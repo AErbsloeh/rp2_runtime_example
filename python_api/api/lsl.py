@@ -18,7 +18,7 @@ from pylsl import (
     proc_threadsafe
 )
 from queue import Queue, Empty
-from vispy import app, scene
+from vispy import app, scene, visuals
 from api.data_api import DataAPI, RawRecording
 
 
@@ -78,6 +78,8 @@ class ThreadLSL:
         self._lock = Lock()
         self._exception = Queue()
         self._release_threads()
+        self._channel_plots = []
+        self.x_counter = 0
 
     @property
     def is_alive(self) -> bool:
@@ -492,41 +494,68 @@ class ThreadLSL:
         buffer_gpu = buffer_lsl.copy()
         # --- Build app
         canvas = scene.SceneCanvas(
-            size=(800, 450),
+            size=(800, 150 + channels*120),
             title=f"Live Plot @{sampling_rate} Hz ({name})",
             keys=None,
             app="glfw",
             show=True,
         )
-        view = canvas.central_widget.add_view()
-        view.camera = "panzoom"
-        view.camera.set_range(
-            x=(0, number_samples_window - 1),
-            y=(0, 65535) if not mode_util else (0, 100)
-        )
-        curves = list()
-        for idx, buffer in enumerate(buffer_gpu):
-            curves.append(scene.Line(
-                pos=buffer.get_data(),
-                width=2,
-                color=line_color[idx % len(line_color)],
+
+        grid = canvas.central_widget.add_grid(spacing=5)
+        x_range = (0, number_samples_window-1)
+        y_range = (0, 65535) if not mode_util else (0, 100)
+
+        views = []
+        lines = []
+        status_texts = []
+        fps_texts = []
+
+        for ch in range(channels):
+            view = grid.add_view(row=ch, col=1, camera='panzoom')
+            view.camera.set_range(x=x_range, y=y_range)
+            views.append(view)
+
+            yaxis = scene.AxisWidget(orientation='left')
+            xaxis = scene.AxisWidget(orientation='bottom')
+
+            grid.add_widget(yaxis, row=ch, col=0)
+            grid.add_widget(xaxis, row=ch, col=1)
+
+            yaxis.link_view(view)
+            #xaxis.link_view(view)
+
+            data = buffer_gpu[ch].get_data()
+            line = scene.visuals.Line(pos=data, color=line_color[ch % len(line_color)],
+                                      width=2, parent=view.scene)
+            lines.append(line)
+
+            scene.visuals.Text(
+                text=f"Ch {ch+1}",
                 parent=view.scene,
-                antialias=False
-            ))
-        status_text = scene.Text(
-            text="LSL: OK",
-            color='green',
-            parent=view.scene,
-            pos=(0.95 * number_samples_window, 0),
-            font_size=8
-        )
-        fps_text = scene.Text(
-            text="FPS: 0",
-            color='green',
-            parent=view.scene,
-            pos=(0.95 * number_samples_window, 0.98 * (65535 if not mode_util else 100)),
-            font_size=8
-        )
+                pos=(20, 0.5),
+                anchor_x='right',
+                anchor_y='center',
+                color='white',
+                font_size=10,
+            )
+
+            status_text = scene.visuals.Text(
+               text="LSL: OK",
+               parent=view.scene,
+               color='green',
+               pos=(0.95 * number_samples_window, -20),
+               font_size=8
+            )
+            status_texts.append(status_text)
+
+            fps_text = scene.visuals.Text(
+               text="FPS: 0",
+               color='green',
+               parent=view.scene,
+               pos=(0.85 * number_samples_window, -20),
+               font_size=8
+            )
+            fps_texts.append(fps_text)
 
         def update_plot_data():
             nonlocal buffer_lsl
@@ -552,12 +581,40 @@ class ThreadLSL:
             nonlocal buffer_gpu
             if not self._event.is_set():
                 app.quit()
-            if not self._is_active:
-                status_text.text = "LSL: DEAD"
-                status_text.color = 'red'
+
             buffer_gpu = buffer_lsl
-            for curve, buffer0 in zip(curves, buffer_gpu):
-                curve.set_data(buffer0.get_data())
+
+            y_min = np.inf
+            y_max = -np.inf
+
+            #self.x_counter += 1
+
+            for ch in range(channels):
+                data = buffer_gpu[ch].get_data()
+                lines[ch].set_data(data)
+
+                y = data[:, 1]
+                y_min = min(y_min, y.min())
+                y_max = max(y_max, y.max())
+
+                if y_max > y_min:
+                   pad = (y_max - y_min) * 0.1
+                else:
+                    pad = 1.0
+
+                views[ch].camera.set_range(
+                   x=(0, number_samples_window-1),
+                   y=(y_min - pad, y_max + 1))
+
+            for ch, status_text in enumerate(status_texts):
+                status_text.pos = (0.85 * number_samples_window, -20)
+                if not self._is_active:
+                    status_text.text = "LSL: DEAD"
+                    status_text.color = 'red'
+
+            for ch, fps_text in enumerate(fps_texts):
+                fps_text.pos = (0.95 * number_samples_window, -20)
+
 
         def update_on_fps(fps):
             with self._lock:
