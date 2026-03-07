@@ -85,7 +85,7 @@ if __name__ == "__main__":
     basicConfig(level=INFO)
     read_util = False
 
-    path2data = Path(get_path_to_project()) / "data"
+    path2data = Path(get_path_to_project()) / "temp_data"
     use_case = -1
 
     dut = DataAPI(path2data, data_prefix='data')
