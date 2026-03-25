@@ -14,10 +14,8 @@ def before_all_tests():
 
 @pytest.fixture(scope="session", autouse=True)
 def after_all_tests():
-    yield
     DeviceAPI().do_reset()
     rmtree(get_path_to_project("temp_data"), ignore_errors=True)
-    print("All pytests are done!")
 
 
 @pytest.fixture
@@ -117,13 +115,6 @@ def test_control_daq(dut: DeviceAPI):
     sleep(1.)
     while dut._get_pin_state() == 'LED_USER':
         sleep(0.1)
-        print("A")
-    sleep(1.)
-    while dut._get_pin_state() == 'NONE':
-        sleep(0.1)
-        print("B")
-    sleep(1.)
-
     dut.stop_daq()
     sleep(1.)
 

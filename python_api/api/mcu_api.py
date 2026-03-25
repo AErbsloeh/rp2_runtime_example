@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from enum import IntEnum
 from logging import getLogger, Logger
 from time import sleep
 import numpy as np
@@ -55,6 +56,24 @@ class SystemState:
     clock: int
     firmware: str
     temp: float
+    
+
+class Commands(IntEnum):
+    """Enum Class for defining the address of the Remote Procedure Calls (RPC)"""
+    ECHO = 0
+    RESET = 1
+    GET_CLOCK = 2
+    GET_STATE = 3
+    GET_PINS = 4
+    GET_RUNTIME = 5
+    GET_VERSION = 6
+    GET_TEMP = 7
+    ENABLE_LED = 8
+    DISABLE_LED = 9
+    TOGGLE_LED = 10
+    START_DAQ = 11
+    STOP_DAQ = 12
+    UPDATE_DAQ = 13
 
 
 class DeviceAPI:
@@ -87,13 +106,13 @@ class DeviceAPI:
             self.__device.close()
         self.__device.open()
 
-    def __write_with_feedback(self, head: int, data: int, size: int=0) -> bytes:
+    def __write_with_feedback(self, head: Commands, data: int, size: int=0) -> bytes:
         return self.__device.write_wfb(
             data=self.__device.convert(head, data),
             size=size
         )
 
-    def __write_without_feedback(self, head: int, data: int) -> None:
+    def __write_without_feedback(self, head: Commands, data: int) -> None:
         self.__device.write(
             data=self.__device.convert(head, data),
         )
@@ -126,7 +145,7 @@ class DeviceAPI:
         if self.__threads.is_alive:
             self.__threads.stop()
             self.stop_daq()
-        self.__write_without_feedback(1, 0)
+        self.__write_without_feedback(Commands.RESET, 0)
         sleep(4)
 
     def echo(self, data: str) -> str:
@@ -137,7 +156,7 @@ class DeviceAPI:
         do_padding = len(data) % self.__device.num_bytes == 1
         val = bytes()
         for chunk in self.__device.serialize_string(data, do_padding):
-            ret = self.__write_with_feedback(0, chunk)
+            ret = self.__write_with_feedback(Commands.ECHO, chunk)
             val += ret[1:]
             if ret[0] != 0x00:
                 raise ValueError(f"Get: {ret}")
@@ -145,28 +164,28 @@ class DeviceAPI:
 
     def _get_system_clock_khz(self) -> int:
         """Returning the system clock of the device in kHz"""
-        ret = self.__write_with_feedback(2, 0)
+        ret = self.__write_with_feedback(Commands.GET_CLOCK, 0)
         if ret[0] != 0x02:
             raise ValueError(f"Get: {ret}")
         return 10 * int.from_bytes(ret[1:], byteorder='little', signed=False)
 
     def _get_system_state(self) -> str:
         """Retuning the System State"""
-        ret = self.__write_with_feedback(3, 0)
+        ret = self.__write_with_feedback(Commands.GET_STATE, 0)
         if ret[0] != 0x03:
             raise ValueError(f"Get: {ret}")
         return _convert_system_state(ret[-1])
 
     def _get_pin_state(self) -> str:
         """Retuning the Pin States"""
-        ret = self.__write_with_feedback(4, 0)
+        ret = self.__write_with_feedback(Commands.GET_PINS, 0)
         return _convert_pin_state(ret[-1])
 
     def _get_runtime_sec(self) -> float:
         """Returning the execution runtime of the device after last reset
         :return:    Float value with runtime in seconds
         """
-        ret = self.__write_with_feedback(5, 0, size=9)
+        ret = self.__write_with_feedback(Commands.GET_RUNTIME, 0, size=9)
         if ret[0] != 0x05:
             raise ValueError(f"Get: {ret}")
         return 1e-6 * int.from_bytes(ret[1:], byteorder='little', signed=False)
@@ -175,7 +194,7 @@ class DeviceAPI:
         """Returning the firmware version of the device
         :return:    String with firmware version
         """
-        ret = self.__write_with_feedback(6, 0)
+        ret = self.__write_with_feedback(Commands.GET_VERSION, 0)
         if ret[0] != 0x06:
             raise ValueError(f"Get: {ret}")
         return f"{ret[1]}.{ret[2]}"
@@ -184,7 +203,7 @@ class DeviceAPI:
         """Returning the temperature of the device in Celsius
         :return:    Float value with temperature in Celsius
         """
-        ret = self.__write_with_feedback(7, 0)
+        ret = self.__write_with_feedback(Commands.GET_TEMP, 0)
         if ret[0] != 0x07:
             raise ValueError(f"Get: {ret}")
         return _convert_rp2_temp_value(int.from_bytes(ret[1:], signed=False, byteorder='little'))
@@ -206,19 +225,19 @@ class DeviceAPI:
         """Changing the state of the LED with enabling it
         :return:        None
         """
-        self.__write_without_feedback(8, 0)
+        self.__write_without_feedback(Commands.ENABLE_LED, 0)
 
     def disable_led(self) -> None:
         """Changing the state of the LED with disabling it
         :return:        None
         """
-        self.__write_without_feedback(9, 0)
+        self.__write_without_feedback(Commands.DISABLE_LED, 0)
 
     def toggle_led(self) -> None:
         """Changing the state of the LED with toggling it
         :return:        None
         """
-        self.__write_without_feedback(10, 0)
+        self.__write_without_feedback(Commands.TOGGLE_LED, 0)
 
     @property
     def _thread_frame_datatype(self) -> np.dtype:
@@ -289,14 +308,14 @@ class DeviceAPI:
 
         self.__device.timeout = 2 / self.__sampling_rate
         self.__threads.start()
-        self.__write_without_feedback(11, 0)
+        self.__write_without_feedback(Commands.STOP_DAQ, 0)
 
     def stop_daq(self) -> None:
         """Changing the state of the DAQ with stopping it
         :return:            None
         """
         self.__threads.stop()
-        self.__write_without_feedback(12, 0)
+        self.__write_without_feedback(Commands.STOP_DAQ, 0)
         self.__device.timeout = self.__timeout_default
 
     def wait_daq(self, time_sec: float) -> None:
@@ -318,4 +337,4 @@ class DeviceAPI:
             raise ValueError(f"Sampling rate cannot be greater than {sampling_limits[1]}")
 
         self.__sampling_rate = sampling_rate
-        self.__write_without_feedback(13, int(sampling_rate))
+        self.__write_without_feedback(Commands.UPDATE_DAQ, int(sampling_rate))
