@@ -3,11 +3,27 @@
 
 system_state_t system_state = STATE_ERROR;
 // ==================== I2C DEFINITION =====================
-//spi_rp2_t spi_mod = {};
+/*spi_rp2_t spi_mod = {
+	.pin_mosi = PICO_DEFAULT_SPI_TX_PIN,
+    .pin_sclk = PICO_DEFAULT_SPI_SCK_PIN,
+    .pin_miso = PICO_DEFAULT_SPI_RX_PIN,
+    .spi_mod = PICO_DEFAULT_SPI,
+    .fspi_khz = 1000,
+    .mode = 0,
+    .msb_first = true,
+    .init_done = false
+};*/
 
 
 // ==================== SPI DEFINITION =====================
-//i2c_rp2_t i2c_mod = {};
+/*i2c_rp2_t i2c_mod = {
+	.pin_sda = PICO_DEFAULT_I2C_SDA_PIN,
+	.pin_scl = PICO_DEFAULT_I2C_SCL_PIN,
+	.i2c_mod = i2c0,
+	.fi2c_khz = 100,
+	.avai_devices = 0,
+	.init_done = false	
+};*/
 
 
 // =============== PICO/SYSTEM DEFINITION ==================

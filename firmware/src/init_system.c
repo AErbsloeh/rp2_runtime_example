@@ -1,6 +1,7 @@
 #include "src/init_system.h"
 #include "hardware/watchdog.h"
 #include "hardware_io.h"
+#include "callbacks/gpio_callbacks.h"
 
 
 void reset_pico_mcu(bool wait_until_done){
