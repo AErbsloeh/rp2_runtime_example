@@ -55,8 +55,8 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/AErbsloeh/rp2_runtime_library.git
     GIT_TAG        main
 )
-#FetchContent_MakeAvailable(custom_library)
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../rp2_runtime_library custom_library)
+FetchContent_MakeAvailable(custom_library)
+#add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../rp2_runtime_library custom_library)
 
 # Modify the below lines to enable/disable output over UART/USB
 pico_enable_stdio_uart(main false)
