@@ -65,8 +65,8 @@ bool irq_tmr_daq0(repeating_timer_t *rt){
     data[1] = rp2_adc_read_raw(&adc_temp);
     daq_push_data_to_fifo(&daq_sample_data, &data[0]);
     daq_push_data_to_fifo(&daq_sample_data, &data[1]);
-    daq_sample_data.new_data = true;
 
+    daq_sample_data.new_data = true;
     return true;    
 };
 repeating_timer_t tmr_daq0;
