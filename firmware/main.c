@@ -18,7 +18,24 @@ int main(){
 
     // Main Loop
     while (true) {  
+        /* --- USB Protocol Handling --- */
         usb_handling_fifo_buffer(&usb_buffer);
-        apply_rpc_callback(*usb_buffer.data, usb_buffer.length, usb_buffer.ready);
+        apply_rpc_callback(usb_buffer.data, usb_buffer.length, usb_buffer.ready);
+
+        /*--- Sending data in main */
+        if(daq_sample_data.send_batch){
+            if(daq_is_fifo_full(&daq_sample_data)){
+                daq_sample_data.iteration ++;
+                daq_send_data_usb(&daq_sample_data, daq_sample_data.data->length);
+                toggle_state_default_led();
+            };    
+        } else {
+            if(daq_sample_data.new_data){
+                daq_sample_data.new_data = false;  
+                daq_sample_data.iteration ++;
+                daq_send_data_usb(&daq_sample_data, 2);
+                toggle_state_default_led();
+            };
+        }
     };
 }

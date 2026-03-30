@@ -30,34 +30,43 @@ system_state_t system_state = STATE_ERROR;
 // --- Internal Temp Sensor
 rp2_adc_t adc_temp = {
     .adc_channel = RP2_ADC_TEMP,
+    .sampling_rate = 1,
+    .buffersize = 1,
+    .use_dma = false,
     .init_done = false
 };
 
 // --- USB PROTOCOL
-char data_usb[USB_FIFO_SIZE] = {0};
 usb_rp2_t usb_buffer = {
 	.ready = false,
-	.length = USB_FIFO_SIZE,
-	.position = USB_FIFO_SIZE-1,
-	.data = data_usb
+	.length = 3,
+	.position = 2
 };  
 
 // --- DAQ Sampling
+fifo_t daq_fifo = {
+    .element_size = sizeof(uint16_t)
+};
 daq_data_t daq_sample_data = {
     .packet_id = 0xA0,
     .iteration = 0,
     .runtime = 0,
-    .value_ch0 = 0,
-    .value_ch1 = 0
+    .num_channels = 2,
+    .num_samples = 16,
+    .data = &daq_fifo,
+    .send_batch = true,
+    .new_data = false
 };
-bool irq_tmr_daq0(repeating_timer_t *rt){
-    daq_sample_data.iteration ++;
-    daq_sample_data.runtime = get_runtime_ms();
-    daq_sample_data.value_ch0 += 4;
-    daq_sample_data.value_ch1 -= 4;
-    send_daq_data_usb(&daq_sample_data);
 
-    toggle_state_default_led();
+uint16_t data[2] = {0, 0};
+bool irq_tmr_daq0(repeating_timer_t *rt){
+    daq_sample_data.runtime = get_runtime_ms();
+    data[0] += 16;
+    data[1] = rp2_adc_read_raw(&adc_temp);
+    daq_push_data_to_fifo(&daq_sample_data, &data[0]);
+    daq_push_data_to_fifo(&daq_sample_data, &data[1]);
+    daq_sample_data.new_data = true;
+
     return true;    
 };
 repeating_timer_t tmr_daq0;

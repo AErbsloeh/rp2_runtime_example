@@ -30,10 +30,11 @@ bool init_gpio_pico(bool block_usb){
     gpio_set_irq_enabled_with_callback(BUTTON_BOARD, GPIO_IRQ_EDGE_FALL, true, &irq_gpio_callbacks);*/
 
     // --- Init of Serial COM-Port
-    usb_init();
+    usb_init(&usb_buffer);
     if(block_usb){
         usb_wait_until_connected();
     }
+    sleep_ms(1000);
     return true;
 }
 
@@ -45,8 +46,7 @@ bool init_system(void){
 	if(rp2_adc_init(&adc_temp))
 		num_init_done++;
 
-    // --- Init of Timer
-    if(init_daq_sampling(&tmr_daq0_hndl))
+    if(daq_init_sampling(&tmr_daq0_hndl, &daq_sample_data))
         num_init_done++;
 
     // --- Blocking Routine if init is not completed
