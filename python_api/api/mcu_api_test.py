@@ -107,16 +107,29 @@ def test_toggle_led(dut: DeviceAPI):
     dut.disable_led()
 
 
-def test_control_daq(dut: DeviceAPI):
+def test_control_daq_sample(dut: DeviceAPI):
     dut.update_daq_sampling_rate(1.)
     assert dut._get_system_state() == 'IDLE'
 
-    dut.start_daq(folder_name="temp_data")
+    dut.start_daq(do_batch=False, folder_name="temp_data")
     sleep(1.)
-    while dut._get_pin_state() == 'LED_USER':
-        sleep(0.1)
     dut.stop_daq()
     sleep(1.)
+
+
+def test_control_daq_batch(dut: DeviceAPI):
+    dut.update_daq_sampling_rate(1.)
+    assert dut._get_system_state() == 'IDLE'
+
+    dut.start_daq(do_batch=True, folder_name="temp_data")
+    sleep(1.)
+    dut.stop_daq()
+    sleep(1.)
+
+
+def test_batchsize_daq(dut: DeviceAPI):
+    ret = dut.get_number_samples_per_batch()
+    assert ret == 16
 
 
 if __name__ == "__main__":

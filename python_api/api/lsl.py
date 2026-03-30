@@ -328,7 +328,9 @@ class ThreadLSL:
                 try:
                     # Data Processing
                     data, tb = daq_func()
-                    if len(data) != len(tb):
+                    if not data or tb is None:
+                        continue
+                    if len(tb) != len(data[0]):
                         continue
                     # Heartbeat
                     with self._lock:
@@ -429,9 +431,9 @@ class ThreadLSL:
                 case 4:  # cf_int32
                     format_h5 = "int32"
                 case 5:  # cf_int16
-                    format_h5 = "uint16"
+                    format_h5 = "int16"
                 case 6:  # cf_int8
-                    format_h5 = "uint8"
+                    format_h5 = "int8"
                 case 7:  # cf_int64
                     format_h5 = "int64"
                 case _:
@@ -492,6 +494,8 @@ class ThreadLSL:
         number_samples_window = int(window_length * sampling_rate)
         buffer_lsl = [RingBuffer(number_samples_window) for _ in range(channels)]
         buffer_gpu = buffer_lsl.copy()
+        iteration_update = 0
+
         # --- Build app
         canvas = scene.SceneCanvas(
             size=(800, 150 + channels*120),
@@ -500,15 +504,12 @@ class ThreadLSL:
             app="glfw",
             show=True,
         )
-
-        grid = canvas.central_widget.add_grid(spacing=5)
+        grid = canvas.central_widget.add_grid(spacing=1)
         x_range = (0, number_samples_window-1)
         y_range = (0, 65535) if not mode_util else (0, 100)
 
         views = []
         lines = []
-        status_texts = []
-        fps_texts = []
 
         for ch in range(channels):
             view = grid.add_view(row=ch, col=1, camera='panzoom')
@@ -525,37 +526,38 @@ class ThreadLSL:
             #xaxis.link_view(view)
 
             data = buffer_gpu[ch].get_data()
-            line = scene.visuals.Line(pos=data, color=line_color[ch % len(line_color)],
-                                      width=2, parent=view.scene)
+            line = scene.visuals.Line(
+                pos=data,
+                color=line_color[ch % len(line_color)],
+                width=2,
+                parent=view.scene
+            )
             lines.append(line)
 
             scene.visuals.Text(
-                text=f"Ch {ch+1}",
+                text=f"C{ch+1}",
                 parent=view.scene,
-                pos=(20, 0.5),
+                pos=(30, 0),
                 anchor_x='right',
                 anchor_y='center',
                 color='white',
                 font_size=10,
             )
 
-            status_text = scene.visuals.Text(
-               text="LSL: OK",
-               parent=view.scene,
-               color='green',
-               pos=(0.95 * number_samples_window, -20),
-               font_size=8
-            )
-            status_texts.append(status_text)
-
-            fps_text = scene.visuals.Text(
-               text="FPS: 0",
-               color='green',
-               parent=view.scene,
-               pos=(0.85 * number_samples_window, -20),
-               font_size=8
-            )
-            fps_texts.append(fps_text)
+        status_text = scene.visuals.Text(
+           text="LSL: OK",
+           parent=views[-1].scene,
+           color='green',
+           pos=(0.95 * number_samples_window, 30),
+           font_size=8
+        )
+        fps_text = scene.visuals.Text(
+           text="FPS: 0",
+           color='green',
+           parent=views[-1].scene,
+           pos=(0.75 * number_samples_window, 100),
+           font_size=8
+        )
 
         def update_plot_data():
             nonlocal buffer_lsl
@@ -579,42 +581,31 @@ class ThreadLSL:
 
         def update_plot_canvas(events):
             nonlocal buffer_gpu
+            nonlocal iteration_update
             if not self._event.is_set():
                 app.quit()
 
             buffer_gpu = buffer_lsl
-
-            y_min = np.inf
-            y_max = -np.inf
-
-            #self.x_counter += 1
-
             for ch in range(channels):
+                # Updating plot graphics
                 data = buffer_gpu[ch].get_data()
                 lines[ch].set_data(data)
 
-                y = data[:, 1]
-                y_min = min(y_min, y.min())
-                y_max = max(y_max, y.max())
-
-                if y_max > y_min:
-                   pad = (y_max - y_min) * 0.1
+                # Updating scaling factor
+                if iteration_update > int(16/update_rate):
+                    iteration_update = 0
+                    y = data[:, 1]
+                    y_min = y.min()
+                    y_max = y.max()
+                    views[ch].camera.set_range(
+                       x=(0, number_samples_window-1),
+                       y=(y_min - 1, y_max + 1))
                 else:
-                    pad = 1.0
+                    iteration_update += 1
 
-                views[ch].camera.set_range(
-                   x=(0, number_samples_window-1),
-                   y=(y_min - pad, y_max + 1))
-
-            for ch, status_text in enumerate(status_texts):
-                status_text.pos = (0.85 * number_samples_window, -20)
-                if not self._is_active:
-                    status_text.text = "LSL: DEAD"
-                    status_text.color = 'red'
-
-            for ch, fps_text in enumerate(fps_texts):
-                fps_text.pos = (0.95 * number_samples_window, -20)
-
+            if not self._is_active:
+                status_text.text = "LSL: DEAD"
+                status_text.color = 'red'
 
         def update_on_fps(fps):
             with self._lock:
