@@ -487,8 +487,6 @@ class ThreadLSL:
         # --- Extract meta
         channels = inlet.info().channel_count()
         sampling_rate = inlet.info().nominal_srate()
-        if sampling_rate > 4500.:
-            raise AttributeError(f"Sampling rate {sampling_rate} is too high")
         # --- Build ring buffer and update func
         max_samples = int(sampling_rate / 50) if sampling_rate > 500. else 10
         number_samples_window = int(window_length * sampling_rate)

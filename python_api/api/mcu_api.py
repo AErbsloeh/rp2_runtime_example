@@ -353,17 +353,19 @@ class DeviceAPI:
         :param sampling_rate:   Float with sampling rate [Hz]
         :return:                None
         """
-        sampling_limits = [0, 2**16-1]
+        sampling_limits = [0, 10e3]
         if sampling_rate < sampling_limits[0]:
             raise ValueError(f"Sampling rate cannot be smaller than {sampling_limits[0]}")
-        if sampling_rate > 10e3:
+        if sampling_rate > sampling_limits[1]:
             raise ValueError(f"Sampling rate cannot be greater than {sampling_limits[1]}")
 
         self.__sampling_rate = sampling_rate
         self.__write_without_feedback(Commands.UPDATE_DAQ, int(sampling_rate))
 
     def get_number_samples_per_batch(self) -> int:
-        """"""
+        """Get number of samples per batch which are transmitted in one data package
+        :return:    Integer with number of samples per batch
+        """
         ret = self.__write_with_feedback(Commands.ASK_BATCH_DAQ, 0, 3)
         if ret[0] != Commands.ASK_BATCH_DAQ:
             raise ValueError(f"Get: {ret}")
