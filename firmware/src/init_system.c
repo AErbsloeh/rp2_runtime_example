@@ -46,7 +46,7 @@ bool init_system(void){
 	if(rp2_adc_init(&adc_temp))
 		num_init_done++;
 
-    if(daq_init_sampling(&tmr_daq0_hndl, &daq_sample_data))
+    if(daq_init_sampling(&tmr_daq0_hndl, &daq_config_raw))
         num_init_done++;
 
     // --- Blocking Routine if init is not completed
@@ -62,12 +62,6 @@ bool init_system(void){
         }
         return false;
     }
-}
-
-
-uint64_t get_runtime_ms(void){
-    absolute_time_t now = get_absolute_time();
-    return to_us_since_boot(now);
 }
 
 

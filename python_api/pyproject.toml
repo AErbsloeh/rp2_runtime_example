@@ -17,9 +17,9 @@ only-packages = true
 
 
 [project]
-name = "pico-api"
-version = "0.1.0"
-description = "A Python API for handling a microcontroller system like the Raspberry Pi Pico RP2xxx"
+name = "rp2_runtime_example"
+version = "0.0.1"
+description = "A Python API for handling an embedded system using RPi RP2xxx"
 requires-python = ">=3.13"
 dependencies = [
     "pyserial>=3.5",
@@ -38,6 +38,5 @@ dev = [
     "hatch",
     "pytest>=8.4.2",
     "matplotlib>=3.10.7",
-    "snakeviz>=2.2.2",
-    "elasticai.hw-measurements @ git+https://github.com/es-ude/elastic-ai.hw-measurements.git"
+    "snakeviz>=2.2.2"
 ]

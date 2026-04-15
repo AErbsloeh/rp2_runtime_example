@@ -20,7 +20,10 @@ typedef enum {
     START_BATCH_DAQ,
     STOP_DAQ,
     UPDATE_DAQ,
-    ASK_BATCH_DAQ
+    ASK_CHANNEL_DAQ,
+    ASK_BATCH_DAQ,
+    ASK_BYTES_SAMPLE_DAQ,
+    ASK_BYTES_BATCH_DAQ,
 } usb_cmd_t;
 
 
@@ -113,14 +116,14 @@ void toggle_led(void){
 
 
 void start_sample_daq(void){
-    daq_sample_data.send_batch = false;
+    daq_config_raw.send_batch = false;
     daq_start_sampling(&tmr_daq0_hndl);
     set_system_state(STATE_DAQ);
 }
 
 
 void start_batch_daq(void){
-    daq_sample_data.send_batch = true;
+    daq_config_raw.send_batch = true;
     daq_start_sampling(&tmr_daq0_hndl);
     set_system_state(STATE_DAQ);
 }
@@ -139,11 +142,40 @@ void update_daq(char* buffer){
 }
 
 
-void ask_batch_daq(void){
+void get_channel_number_daq(void){
+    char buffer_send[3];
+    buffer_send[0] = ASK_CHANNEL_DAQ;
+    buffer_send[1] = 0x00;
+    buffer_send[2] = daq_config_raw.num_channels;
+    usb_send_bytes(buffer_send, sizeof(buffer_send));
+}
+
+
+void get_batchsize_daq(void){
     char buffer_send[3];
     buffer_send[0] = ASK_BATCH_DAQ;
     buffer_send[1] = 0x00;
-    buffer_send[2] = daq_sample_data.num_samples;
+    buffer_send[2] = daq_config_raw.num_samples;
+    usb_send_bytes(buffer_send, sizeof(buffer_send));
+}
+
+
+void get_bytes_sample_daq(void){
+    uint16_t bytes = daq_get_number_bytes_per_sample(&daq_config_raw);
+    char buffer_send[3];
+    buffer_send[0] = ASK_BYTES_SAMPLE_DAQ;
+    buffer_send[1] = bytes >> 0;
+    buffer_send[2] = bytes >> 8;
+    usb_send_bytes(buffer_send, sizeof(buffer_send));
+}
+
+
+void get_bytes_batch_daq(void){
+    uint16_t bytes = daq_get_number_bytes_per_batch(&daq_config_raw);
+    char buffer_send[3];
+    buffer_send[0] = ASK_BYTES_BATCH_DAQ;
+    buffer_send[1] = bytes >> 0;
+    buffer_send[2] = bytes >> 8;
     usb_send_bytes(buffer_send, sizeof(buffer_send));
 }
 
@@ -152,23 +184,26 @@ void ask_batch_daq(void){
 bool apply_rpc_callback(char* buffer, size_t length, bool ready){    
     if(ready){
         switch(buffer[0]){
-            case ECHO:              echo(buffer, length);                   break;
-            case RESET:             system_reset();                         break;
-            case CLOCK_SYS:         get_clock_system();                     break;
-            case STATE_SYS:         get_state_system();                     break;
-            case STATE_PIN:         get_state_pin();                        break; 
-            case RUNTIME:           get_runtime();                          break;
-			case TEMP_MCU:		    get_temp_mcu();							break;
-            case FIRMWARE:          get_firmware_version();                 break;
-            case ENABLE_LED:        enable_led();                           break;
-            case DISABLE_LED:       disable_led();                          break;
-            case TOGGLE_LED:        toggle_led();                           break;
-            case START_SAMPLE_DAQ:  start_sample_daq();                     break;
-            case START_BATCH_DAQ:   start_batch_daq();                      break;
-            case STOP_DAQ:          stop_daq();                             break;
-            case UPDATE_DAQ:        update_daq(buffer);                     break;
-            case ASK_BATCH_DAQ:     ask_batch_daq();                        break;
-            default:                set_system_state(STATE_ERROR);          break;        
+            case ECHO:                  echo(buffer, length);                   break;
+            case RESET:                 system_reset();                         break;
+            case CLOCK_SYS:             get_clock_system();                     break;
+            case STATE_SYS:             get_state_system();                     break;
+            case STATE_PIN:             get_state_pin();                        break; 
+            case RUNTIME:               get_runtime();                          break;
+			case TEMP_MCU:		        get_temp_mcu();							break;
+            case FIRMWARE:              get_firmware_version();                 break;
+            case ENABLE_LED:            enable_led();                           break;
+            case DISABLE_LED:           disable_led();                          break;
+            case TOGGLE_LED:            toggle_led();                           break;
+            case START_SAMPLE_DAQ:      start_sample_daq();                     break;
+            case START_BATCH_DAQ:       start_batch_daq();                      break;
+            case STOP_DAQ:              stop_daq();                             break;
+            case UPDATE_DAQ:            update_daq(buffer);                     break;
+            case ASK_CHANNEL_DAQ:       get_channel_number_daq();               break;
+            case ASK_BATCH_DAQ:         get_batchsize_daq();                    break;
+            case ASK_BYTES_SAMPLE_DAQ:  get_bytes_sample_daq();                 break;
+            case ASK_BYTES_BATCH_DAQ:   get_bytes_batch_daq();                  break;
+            default:                    set_system_state(STATE_ERROR);          break;        
         }  
     }
     return true;

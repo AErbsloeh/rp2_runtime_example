@@ -75,7 +75,10 @@ class Commands(IntEnum):
     START_BATCH_DAQ = 12
     STOP_DAQ = 13
     UPDATE_DAQ = 14
-    ASK_BATCH_DAQ = 15
+    ASK_CHANNEL_DAQ = 15
+    ASK_BATCH_DAQ = 16
+    ASK_BYTES_SAMPLE_DAQ = 17
+    ASK_BYTES_BATCH_DAQ = 18
 
 
 class DeviceAPI:
@@ -83,9 +86,9 @@ class DeviceAPI:
     __threads: ThreadLSL
     __logger: Logger
     __timeout_default: float = 10.
-    __num_samples_batch: int = 8
-    __num_bytes_sample: int = 0
-    __num_bytes_batch: int = 0
+    __num_channels: int = 0
+    __num_bytes_rx: int = 0
+    __num_samples_batch: int = 0
     __sampling_rate: float = 4.
     __usb_vid: int = 0x2E8A
     # PID of RP2350 = 0x0009 and RP2040 = 0x000A
@@ -98,7 +101,6 @@ class DeviceAPI:
         self.__logger = getLogger(__name__)
         self.__threads = ThreadLSL()
         self.__timeout_default = timeout
-        self.__define_bytes_data(self.__num_samples_batch)
         self.__device = InterfaceSerial(
             com_name=com_name if com_name != "AUTOCOM" else get_comport_name(usb_vid=self.__usb_vid),
             baud=230400,
@@ -121,10 +123,9 @@ class DeviceAPI:
             data=self.__device.convert(head, data),
         )
 
-    def __define_bytes_data(self, samples_per_batch: int) -> None:
-        self.__num_samples_batch = samples_per_batch
-        self.__num_bytes_sample: int = 11 + 4
-        self.__num_bytes_batch: int = 11 + 4 * samples_per_batch
+    @staticmethod
+    def __bytes_to_int(data: bytes) -> int:
+        return int.from_bytes(data, byteorder='little', signed=False)
 
     @property
     def total_num_bytes(self) -> int:
@@ -176,7 +177,7 @@ class DeviceAPI:
         ret = self.__write_with_feedback(Commands.GET_CLOCK, 0)
         if ret[0] != Commands.GET_CLOCK:
             raise ValueError(f"Get: {ret}")
-        return 10 * int.from_bytes(ret[1:], byteorder='little', signed=False)
+        return 10 * self.__bytes_to_int(ret[1:])
 
     def _get_system_state(self) -> str:
         """Retuning the System State"""
@@ -199,7 +200,7 @@ class DeviceAPI:
         ret = self.__write_with_feedback(Commands.GET_RUNTIME, 0, size=9)
         if ret[0] != Commands.GET_RUNTIME:
             raise ValueError(f"Get: {ret}")
-        return 1e-6 * int.from_bytes(ret[1:], byteorder='little', signed=False)
+        return 1e-6 * self.__bytes_to_int(ret[1:])
 
     def _get_firmware_version(self) -> str:
         """Returning the firmware version of the device
@@ -217,7 +218,7 @@ class DeviceAPI:
         ret = self.__write_with_feedback(Commands.GET_TEMP, 0)
         if ret[0] != Commands.GET_TEMP:
             raise ValueError(f"Get: {ret}")
-        return _convert_rp2_temp_value(int.from_bytes(ret[1:], signed=False, byteorder='little'))
+        return _convert_rp2_temp_value(self.__bytes_to_int(ret[1:]))
 
     def get_state(self) -> SystemState:
         """Returning the state of the system
@@ -253,27 +254,17 @@ class DeviceAPI:
     @property
     def _thread_frame_datatype(self) -> np.dtype:
         return np.dtype([
-            ('head', 'u1'),         # 1 Byte unsigned
-            ('index', 'u1'),        # 1 Byte unsigned
-            ('timestamp', '<u8'),   # 8 Byte unsigned
-            ('data', '<u2', (2,)),  # 2 Byte signed short (channels, samples)
-            ('tail', 'u1')          # 1 Byte unsigned
-        ])
-
-    @property
-    def _thread_batch_datatype(self) -> np.dtype:
-        return np.dtype([
-            ('head', 'u1'),         # 1 Byte unsigned
-            ('index', 'u1'),        # 1 Byte unsigned
-            ('timestamp', '<u8'),   # 8 Byte unsigned
-            ('data', '<u2', (2,self.__num_samples_batch,)),# 2 Byte signed short (channels, samples)
-            ('tail', 'u1')          # 1 Byte unsigned
+            ('head', 'u1'),                             # 1 Byte unsigned
+            ('index', 'u1'),                            # 1 Byte unsigned
+            ('timestamp', '<u8'),                       # 8 Byte unsigned
+            ('data', '<u2', (self.__num_channels,)),    # 2 Byte signed short (channels, samples)
+            ('tail', 'u1')                              # 1 Byte unsigned
         ])
 
     def _thread_read_frame(self) -> tuple[list, float]:
         """Entpacken der Informationen aus dem USB Protokoll (siehe C-Datei: src/daq_sample.c in der Firmware)"""
         try:
-            buffer = self.__device.read(self.__num_bytes_sample)
+            buffer = self.__device.read(self.__num_bytes_rx)
             if not buffer:
                 raise Exception
             frames = np.frombuffer(buffer, dtype=self._thread_frame_datatype)
@@ -288,18 +279,29 @@ class DeviceAPI:
                 raise Exception
         except Exception:
             return [], None
+            
+    @property
+    def _thread_batch_datatype(self) -> np.dtype:
+        return np.dtype([
+            ('head', 'u1'),             # 1 Byte unsigned
+            ('index', 'u1'),            # 1 Byte unsigned
+            ('timestamp', '<u8', (2,)), # 8 Byte unsigned [first, last value]
+            ('data', '<u2', (self.__num_channels, self.__num_samples_batch,)),# 2 Byte signed short (channels, samples)
+            ('tail', 'u1')          # 1 Byte unsigned
+        ])
 
     def _thread_read_batch(self) -> tuple[list[list], list[float]]:
         """Entpacken der Informationen aus dem USB Protokoll (siehe C-Datei: src/daq_sample.c in der Firmware)"""
         try:
-            buffer = self.__device.read(self.__num_bytes_batch)
+            buffer = self.__device.read(self.__num_bytes_rx)
             if not buffer:
                 raise Exception
             frames = np.frombuffer(buffer, dtype=self._thread_batch_datatype)
             mask = (frames['head'] == 0xA0) & (frames['tail'] == 0xFF)
             frames = frames[mask]
             if frames.size > 0:
-                timestamps = [float(1e-6 * frames['timestamp'][0]) for _ in range(self.__num_samples_batch)]
+                dt = (frames['timestamp'][0][1] - frames['timestamp'][0][0]) / (self.__num_samples_batch-1)
+                timestamps = [float(1e-6 * (frames['timestamp'][0][0] + dt*idx)) for idx in range(self.__num_samples_batch)]
                 data = frames['data'][0].tolist()
                 return data, timestamps
             else:
@@ -316,8 +318,9 @@ class DeviceAPI:
         :param folder_name: String with folder name to save data in project folder
         :return: None
         """
-        batchsize = self.get_number_samples_per_batch()
-        self.__define_bytes_data(batchsize)
+        self.__num_samples_batch = self._get_number_samples_per_batch()
+        self.__num_bytes_rx = self._get_number_bytes_per_daq_batch() if do_batch else self._get_number_bytes_per_daq_sample()
+        self.__num_channels = self._get_number_channels()
         path2data = get_path_to_project(new_folder=folder_name)
 
         func = self._thread_read_batch if do_batch else self._thread_read_frame
@@ -337,9 +340,13 @@ class DeviceAPI:
         """Changing the state of the DAQ with stopping it
         :return:            None
         """
-        self.__threads.stop()
         self.__write_without_feedback(Commands.STOP_DAQ, 0)
+        sleep(0.5)
         self.__device.timeout = self.__timeout_default
+        while self.__threads.is_alive:
+            self.__threads.stop()
+            sleep(0.5)
+        self.__device.empty_buffer()
 
     def wait_daq(self, time_sec: float) -> None:
         """Waiting Routine incl. returning possible thread errors
@@ -362,11 +369,38 @@ class DeviceAPI:
         self.__sampling_rate = sampling_rate
         self.__write_without_feedback(Commands.UPDATE_DAQ, int(sampling_rate))
 
-    def get_number_samples_per_batch(self) -> int:
+    def _get_number_channels(self) -> int:
+        """Get number of channels for acquiring data
+        :return:    Integer with number of DAQ channels
+        """
+        ret = self.__write_with_feedback(Commands.ASK_CHANNEL_DAQ, 0)
+        if ret[0] != Commands.ASK_CHANNEL_DAQ:
+            raise ValueError(f"Get: {ret}")
+        return int(ret[2])
+
+    def _get_number_samples_per_batch(self) -> int:
         """Get number of samples per batch which are transmitted in one data package
         :return:    Integer with number of samples per batch
         """
-        ret = self.__write_with_feedback(Commands.ASK_BATCH_DAQ, 0, 3)
+        ret = self.__write_with_feedback(Commands.ASK_BATCH_DAQ, 0)
         if ret[0] != Commands.ASK_BATCH_DAQ:
             raise ValueError(f"Get: {ret}")
         return int(ret[2])
+
+    def _get_number_bytes_per_daq_sample(self) -> int:
+        """Get number of bytes transmitted per each DAQ sample
+        :return:    Integer with number of bytes per DAQ sample
+        """
+        ret = self.__write_with_feedback(Commands.ASK_BYTES_SAMPLE_DAQ, 0)
+        if ret[0] != Commands.ASK_BYTES_SAMPLE_DAQ:
+            raise ValueError(f"Get: {ret}")
+        return self.__bytes_to_int(ret[1:])
+
+    def _get_number_bytes_per_daq_batch(self) -> int:
+        """Get number of bytes transmitted per each DAQ sample
+        :return:    Integer with number of bytes per DAQ sample
+        """
+        ret = self.__write_with_feedback(Commands.ASK_BYTES_BATCH_DAQ, 0)
+        if ret[0] != Commands.ASK_BYTES_BATCH_DAQ:
+            raise ValueError(f"Get: {ret}")
+        return self.__bytes_to_int(ret[1:])

@@ -60,7 +60,11 @@ class InterfaceSerial:
         return self.__BYTES_DATA
 
     def convert(self, head: int, data: int) -> bytes:
-        """"""
+        """Function for converting data to bytes
+        :param head:    Header information, RPC command
+        :param data:    Data to be converted
+        :return:        Bytes converted from head + data
+        """
         transmit = data.to_bytes(self.__BYTES_DATA, 'little')
         transmit += head.to_bytes(self.__BYTES_HEAD, 'little')
         return transmit
@@ -109,3 +113,8 @@ class InterfaceSerial:
     def close(self) -> None:
         """Closing a connection to device"""
         self.__device.close()
+
+    def empty_buffer(self) -> None:
+        """Function for emptying input and output buffers"""
+        self.__device.reset_input_buffer()
+        self.__device.reset_output_buffer()

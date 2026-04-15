@@ -47,10 +47,11 @@ usb_rp2_t usb_buffer = {
 fifo_t daq_fifo = {
     .element_size = sizeof(uint16_t)
 };
-daq_data_t daq_sample_data = {
+daq_data_t daq_config_raw = {
     .packet_id = 0xA0,
     .iteration = 0,
-    .runtime = 0,
+    .runtime_first = 0,
+    .runtime_last = 0,
     .num_channels = 2,
     .num_samples = 16,
     .data = &daq_fifo,
@@ -60,14 +61,9 @@ daq_data_t daq_sample_data = {
 
 uint16_t data[2] = {0, 0};
 bool irq_tmr_daq0(repeating_timer_t *rt){
-    daq_sample_data.runtime = get_runtime_ms();
     data[0] += 16;
     data[1] = rp2_adc_read_raw(&adc_temp);
-    daq_push_data_to_fifo(&daq_sample_data, &data[0]);
-    daq_push_data_to_fifo(&daq_sample_data, &data[1]);
-
-    daq_sample_data.new_data = true;
-    return true;    
+    return daq_irq_process(&daq_config_raw, data);
 };
 repeating_timer_t tmr_daq0;
 tmr_repeat_irq_t tmr_daq0_hndl = {

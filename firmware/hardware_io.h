@@ -4,6 +4,7 @@
 
 #include "hardware/gpio.h"
 #include "hardware/clocks.h"
+#include "hal/helper/helper.h"
 #include "hal/led/led.h"
 #include "hal/tmr/tmr.h"
 #include "hal/usb/usb.h"
@@ -35,7 +36,7 @@ extern rp2_adc_t adc_temp;
 extern usb_rp2_t usb_buffer;
 
 // --- DAQ Sampling
-extern daq_data_t daq_sample_data;
+extern daq_data_t daq_config_raw;
 extern tmr_repeat_irq_t tmr_daq0_hndl;
 
 #endif

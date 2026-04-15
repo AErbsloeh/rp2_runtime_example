@@ -5,22 +5,23 @@ from logging import basicConfig, DEBUG, INFO
 from api import DataAPI, RawRecording, get_path_to_project
 
 
-def plot_histogram_time(packet: RawRecording, show_density: bool=False, show_plot: bool=True) -> None:
+def plot_histogram_time(packet: RawRecording, show_density: bool = False, show_plot: bool = True) -> None:
     plt.figure()
-    plt.hist(np.diff(packet.time[1:-1]), density=show_density, cumulative=show_density, histtype="stepfilled", color='k')
-    plt.xlabel('Sampling Period (s)')
+    plt.hist(1e3 * np.diff(packet.time[1:-1]), density=show_density, cumulative=show_density, histtype="stepfilled",
+             color='k')
+    plt.xlabel('Sampling Period (ms)')
     plt.ylabel('Bins')
     plt.grid(True)
     plt.tight_layout()
     if show_plot:
         plt.show()
-        
-        
-def plot_transient_time(packet: RawRecording, do_logy: bool=False, show_plot: bool=True) -> None:
+
+
+def plot_transient_time(packet: RawRecording, do_logy: bool = False, show_plot: bool = True) -> None:
     plt.figure()
-    plt.plot(packet.time[1:-1], np.diff(packet.time[:-1]), linewidth=1, marker='.', markersize=2)
+    plt.plot(packet.time[1:-1], 1e3 * np.diff(packet.time[:-1]), linewidth=1, marker='.', markersize=2)
     plt.xlabel('Time (s)')
-    plt.ylabel('Sampling time')
+    plt.ylabel('Sampling time (ms)')
     plt.yscale('log' if do_logy else 'linear')
     plt.xlim(packet.time[0], packet.time[-1])
     plt.grid(True)
@@ -29,20 +30,20 @@ def plot_transient_time(packet: RawRecording, do_logy: bool=False, show_plot: bo
         plt.show()
 
 
-def plot_transient_drift(packet: RawRecording, do_logy: bool=False, show_plot: bool=True) -> None:
-    dt = np.diff(packet.time[:-1]) - 1/packet.sampling_rate
+def plot_transient_drift(packet: RawRecording, do_logy: bool = False, show_plot: bool = True) -> None:
+    dt = np.diff(packet.time[:-1]) - 1 / packet.sampling_rate
 
     drift_time = np.zeros_like(dt)
     for idx, dt0 in enumerate(dt, start=1):
         if idx == dt.size:
             break
         else:
-            drift_time[idx] = dt0 + drift_time[idx-1]
+            drift_time[idx] = dt0 + drift_time[idx - 1]
 
     plt.figure()
-    plt.plot(packet.time[1:-1], drift_time, linewidth=1, marker='.', markersize=2)
+    plt.plot(packet.time[1:-1], 1e6 * drift_time, linewidth=1, marker='.', markersize=2)
     plt.xlabel('Time (s)')
-    plt.ylabel('Drift time')
+    plt.ylabel('Drift time (µs)')
     plt.yscale('log' if do_logy else 'linear')
     plt.xlim(packet.time[0], packet.time[-1])
     plt.grid(True)
@@ -51,11 +52,11 @@ def plot_transient_drift(packet: RawRecording, do_logy: bool=False, show_plot: b
         plt.show()
 
 
-def plot_transient_data(packet: RawRecording, show_plot: bool=True) -> None:
-    min_size = np.min([packet.time.size, packet.data.shape[1]])-1
+def plot_transient_data(packet: RawRecording, show_plot: bool = True) -> None:
+    min_size = np.min([packet.time.size, packet.data.shape[1]]) - 1
 
     plt.figure()
-    plt.plot(packet.time[:min_size], packet.data[:,:min_size].T, linewidth=1, marker='.', markersize=2)
+    plt.plot(packet.time[:min_size], packet.data[:, :min_size].T, linewidth=1, marker='.', markersize=2)
     plt.xlabel('Time (s)')
     plt.ylabel('Amplitude')
     plt.xlim(packet.time[0], packet.time[-1])
@@ -65,12 +66,12 @@ def plot_transient_data(packet: RawRecording, show_plot: bool=True) -> None:
         plt.show()
 
 
-def plot_transient_util(packet: RawRecording, show_plot: bool=True) -> None:
-    min_size = np.min([packet.time.size, packet.data.shape[1]])-1
+def plot_transient_util(packet: RawRecording, show_plot: bool = True) -> None:
+    min_size = np.min([packet.time.size, packet.data.shape[1]]) - 1
 
     plt.figure()
-    plt.plot(packet.time[:min_size], packet.data[0,:min_size], marker='.', color='k', label='CPU')
-    plt.plot(packet.time[:min_size], packet.data[1,:min_size], marker='.', color='r', label='RAM')
+    plt.plot(packet.time[:min_size], packet.data[0, :min_size], marker='.', color='k', label='CPU')
+    plt.plot(packet.time[:min_size], packet.data[1, :min_size], marker='.', color='r', label='RAM')
     plt.xlabel('Time (s)')
     plt.ylabel('Utilization (%)')
     plt.legend(loc='best')
@@ -85,7 +86,7 @@ if __name__ == "__main__":
     basicConfig(level=INFO)
     read_util = False
 
-    path2data = Path(get_path_to_project()) / "temp_data"
+    path2data = Path(get_path_to_project()) / "data"
     use_case = -1
 
     dut = DataAPI(path2data, data_prefix='data')

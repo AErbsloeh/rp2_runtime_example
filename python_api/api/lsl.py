@@ -127,7 +127,7 @@ class ThreadLSL:
         """
         self._event.clear()
         for p in self._thread:
-            p.join(timeout=1.)
+            p.join(timeout=30.)
         self._release_threads()
 
     def check_exception(self) -> None:

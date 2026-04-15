@@ -18,7 +18,7 @@ typedef enum{
 
 
 /*! \brief Function for resetting the Pico MCU
-* \param wait_until_done   Boolean for waiting routine until reset is done
+* \param wait_until_done    Boolean for waiting routine until reset is done
 */
 void reset_pico_mcu(bool wait_until_done);
 
@@ -31,15 +31,9 @@ bool init_gpio_pico(bool block_usb);
 
 
 /*! \brief  Function for initialisating the System Functionalities
-    \return                           Boolean for done initialisation of system
+    \return             Boolean for done initialisation of system
 */
 bool init_system(void);
-
-
-/*! \brief Function for getting the runtime since last reboot
-* \return                           Time structure with runtime in ms
-*/
-uint64_t get_runtime_ms(void);
 
 
 /*! \brief Function for getting the status register of the system

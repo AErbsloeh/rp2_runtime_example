@@ -23,7 +23,7 @@ int main(){
         apply_rpc_callback(usb_buffer.data, usb_buffer.length, usb_buffer.ready);
 
         /*--- Sending data in main */
-        if(daq_check_send_data(&daq_sample_data))
+        if(daq_check_send_data(&daq_config_raw))
             toggle_state_default_led();
     };
 }

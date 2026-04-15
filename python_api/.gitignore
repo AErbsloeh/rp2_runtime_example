@@ -3,6 +3,7 @@
 **/.pytest_cache
 **/data
 **/dist
+**/bench_data
 **/temp_data
 .venv
 .python-version

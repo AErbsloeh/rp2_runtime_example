@@ -11,6 +11,8 @@ def _convert_pin_state(state: int) -> str:
         for idx, led in enumerate(led_name):
             if state & (1 << idx):
                 ret_text += f'{led}' if len(ret_text) == 0 else f'+{led}'
+        if ret_text == '':
+            raise ValueError("Translated pin state is undefined")
         return ret_text
 
 
@@ -21,7 +23,7 @@ def _convert_system_state(state: int) -> str:
     """
     state_name = ["ERROR", "RESET", "INIT", "IDLE", "TEST", "DAQ"]
     if not 0 <= state < len(state_name):
-        raise ValueError(f'Invalid pin state: {state}')
+        raise ValueError(f'Invalid system state: {state}')
     return state_name[state]
 
 

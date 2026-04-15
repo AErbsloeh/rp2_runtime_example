@@ -127,9 +127,24 @@ def test_control_daq_batch(dut: DeviceAPI):
     sleep(1.)
 
 
+def test_channel_daq(dut: DeviceAPI):
+    ret = dut._get_number_channels()
+    assert ret == 2
+
+
 def test_batchsize_daq(dut: DeviceAPI):
-    ret = dut.get_number_samples_per_batch()
+    ret = dut._get_number_samples_per_batch()
     assert ret == 16
+
+
+def test_bytes_daq_sample(dut: DeviceAPI):
+    ret = dut._get_number_bytes_per_daq_sample()
+    assert ret == 15
+
+
+def test_bytes_daq_batch(dut: DeviceAPI):
+    ret = dut._get_number_bytes_per_daq_batch()
+    assert ret == 83
 
 
 if __name__ == "__main__":
