@@ -1,16 +1,18 @@
 from api import DeviceAPI
+from logging import basicConfig, DEBUG, INFO
 
 
 if __name__ == '__main__':
+    basicConfig(level=DEBUG)
+
     DeviceAPI().do_reset()
     dut = DeviceAPI()
-    dut.update_daq_sampling_rate(1000.)
-
     dut.start_daq(
-        do_batch=True,
+        sampling_rate=500.,
+        do_batch=False,
         do_plot=True,
-        window_sec=10.,
-        track_util=True
+        window_sec=4.,
+        track_util=False
     )
-    dut.wait_daq(100.*60)
+    dut.wait_daq(1.*60)
     dut.stop_daq()

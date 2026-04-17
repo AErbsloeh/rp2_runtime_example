@@ -1,89 +1,49 @@
-from dataclasses import dataclass
 from enum import IntEnum
 from logging import getLogger, Logger
 from time import sleep
 import numpy as np
 
-from api.interface import get_comport_name, InterfaceSerial
+from api.interface import (
+    get_comport_name,
+    InterfaceSerial
+)
 from api.lsl import ThreadLSL
-from api.mcu_conv import _convert_pin_state, _convert_system_state, _convert_rp2_temp_value
-
-
-def get_path_to_project(new_folder: str='', max_levels: int=5) -> str:
-    """Function for getting the path to find the project folder structure in application.
-    :param new_folder:  New folder path
-    :param max_levels:  Max number of levels to get-out for finding pyproject.toml
-    :return:            String with absolute path to start the project structure
-    """
-    from pathlib import Path
-    cwd = Path(".").absolute()
-    current = cwd
-
-    def is_project_root(p):
-        return (p / "pyproject.toml").exists()
-
-    for _ in range(max_levels):
-        if is_project_root(current):
-            return str(current / new_folder)
-        current = current.parent
-
-    if is_project_root(current):
-        return str(current / new_folder)
-    return str(cwd)
-
-
-@dataclass(frozen=True)
-class SystemState:
-    """Dataclass for handling the system state of the device
-    Attributes:
-        pins:       String with enabled GPIO pins (selection from MCU)
-        system:     String with actual system state
-        runtime:    Float with actual execution runtime after last reset [sec.]
-        clock:      Integer with System Clock [kHz]
-        firmware:   String with firmware version on board
-        temp:       Float with temperature [°C] of the board
-    """
-    pins: str
-    system: str
-    runtime: float
-    clock: int
-    firmware: str
-    temp: float
+from api.helper import (
+    _convert_pin_state,
+    _convert_system_state,
+    _convert_rp2_temp_value,
+    get_path_to_project,
+    DataAcquisitionConfig,
+    SystemState
+)
     
 
 class Commands(IntEnum):
-    ECHO = 0
-    RESET = 1
-    GET_CLOCK = 2
-    GET_STATE = 3
-    GET_PINS = 4
-    GET_RUNTIME = 5
-    GET_VERSION = 6
-    GET_TEMP = 7
-    ENABLE_LED = 8
-    DISABLE_LED = 9
-    TOGGLE_LED = 10
-    START_SAMPLE_DAQ = 11
-    START_BATCH_DAQ = 12
-    STOP_DAQ = 13
-    UPDATE_DAQ = 14
-    ASK_CHANNEL_DAQ = 15
-    ASK_BATCH_DAQ = 16
-    ASK_BYTES_SAMPLE_DAQ = 17
-    ASK_BYTES_BATCH_DAQ = 18
+    ECHO = 0x00
+    RESET = 0x01
+    GET_CHARAC_STATE = 0x02
+    GET_CHARAC_DAQ = 0x03
+    ENABLE_LED = 0x04
+    DISABLE_LED = 0x05
+    TOGGLE_LED = 0x06
+    START_DAQ = 0x07
+    STOP_DAQ = 0x08
+    SET_PERIOD_DAQ = 0x09
+    SET_BATCH_DAQ = 0x0A
 
 
 class DeviceAPI:
+    __logger: Logger
     __device: InterfaceSerial
     __threads: ThreadLSL
-    __logger: Logger
-    __timeout_default: float = 10.
-    __num_channels: int = 0
-    __num_bytes_rx: int = 0
-    __num_samples_batch: int = 0
-    __sampling_rate: float = 4.
+    __daq_config: DataAcquisitionConfig
+    __timeout_default: float
     __usb_vid: int = 0x2E8A
+    __last_idx: int = 255
+    __num_package_loss: int = 0
     # PID of RP2350 = 0x0009 and RP2040 = 0x000A
+    _pin_names: list[str] = ['LED_USER']
+    _state_names: list[str] = ["ERROR", "RESET", "INIT", "IDLE", "TEST", "DAQ"]
 
     def __init__(self, com_name: str="AUTOCOM", timeout: float=1.) -> None:
         """Init. of the device with name and baudrate of the device
@@ -135,7 +95,7 @@ class DeviceAPI:
     @property
     def is_daq_running(self) -> bool:
         """Returning if DAQ is still running"""
-        return self._get_system_state() == "DAQ" and self.__threads.is_alive
+        return self.get_state().system == "DAQ" and self.__threads.is_alive
 
     def open(self) -> None:
         """Opening the serial communication between API and device"""
@@ -164,53 +124,31 @@ class DeviceAPI:
             val += self.__write_with_feedback(Commands.ECHO, chunk)
         return self.__device.deserialize_string(val, do_padding)
 
-    def _get_system_clock_khz(self) -> int:
-        """Returning the system clock of the device in kHz"""
-        ret = self.__write_with_feedback(Commands.GET_CLOCK)
-        return 10 * self._bytes_to_int(ret)
-
-    def _get_system_state(self) -> str:
-        """Retuning the System State"""
-        ret = self.__write_with_feedback(Commands.GET_STATE)
-        return _convert_system_state(self._bytes_to_int(ret))
-
-    def _get_pin_state(self) -> str:
-        """Retuning the Pin States"""
-        ret = self.__write_with_feedback(Commands.GET_PINS)
-        return _convert_pin_state(self._bytes_to_int(ret))
-
-    def _get_runtime_sec(self) -> float:
-        """Returning the execution runtime of the device after last reset
-        :return:    Float value with runtime in seconds
-        """
-        ret = self.__write_with_feedback(Commands.GET_RUNTIME, size=9)
-        return 1e-6 * self._bytes_to_int(ret)
-
-    def _get_firmware_version(self) -> str:
-        """Returning the firmware version of the device
-        :return:    String with firmware version
-        """
-        ret = self.__write_with_feedback(Commands.GET_VERSION)
-        return f"{ret[0]}.{ret[1]}"
-
-    def _get_temp_mcu(self) -> float:
-        """Returning the temperature of the device in Celsius
-        :return:    Float value with temperature in Celsius
-        """
-        ret = self.__write_with_feedback(Commands.GET_TEMP)
-        return _convert_rp2_temp_value(self._bytes_to_int(ret))
+    @property
+    def _package_system_state(self) -> np.dtype:
+        return np.dtype([
+            ('state', '<u2'),
+            ('clock', '<u2'),
+            ('pins', '<u2'),
+            ('temp', '<u2'),
+            ('major', 'u1'),
+            ('minor', 'u1'),
+            ('runtime', '<u8')
+        ])
 
     def get_state(self) -> SystemState:
         """Returning the state of the system
         :return:    Class SystemState with information about pin state, system state and actual runtime of the system
         """
+        ret = self.__write_with_feedback(Commands.GET_CHARAC_STATE, size=19)
+        frame = np.frombuffer(ret, dtype=self._package_system_state)[0]
         return SystemState(
-            pins=self._get_pin_state(),
-            system=self._get_system_state(),
-            runtime=self._get_runtime_sec(),
-            clock=self._get_system_clock_khz(),
-            firmware=self._get_firmware_version(),
-            temp=self._get_temp_mcu()
+            pins=_convert_pin_state(int(frame['pins']), self._pin_names),
+            system=_convert_system_state(int(frame['state']), self._state_names),
+            runtime=float(1e-6 * frame['runtime']),
+            clock=10 * int(frame['clock']),
+            firmware=f"{frame['major']}.{frame['minor']}",
+            temp=_convert_rp2_temp_value(int(frame['temp']))
         )
 
     def enable_led(self) -> None:
@@ -231,80 +169,134 @@ class DeviceAPI:
         """
         self.__write_without_feedback(Commands.TOGGLE_LED)
 
+    def _update_daq_sampling_rate(self, sampling_rate: float) -> None:
+        """Updating the sampling rate of the DAQ
+        :param sampling_rate:   Float with sampling rate [Hz]
+        :return:                None
+        """
+        sampling_limits = [0, 10e3]
+        if not sampling_limits[0] < sampling_rate < sampling_limits[1]:
+            raise ValueError(f"Sampling rate cannot be smaller than [{sampling_limits[0], sampling_limits[1]}] Hz")
+        self.__write_without_feedback(Commands.SET_PERIOD_DAQ, int(sampling_rate))
+
+    def _enable_batch_daq(self, use_batches: bool=True) -> None:
+        """Enabling or disabling the batch transmission mode of the DAQ
+        :param use_batches:     Boolean with True for enabling batch mode otherwise sample-wise
+        :return:                None
+        """
+        self.__write_without_feedback(Commands.SET_BATCH_DAQ, int(use_batches))
+
+    def _check_package_loss(self, new_idx: int) -> None:
+        if 1 < new_idx - self.__last_idx < 255:
+            self.__num_package_loss += 1
+            self.__logger.debug(f"Package loss detected: {self.__num_package_loss}")
+        self.__last_idx = new_idx
+
     @property
-    def _thread_frame_datatype(self) -> np.dtype:
+    def _package_daq_config(self) -> np.dtype:
         return np.dtype([
-            ('head', 'u1'),                             # 1 Byte unsigned
-            ('index', 'u1'),                            # 1 Byte unsigned
-            ('timestamp', '<u8'),                       # 8 Byte unsigned
-            ('data', '<u2', (self.__num_channels,)),    # 2 Byte signed short (channels, samples)
-            ('tail', 'u1')                              # 1 Byte unsigned
+            ('head', 'u1'),
+            ('tail', 'u1'),
+            ('signed', 'u1'),
+            ('mode', 'u1'),
+            ('num_channels', '<u2'),
+            ('num_samples', '<u2'),
+            ('num_bytes', '<u2'),
+            ('bytes_sample', 'u1'),
+            ('period', '<i8')
+        ])
+
+    def get_daq_characteristics(self) -> DataAcquisitionConfig:
+        """Get number of channels for acquiring data
+        :return:    Integer with number of DAQ channels
+        """
+        ret = self.__write_with_feedback(Commands.GET_CHARAC_DAQ, size=20)
+        frame = np.frombuffer(ret, dtype=self._package_daq_config)[0]
+        return DataAcquisitionConfig(
+            head_cmd=int(frame['head']),
+            tail_cmd=int(frame['tail']),
+            num_channels=int(frame['num_channels']),
+            num_samples=int(frame['num_samples']),
+            num_bytes_total=int(frame['num_bytes']),
+            send_batch=bool(frame['mode']),
+            bytes_sample=int(frame['bytes_sample']),
+            sampling_rate=float(-1e6 / frame['period']),
+            is_signed=bool(frame['signed'])
+        )
+
+    @property
+    def _package_daq_sample(self) -> np.dtype:
+        return np.dtype([
+            ('head', 'u1'),
+            ('index', 'u1'),
+            ('timestamp', '<u8'),
+            ('data', self.__daq_config.dtype_sample, self.__daq_config.data_shape),
+            ('tail', 'u1')
         ])
 
     def _thread_read_frame(self) -> tuple[list, float]:
-        """Entpacken der Informationen aus dem USB Protokoll (siehe C-Datei: src/daq_sample.c in der Firmware)"""
         try:
-            buffer = self.__device.read(self.__num_bytes_rx)
+            buffer = self.__device.read(self.__daq_config.num_bytes_total)
             if not buffer:
                 raise Exception
-            frames = np.frombuffer(buffer, dtype=self._thread_frame_datatype)
-            mask = (frames['head'] == 0xA0) & (frames['tail'] == 0xFF)
-            frames = frames[mask]
-
-            if frames.size > 0:
-                timestamps = float(frames['timestamp'][0] * 1e-6)
-                data = frames['data'][0].tolist()
+            frames = np.frombuffer(buffer, dtype=self._package_daq_sample)[0]
+            mask = (frames['head'], frames['tail']) == (self.__daq_config.head_cmd, self.__daq_config.tail_cmd)
+            if mask:
+                self._check_package_loss(int(frames['index']))
+                timestamps = 1e-6 * float(frames['timestamp'])
+                data = frames['data'].tolist()
                 return data, timestamps
             else:
                 raise Exception
         except Exception:
             return [], None
-            
+
     @property
     def _thread_batch_datatype(self) -> np.dtype:
         return np.dtype([
-            ('head', 'u1'),             # 1 Byte unsigned
-            ('index', 'u1'),            # 1 Byte unsigned
-            ('timestamp', '<u8', (2,)), # 8 Byte unsigned [first, last value]
-            ('data', '<u2', (self.__num_channels, self.__num_samples_batch,)),# 2 Byte signed short (channels, samples)
-            ('tail', 'u1')          # 1 Byte unsigned
+            ('head', 'u1'),
+            ('index', 'u1'),
+            ('timestamp', '<u8', (2,)),
+            ('data', self.__daq_config.dtype_sample, self.__daq_config.data_shape),
+            ('tail', 'u1')
         ])
 
     def _thread_read_batch(self) -> tuple[list[list], list[float]]:
-        """Entpacken der Informationen aus dem USB Protokoll (siehe C-Datei: src/daq_sample.c in der Firmware)"""
         try:
-            buffer = self.__device.read(self.__num_bytes_rx)
+            buffer = self.__device.read(self.__daq_config.num_bytes_total)
             if not buffer:
                 raise Exception
-            frames = np.frombuffer(buffer, dtype=self._thread_batch_datatype)
-            mask = (frames['head'] == 0xA0) & (frames['tail'] == 0xFF)
-            frames = frames[mask]
-            if frames.size > 0:
-                dt = (frames['timestamp'][0][1] - frames['timestamp'][0][0]) / (self.__num_samples_batch-1)
-                timestamps = [float(1e-6 * (frames['timestamp'][0][0] + dt*idx)) for idx in range(self.__num_samples_batch)]
-                data = frames['data'][0].tolist()
+            frames = np.frombuffer(buffer, dtype=self._thread_batch_datatype)[0]
+            mask = (frames['head'], frames['tail']) == (self.__daq_config.head_cmd, self.__daq_config.tail_cmd)
+            if mask:
+                self._check_package_loss(int(frames['index']))
+                dt = (frames['timestamp'][1] - frames['timestamp'][0]) / (self.__daq_config.num_samples-1)
+                timestamps = [float(1e-6 * (frames['timestamp'][0] + dt*idx)) for idx in range(self.__daq_config.num_samples)]
+                data = frames['data'].tolist()
                 return data, timestamps
             else:
                 raise Exception
         except Exception:
             return [], None
 
-    def start_daq(self, do_batch: bool=True, do_plot: bool=False, window_sec: float= 30., track_util: bool=False, folder_name: str="data") -> None:
+    def start_daq(self, sampling_rate: float, do_batch: bool=True, do_plot: bool=False, window_sec: float= 30., track_util: bool=False, folder_name: str="data") -> None:
         """Changing the state of the DAQ with starting it
-        :param do_batch:    True for sending batches outside otherwise sample-wise
-        :param do_plot:     True to plot the data in real-time
-        :param window_sec:  Floating value with window length [in seconds] for live plotting
-        :param track_util:  If true, the utilization (CPU / RAM) of the host computer will be tracked during recording session
-        :param folder_name: String with folder name to save data in project folder
-        :return: None
+        :param sampling_rate:   Float with sampling rate [Hz]
+        :param do_batch:        True for sending batches outside otherwise sample-wise
+        :param do_plot:         True to plot the data in real-time
+        :param window_sec:      Floating value with window length [in seconds] for live plotting
+        :param track_util:      If true, the utilization (CPU / RAM) of the host computer will be tracked during recording session
+        :param folder_name:     String with folder name to save data in project folder
+        :return:                None
         """
-        self.__num_samples_batch = self._get_number_samples_per_batch()
-        self.__num_bytes_rx = self._get_number_bytes_per_daq_batch() if do_batch else self._get_number_bytes_per_daq_sample()
-        self.__num_channels = self._get_number_channels()
+        self.__num_package_loss = 0
+        self._enable_batch_daq(do_batch)
+        self._update_daq_sampling_rate(sampling_rate)
+        self.__daq_config = self.get_daq_characteristics()
         path2data = get_path_to_project(new_folder=folder_name)
 
         func = self._thread_read_batch if do_batch else self._thread_read_frame
-        self.__threads.register(func=self.__threads.lsl_stream_data, args=(0, 'data', func, 2, self.__sampling_rate))
+        self.__threads.register(func=self.__threads.lsl_stream_data, args=(0, 'data', func, 2, self.__daq_config.sampling_rate))
         self.__threads.register(func=self.__threads.lsl_record_stream, args=(1, 'data', path2data))
         if track_util:
             self.__threads.register(func=self.__threads.lsl_stream_util, args=(2, 'util', 2.))
@@ -312,9 +304,9 @@ class DeviceAPI:
         if do_plot:
             self.__threads.register(func=self.__threads.lsl_plot_stream, args=(4 if track_util else 2, 'data', window_sec))
 
-        self.__device.timeout = 2 / self.__sampling_rate
+        self.__device.timeout = 2 / self.__daq_config.sampling_rate
         self.__threads.start()
-        self.__write_without_feedback(Commands.START_BATCH_DAQ if do_batch else Commands.START_SAMPLE_DAQ, 0)
+        self.__write_without_feedback(Commands.START_DAQ)
 
     def stop_daq(self) -> None:
         """Changing the state of the DAQ with stopping it
@@ -327,6 +319,8 @@ class DeviceAPI:
             self.__threads.stop()
             sleep(0.5)
         self.__device.empty_buffer()
+        if self.__num_package_loss > 0:
+            self.__logger.info(f"Number of package losses: {self.__num_package_loss}")
 
     def wait_daq(self, time_sec: float) -> None:
         """Waiting Routine incl. returning possible thread errors
@@ -334,45 +328,3 @@ class DeviceAPI:
         :return:            None
         """
         self.__threads.wait_for_seconds(time_sec)
-
-    def update_daq_sampling_rate(self, sampling_rate: float) -> None:
-        """Updating the sampling rate of the DAQ
-        :param sampling_rate:   Float with sampling rate [Hz]
-        :return:                None
-        """
-        sampling_limits = [0, 10e3]
-        if sampling_rate < sampling_limits[0]:
-            raise ValueError(f"Sampling rate cannot be smaller than {sampling_limits[0]}")
-        if sampling_rate > sampling_limits[1]:
-            raise ValueError(f"Sampling rate cannot be greater than {sampling_limits[1]}")
-
-        self.__sampling_rate = sampling_rate
-        self.__write_without_feedback(Commands.UPDATE_DAQ, int(sampling_rate))
-
-    def _get_number_channels(self) -> int:
-        """Get number of channels for acquiring data
-        :return:    Integer with number of DAQ channels
-        """
-        ret = self.__write_with_feedback(Commands.ASK_CHANNEL_DAQ)
-        return self._bytes_to_int(ret)
-
-    def _get_number_samples_per_batch(self) -> int:
-        """Get number of samples per batch which are transmitted in one data package
-        :return:    Integer with number of samples per batch
-        """
-        ret = self.__write_with_feedback(Commands.ASK_BATCH_DAQ)
-        return self._bytes_to_int(ret)
-
-    def _get_number_bytes_per_daq_sample(self) -> int:
-        """Get number of bytes transmitted per each DAQ sample
-        :return:    Integer with number of bytes per DAQ sample
-        """
-        ret = self.__write_with_feedback(Commands.ASK_BYTES_SAMPLE_DAQ)
-        return self._bytes_to_int(ret)
-
-    def _get_number_bytes_per_daq_batch(self) -> int:
-        """Get number of bytes transmitted per each DAQ sample
-        :return:    Integer with number of bytes per DAQ sample
-        """
-        ret = self.__write_with_feedback(Commands.ASK_BYTES_BATCH_DAQ)
-        return self._bytes_to_int(ret)
