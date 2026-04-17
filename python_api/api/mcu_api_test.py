@@ -1,4 +1,5 @@
 import pytest
+from random import randint
 from shutil import rmtree
 from time import sleep
 from api.mcu_api import (
@@ -39,6 +40,15 @@ def test_check_echo(dut: DeviceAPI):
     ret = dut.echo(test_pattern)
     assert ret == test_pattern
     assert len(ret) == len(test_pattern)
+
+
+def test_bytes_int_conversion(dut: DeviceAPI):
+    input = [randint(a=0, b=65535) for _ in range(100)]
+    rslt = []
+    for val in input:
+        data = val.to_bytes(2, byteorder='little')
+        rslt.append(dut._bytes_to_int(data))
+    assert rslt == input
 
 
 def test_check_system_state(dut: DeviceAPI):

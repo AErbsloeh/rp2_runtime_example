@@ -65,8 +65,8 @@ class InterfaceSerial:
         :param data:    Data to be converted
         :return:        Bytes converted from head + data
         """
-        transmit = data.to_bytes(self.__BYTES_DATA, 'little')
-        transmit += head.to_bytes(self.__BYTES_HEAD, 'little')
+        transmit = data.to_bytes(self.__BYTES_DATA, byteorder='little')
+        transmit += head.to_bytes(self.__BYTES_HEAD, byteorder='little')
         return transmit
 
     def is_open(self) -> bool:

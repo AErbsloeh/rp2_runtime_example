@@ -4,7 +4,7 @@ from api import DeviceAPI
 if __name__ == '__main__':
     DeviceAPI().do_reset()
     dut = DeviceAPI()
-    dut.update_daq_sampling_rate(10000.)
+    dut.update_daq_sampling_rate(1000.)
 
     dut.start_daq(
         do_batch=True,
@@ -12,5 +12,5 @@ if __name__ == '__main__':
         window_sec=10.,
         track_util=True
     )
-    dut.wait_daq(10.)
+    dut.wait_daq(100.*60)
     dut.stop_daq()

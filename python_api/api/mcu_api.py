@@ -4,16 +4,9 @@ from logging import getLogger, Logger
 from time import sleep
 import numpy as np
 
-from api.interface import (
-    get_comport_name,
-    InterfaceSerial
-)
+from api.interface import get_comport_name, InterfaceSerial
 from api.lsl import ThreadLSL
-from api.mcu_conv import (
-    _convert_pin_state,
-    _convert_system_state,
-    _convert_rp2_temp_value
-)
+from api.mcu_conv import _convert_pin_state, _convert_system_state, _convert_rp2_temp_value
 
 
 def get_path_to_project(new_folder: str='', max_levels: int=5) -> str:
@@ -59,7 +52,6 @@ class SystemState:
     
 
 class Commands(IntEnum):
-    """Enum Class for defining the address of the Remote Procedure Calls (RPC)"""
     ECHO = 0
     RESET = 1
     GET_CLOCK = 2
@@ -112,20 +104,23 @@ class DeviceAPI:
             self.__device.close()
         self.__device.open()
 
-    def __write_with_feedback(self, head: Commands, data: int, size: int=0) -> bytes:
-        return self.__device.write_wfb(
+    def __write_with_feedback(self, head: Commands, data: int=0, size: int=0) -> bytes:
+        data = self.__device.write_wfb(
             data=self.__device.convert(head, data),
             size=size
         )
+        if data[0] != head:
+            raise ValueError(f"Get: {data}")
+        return data[1:]
 
-    def __write_without_feedback(self, head: Commands, data: int) -> None:
+    def __write_without_feedback(self, head: Commands, data: int=0) -> None:
         self.__device.write(
             data=self.__device.convert(head, data),
         )
 
     @staticmethod
-    def __bytes_to_int(data: bytes) -> int:
-        return int.from_bytes(data, byteorder='little', signed=False)
+    def _bytes_to_int(data: bytes, signed: bool=False) -> int:
+        return int.from_bytes(data, byteorder='little', signed=signed)
 
     @property
     def total_num_bytes(self) -> int:
@@ -155,7 +150,7 @@ class DeviceAPI:
         if self.__threads.is_alive:
             self.__threads.stop()
             self.stop_daq()
-        self.__write_without_feedback(Commands.RESET, 0)
+        self.__write_without_feedback(Commands.RESET)
         sleep(4)
 
     def echo(self, data: str) -> str:
@@ -166,59 +161,44 @@ class DeviceAPI:
         do_padding = len(data) % self.__device.num_bytes == 1
         val = bytes()
         for chunk in self.__device.serialize_string(data, do_padding):
-            ret = self.__write_with_feedback(Commands.ECHO, chunk)
-            if ret[0] != Commands.ECHO:
-                raise ValueError(f"Get: {ret}")
-            val += ret[1:]
+            val += self.__write_with_feedback(Commands.ECHO, chunk)
         return self.__device.deserialize_string(val, do_padding)
 
     def _get_system_clock_khz(self) -> int:
         """Returning the system clock of the device in kHz"""
-        ret = self.__write_with_feedback(Commands.GET_CLOCK, 0)
-        if ret[0] != Commands.GET_CLOCK:
-            raise ValueError(f"Get: {ret}")
-        return 10 * self.__bytes_to_int(ret[1:])
+        ret = self.__write_with_feedback(Commands.GET_CLOCK)
+        return 10 * self._bytes_to_int(ret)
 
     def _get_system_state(self) -> str:
         """Retuning the System State"""
-        ret = self.__write_with_feedback(Commands.GET_STATE, 0)
-        if ret[0] != Commands.GET_STATE:
-            raise ValueError(f"Get: {ret}")
-        return _convert_system_state(ret[-1])
+        ret = self.__write_with_feedback(Commands.GET_STATE)
+        return _convert_system_state(self._bytes_to_int(ret))
 
     def _get_pin_state(self) -> str:
         """Retuning the Pin States"""
-        ret = self.__write_with_feedback(Commands.GET_PINS, 0)
-        if ret[0] != Commands.GET_PINS:
-            raise ValueError(f"Get: {ret}")
-        return _convert_pin_state(ret[-1])
+        ret = self.__write_with_feedback(Commands.GET_PINS)
+        return _convert_pin_state(self._bytes_to_int(ret))
 
     def _get_runtime_sec(self) -> float:
         """Returning the execution runtime of the device after last reset
         :return:    Float value with runtime in seconds
         """
-        ret = self.__write_with_feedback(Commands.GET_RUNTIME, 0, size=9)
-        if ret[0] != Commands.GET_RUNTIME:
-            raise ValueError(f"Get: {ret}")
-        return 1e-6 * self.__bytes_to_int(ret[1:])
+        ret = self.__write_with_feedback(Commands.GET_RUNTIME, size=9)
+        return 1e-6 * self._bytes_to_int(ret)
 
     def _get_firmware_version(self) -> str:
         """Returning the firmware version of the device
         :return:    String with firmware version
         """
-        ret = self.__write_with_feedback(Commands.GET_VERSION, 0)
-        if ret[0] != Commands.GET_VERSION:
-            raise ValueError(f"Get: {ret}")
-        return f"{ret[1]}.{ret[2]}"
+        ret = self.__write_with_feedback(Commands.GET_VERSION)
+        return f"{ret[0]}.{ret[1]}"
 
     def _get_temp_mcu(self) -> float:
         """Returning the temperature of the device in Celsius
         :return:    Float value with temperature in Celsius
         """
-        ret = self.__write_with_feedback(Commands.GET_TEMP, 0)
-        if ret[0] != Commands.GET_TEMP:
-            raise ValueError(f"Get: {ret}")
-        return _convert_rp2_temp_value(self.__bytes_to_int(ret[1:]))
+        ret = self.__write_with_feedback(Commands.GET_TEMP)
+        return _convert_rp2_temp_value(self._bytes_to_int(ret))
 
     def get_state(self) -> SystemState:
         """Returning the state of the system
@@ -237,19 +217,19 @@ class DeviceAPI:
         """Changing the state of the LED with enabling it
         :return:        None
         """
-        self.__write_without_feedback(Commands.ENABLE_LED, 0)
+        self.__write_without_feedback(Commands.ENABLE_LED)
 
     def disable_led(self) -> None:
         """Changing the state of the LED with disabling it
         :return:        None
         """
-        self.__write_without_feedback(Commands.DISABLE_LED, 0)
+        self.__write_without_feedback(Commands.DISABLE_LED)
 
     def toggle_led(self) -> None:
         """Changing the state of the LED with toggling it
         :return:        None
         """
-        self.__write_without_feedback(Commands.TOGGLE_LED, 0)
+        self.__write_without_feedback(Commands.TOGGLE_LED)
 
     @property
     def _thread_frame_datatype(self) -> np.dtype:
@@ -340,7 +320,7 @@ class DeviceAPI:
         """Changing the state of the DAQ with stopping it
         :return:            None
         """
-        self.__write_without_feedback(Commands.STOP_DAQ, 0)
+        self.__write_without_feedback(Commands.STOP_DAQ)
         sleep(0.5)
         self.__device.timeout = self.__timeout_default
         while self.__threads.is_alive:
@@ -373,34 +353,26 @@ class DeviceAPI:
         """Get number of channels for acquiring data
         :return:    Integer with number of DAQ channels
         """
-        ret = self.__write_with_feedback(Commands.ASK_CHANNEL_DAQ, 0)
-        if ret[0] != Commands.ASK_CHANNEL_DAQ:
-            raise ValueError(f"Get: {ret}")
-        return int(ret[2])
+        ret = self.__write_with_feedback(Commands.ASK_CHANNEL_DAQ)
+        return self._bytes_to_int(ret)
 
     def _get_number_samples_per_batch(self) -> int:
         """Get number of samples per batch which are transmitted in one data package
         :return:    Integer with number of samples per batch
         """
-        ret = self.__write_with_feedback(Commands.ASK_BATCH_DAQ, 0)
-        if ret[0] != Commands.ASK_BATCH_DAQ:
-            raise ValueError(f"Get: {ret}")
-        return int(ret[2])
+        ret = self.__write_with_feedback(Commands.ASK_BATCH_DAQ)
+        return self._bytes_to_int(ret)
 
     def _get_number_bytes_per_daq_sample(self) -> int:
         """Get number of bytes transmitted per each DAQ sample
         :return:    Integer with number of bytes per DAQ sample
         """
-        ret = self.__write_with_feedback(Commands.ASK_BYTES_SAMPLE_DAQ, 0)
-        if ret[0] != Commands.ASK_BYTES_SAMPLE_DAQ:
-            raise ValueError(f"Get: {ret}")
-        return self.__bytes_to_int(ret[1:])
+        ret = self.__write_with_feedback(Commands.ASK_BYTES_SAMPLE_DAQ)
+        return self._bytes_to_int(ret)
 
     def _get_number_bytes_per_daq_batch(self) -> int:
         """Get number of bytes transmitted per each DAQ sample
         :return:    Integer with number of bytes per DAQ sample
         """
-        ret = self.__write_with_feedback(Commands.ASK_BYTES_BATCH_DAQ, 0)
-        if ret[0] != Commands.ASK_BYTES_BATCH_DAQ:
-            raise ValueError(f"Get: {ret}")
-        return self.__bytes_to_int(ret[1:])
+        ret = self.__write_with_feedback(Commands.ASK_BYTES_BATCH_DAQ)
+        return self._bytes_to_int(ret)

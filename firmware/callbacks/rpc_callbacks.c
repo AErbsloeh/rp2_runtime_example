@@ -41,8 +41,8 @@ void system_reset(void){
 void get_state_system(void){
     char buffer_send[3];
     buffer_send[0] = STATE_SYS;
-    buffer_send[1] = 0x00;
-    buffer_send[2] = system_state;
+    buffer_send[1] = (uint8_t)(get_system_state() >> 0);
+    buffer_send[2] = (uint8_t)(get_system_state() >> 8);
 
     usb_send_bytes(buffer_send, sizeof(buffer_send));
 }
@@ -62,8 +62,8 @@ void get_clock_system(void){
 void get_state_pin(void){
     char buffer_send[3];
     buffer_send[0] = STATE_PIN;
-    buffer_send[1] = 0x02;
-    buffer_send[2] = (get_state_default_led() << 0x00);
+    buffer_send[1] = (uint8_t)(get_state_default_led() << 0x00);
+    buffer_send[2] = (uint8_t)(get_state_default_led() << 0x08);
     usb_send_bytes(buffer_send, sizeof(buffer_send));
 }
 
@@ -145,8 +145,8 @@ void update_daq(char* buffer){
 void get_channel_number_daq(void){
     char buffer_send[3];
     buffer_send[0] = ASK_CHANNEL_DAQ;
-    buffer_send[1] = 0x00;
-    buffer_send[2] = daq_config_raw.num_channels;
+    buffer_send[1] = (uint8_t)(daq_config_raw.num_channels >> 0);
+    buffer_send[2] = (uint8_t)(daq_config_raw.num_channels >> 8);
     usb_send_bytes(buffer_send, sizeof(buffer_send));
 }
 
@@ -154,8 +154,8 @@ void get_channel_number_daq(void){
 void get_batchsize_daq(void){
     char buffer_send[3];
     buffer_send[0] = ASK_BATCH_DAQ;
-    buffer_send[1] = 0x00;
-    buffer_send[2] = daq_config_raw.num_samples;
+    buffer_send[1] = (uint8_t)(daq_config_raw.num_samples >> 0);
+    buffer_send[2] = (uint8_t)(daq_config_raw.num_samples >> 8);
     usb_send_bytes(buffer_send, sizeof(buffer_send));
 }
 
@@ -164,8 +164,8 @@ void get_bytes_sample_daq(void){
     uint16_t bytes = daq_get_number_bytes_per_sample(&daq_config_raw);
     char buffer_send[3];
     buffer_send[0] = ASK_BYTES_SAMPLE_DAQ;
-    buffer_send[1] = bytes >> 0;
-    buffer_send[2] = bytes >> 8;
+    buffer_send[1] = (uint8_t)(bytes >> 0);
+    buffer_send[2] = (uint8_t)(bytes >> 8);
     usb_send_bytes(buffer_send, sizeof(buffer_send));
 }
 
@@ -174,8 +174,8 @@ void get_bytes_batch_daq(void){
     uint16_t bytes = daq_get_number_bytes_per_batch(&daq_config_raw);
     char buffer_send[3];
     buffer_send[0] = ASK_BYTES_BATCH_DAQ;
-    buffer_send[1] = bytes >> 0;
-    buffer_send[2] = bytes >> 8;
+    buffer_send[1] = (uint8_t)(bytes >> 0);
+    buffer_send[2] = (uint8_t)(bytes >> 8);
     usb_send_bytes(buffer_send, sizeof(buffer_send));
 }
 
