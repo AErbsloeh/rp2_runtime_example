@@ -12,7 +12,7 @@ if __name__ == '__main__':
         do_batch=False,
         do_plot=True,
         window_sec=4.,
-        track_util=False
+        track_util=True
     )
-    dut.wait_daq(1.*60)
+    dut.wait_daq(0.5* 60)
     dut.stop_daq()

@@ -45,7 +45,7 @@ class DeviceAPI:
     _pin_names: list[str] = ['LED_USER']
     _state_names: list[str] = ["ERROR", "RESET", "INIT", "IDLE", "TEST", "DAQ"]
 
-    def __init__(self, com_name: str="AUTOCOM", timeout: float=1.) -> None:
+    def __init__(self, com_name: str="AUTOCOM", timeout: float=0.1) -> None:
         """Init. of the device with name and baudrate of the device
         :param com_name:    String with the serial port name of the used device
         :param timeout:     Floating value with timeout for the communication [Default, not during DAQ]
@@ -279,7 +279,7 @@ class DeviceAPI:
         except Exception:
             return [], None
 
-    def start_daq(self, sampling_rate: float, do_batch: bool=True, do_plot: bool=False, window_sec: float= 30., track_util: bool=False, folder_name: str="data") -> None:
+    def start_daq(self, sampling_rate: float, window_sec: float= 30., do_batch: bool=True, do_plot: bool=False, track_util: bool=False, folder_name: str="data") -> None:
         """Changing the state of the DAQ with starting it
         :param sampling_rate:   Float with sampling rate [Hz]
         :param do_batch:        True for sending batches outside otherwise sample-wise
@@ -296,13 +296,11 @@ class DeviceAPI:
         path2data = get_path_to_project(new_folder=folder_name)
 
         func = self._thread_read_batch if do_batch else self._thread_read_frame
-        self.__threads.register(func=self.__threads.lsl_stream_data, args=(0, 'data', func, 2, self.__daq_config.sampling_rate))
-        self.__threads.register(func=self.__threads.lsl_record_stream, args=(1, 'data', path2data))
-        if track_util:
-            self.__threads.register(func=self.__threads.lsl_stream_util, args=(2, 'util', 2.))
-            self.__threads.register(func=self.__threads.lsl_record_stream, args=(3, 'util', path2data))
+        self.__threads.register(func=self.__threads.lsl_stream_util, args=(0, 'util', 2.))
+        self.__threads.register(func=self.__threads.lsl_stream_data, args=(1, 'data', func, self.__daq_config.num_channels, self.__daq_config.sampling_rate))
+        self.__threads.register(func=self.__threads.lsl_record_stream, args=(2, 'data', path2data, track_util))
         if do_plot:
-            self.__threads.register(func=self.__threads.lsl_plot_stream, args=(4 if track_util else 2, 'data', window_sec))
+            self.__threads.register(func=self.__threads.lsl_plot_stream, args=(3, 'data', window_sec))
 
         self.__device.timeout = 2 / self.__daq_config.sampling_rate
         self.__threads.start()

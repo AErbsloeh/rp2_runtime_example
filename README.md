@@ -9,5 +9,8 @@ Enjoy. If you have questions and suggestions, please create an issue or contact 
 ## Template of a Firmware
 This template provides a basic structure with timer IRQ, USB handling, and state machine. The sensors will be automatic downloaded and included from [here](https://github.com/AErbsloeh/pico_runtime_library). The content will be updateded continously and you can just update it by configuring CMake.
 
-## Template of a Python API
-This Python API is usable for communicating with RP2xxx MCU using the firmware template. 
+## Template of a Python-API
+This Python-API is usable for communicating with RP2xxx MCU using the firmware template.
+
+## Template of C-API 
+This C-API is usable for data acquisition using the firmware template (future feature). 

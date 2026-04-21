@@ -12,11 +12,12 @@ from api.lsl import (
 
 
 @pytest.fixture(scope="session", autouse=True)
-def before_all_tests():
-    path = Path(get_path_to_project("test_data"))
-    if path.exists():
-        rmtree(path)
+def path():
+    path = Path(get_path_to_project("temp_data"))
+    rmtree(path, ignore_errors=True)
     path.mkdir(parents=True, exist_ok=True)
+    yield path
+    rmtree(path, ignore_errors=True)
 
 
 def test_ringbuffer_without_timestamp():
@@ -114,11 +115,10 @@ def test_thread_register_and_start_multiple():
     assert dut.is_running == False
 
 
-def test_thread_utilization():
+def test_thread_utilization(path: Path):
     dut = ThreadLSL()
-    path2data = get_path_to_project("temp_data")
     dut.register(func=dut.lsl_stream_util, args=(0, 'util', 2.))
-    dut.register(func=dut.lsl_record_stream, args=(1, 'util', path2data))
+    dut.register(func=dut.lsl_record_stream, args=(1, 'util', path))
     assert len(dut._thread) == 3
 
     dut.start()
@@ -128,16 +128,15 @@ def test_thread_utilization():
     assert dut.is_running == False
 
 
-def test_thread_mock_random():
+def test_thread_mock_random(path: Path):
     dut = ThreadLSL()
     channel_num = 4
     sample_rate = 200
-    path2data = get_path_to_project("temp_data")
 
     dut.register(func=dut.lsl_stream_util, args=(0, 'util', 2.))
-    dut.register(func=dut.lsl_record_stream, args=(1, 'util', path2data))
+    dut.register(func=dut.lsl_record_stream, args=(1, 'util', path))
     dut.register(func=dut.lsl_stream_mock, args=(2, 'data', channel_num, sample_rate))
-    dut.register(func=dut.lsl_record_stream, args=(3, 'data', path2data))
+    dut.register(func=dut.lsl_record_stream, args=(3, 'data', path))
     assert len(dut._thread) == 5
 
     dut.start()
@@ -147,14 +146,13 @@ def test_thread_mock_random():
     assert dut.is_running == False
 
 
-def test_thread_mock_file():
+def test_thread_mock_file(path: Path):
     dut = ThreadLSL()
-    path2save = get_path_to_project("temp_data")
-    path2data = get_path_to_project("test_data")
 
-    dut.register(func=dut.lsl_stream_file, args=(0, 'mock', path2data, 0, 'mock'))
-    dut.register(func=dut.lsl_record_stream, args=(1, 'mock', path2save))
-    assert len(dut._thread) == 3
+    dut.register(func=dut.lsl_stream_util, args=(0, 'util', 1.))
+    dut.register(func=dut.lsl_stream_file, args=(1, 'mock', path, -1, 'data'))
+    dut.register(func=dut.lsl_record_stream, args=(2, 'mock', path, False))
+    assert len(dut._thread) == 4
 
     dut.start()
     try:

@@ -18,7 +18,7 @@ from pylsl import (
     proc_threadsafe
 )
 from queue import Queue, Empty
-from vispy import app, scene, visuals
+from vispy import app, scene
 from api.data_api import DataAPI, RawRecording
 
 
@@ -274,12 +274,14 @@ class ThreadLSL:
         path0 = Path(path2data)
         if not path0.exists():
             raise AttributeError("File is not available")
-        data: RawRecording = DataAPI(path2data=path0, data_prefix=prefix).read_data_file(file_index)
+        reader = DataAPI(path2data=path0, data_prefix=prefix)
+        reader.select_file(file_index)
+        data: RawRecording = reader.get_sensor_data()
 
         outlet = self._establish_lsl_outlet(
             idx=stim_idx,
             lsl_name=name,
-            lsl_type='mock_file_daq',
+            lsl_type='mock_daq',
             sampling_rate=float(data.sampling_rate),
             channel_num=int(data.num_channels),
             channel_type=cf_int16
@@ -383,8 +385,6 @@ class ThreadLSL:
 
         while self._event.is_set():
             try:
-                with self._lock:
-                    self._thread_active[stim_idx] = outlet.have_consumers()
                 outlet.push_sample(
                     x=[cpu_percent(), virtual_memory().percent],
                     timestamp=0.0,
@@ -395,20 +395,22 @@ class ThreadLSL:
                 with self._lock:
                     self._exception.put(e)
 
-    def lsl_record_stream(self, stim_idx: int, name: str, path2save: Path | str) -> None:
+    def lsl_record_stream(self, stim_idx: int, name: str, path2save: Path | str, track_util: bool=False) -> None:
         """Function for recording and saving the data pushed on LSL stream
         :param stim_idx:            Integer with array index to write into heartbeat feedback array
-        :param name:                String with name of the LSL stream in order to catch it
+        :param name:                String with name of the LSL stream to catch it
         :param path2save:           Path to save the data (if it is a string, it will be auto-converted)
+        :param track_util:          Boolean to track the utilization of the host computer
         :return: None
         """
         path = Path(path2save) if type(path2save) == str else path2save
-        inlet = self._establish_lsl_inlet(name)
+        inlet_data = self._establish_lsl_inlet(name)
+        inlet_util = self._establish_lsl_inlet("util")
         # Extract meta
-        channels = inlet.info().channel_count()
-        sampling_rate = inlet.info().nominal_srate()
-        sys_type = inlet.info().type()
-        data_format = inlet.info().channel_format()
+        channels = inlet_data.info().channel_count()
+        sampling_rate = inlet_data.info().nominal_srate()
+        sys_type = inlet_data.info().type()
+        data_format = inlet_data.info().channel_format()
         time = datetime.today().strftime('%Y%m%d_%H%M%S')
 
         if not path.is_dir():
@@ -419,8 +421,9 @@ class ThreadLSL:
             f.attrs["type"] = sys_type
             f.attrs["creation_date"] = datetime.today().strftime('%Y-%m-%d')
             f.attrs["data_format"] = data_format
-            ts_dset = f.create_dataset("time", (0,), maxshape=(None,), dtype=float)
-            ts_dset.attrs["unit"] = "s"
+            f.attrs["is_util_tracked"] = track_util
+            data_time = f.create_dataset("data_time", (0,), maxshape=(None,), dtype=float)
+            data_time.attrs["unit"] = "s"
             match data_format:
                 case 1: #cf_float32
                     format_h5 = "float32"
@@ -438,35 +441,51 @@ class ThreadLSL:
                     format_h5 = "int64"
                 case _:
                     raise ValueError(f"Unknown LSL datatype format")
-            data_dset = f.create_dataset("data", (0, channels), maxshape=(None, channels), dtype=format_h5)
-            ts_dset.attrs["unit"] = ""
+            data_data = f.create_dataset("data_raw", (0, channels), maxshape=(None, channels), dtype=format_h5)
+            data_data.attrs["unit"] = ""
+
+            util_time = f.create_dataset("util_time", (0,), maxshape=(None,), dtype=float)
+            util_time.attrs["unit"] = "s"
+            util_data = f.create_dataset("util_data", (0, 2), maxshape=(None, 2), dtype="int8")
+            util_data.attrs["unit"] = "%"
             f.flush()
 
             process_list = [i for i in range(channels)]
-            cnt_flush = 0
             max_samples = int(sampling_rate / 50) if sampling_rate > 500. else 10
             while self._event.is_set():
                 try:
-                    data_buf, ts_buf = inlet.pull_chunk(
+                    data_buf, ts_buf = inlet_data.pull_chunk(
                         max_samples=max_samples,
-                        timeout=10e-3
+                        timeout=0.01
                     )
-                    if not data_buf:
+                    util_buf, util_ts = inlet_util.pull_chunk(
+                        max_samples=4,
+                        timeout=0.01
+                    )
+
+                    if not data_buf and not util_buf:
                         continue
-                    else:
+                    if data_buf:
                         with self._lock:
                             self._thread_active[stim_idx] = True
-                        idx = len(ts_dset)
+                        idx = len(data_time)
                         new = len(ts_buf)
-                        ts_dset.resize((idx + new,))
-                        data_dset.resize((idx + new, channels))
-                        ts_dset[idx:idx + new] = ts_buf
-                        data_dset[idx:idx + new, :] = np.asarray(data_buf)[:, process_list]
-                        if cnt_flush == 3:
+                        data_time.resize((idx + new,))
+                        data_data.resize((idx + new, channels))
+                        data_time[idx:idx + new] = ts_buf
+                        data_data[idx:idx + new, :] = np.asarray(data_buf)[:, process_list]
+                        f.flush()
+                    if util_buf:
+                        with self._lock:
+                            self._thread_active[0] = True
+                        if track_util:
+                            idx = len(util_time)
+                            new = len(util_ts)
+                            util_time.resize((idx + new,))
+                            util_data.resize((idx + new, 2))
+                            util_time[idx:idx + new] = util_ts
+                            util_data[idx:idx + new, :] = np.asarray(util_buf)[:, [0, 1]]
                             f.flush()
-                            cnt_flush = 0
-                        else:
-                            cnt_flush += 1
                 except Exception as e:
                     self._exception.put(e)
             f.close()

@@ -13,22 +13,15 @@ from api.helper import (
 
 
 @pytest.fixture(scope="session", autouse=True)
-def before_all_tests():
-    DeviceAPI().do_reset()
-
-
-@pytest.fixture(scope="session", autouse=True)
-def after_all_tests():
-    DeviceAPI().do_reset()
-    rmtree(get_path_to_project("temp_data"), ignore_errors=True)
-
-
-@pytest.fixture
 def dut():
+    DeviceAPI().do_reset()
     mcu_api = DeviceAPI(
         com_name="AUTOCOM"
     )
     yield mcu_api
+    mcu_api.do_reset()
+    path = get_path_to_project("temp_data")
+    rmtree(path, ignore_errors=True)
 
 
 def test_num_bytes(dut: DeviceAPI):

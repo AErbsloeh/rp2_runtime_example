@@ -87,13 +87,14 @@ if __name__ == "__main__":
     read_util = False
 
     path2data = Path(get_path_to_project()) / "data"
-    use_case = -1
+    use_case = -2
 
     dut = DataAPI(path2data, data_prefix='data')
-    data = dut.read_data_file(use_case)
+    dut.select_file(use_case)
+    data = dut.get_sensor_data()
 
-    if read_util:
-        util = dut.read_utilization_file(use_case)
+    if read_util and dut.is_utilization_available:
+        util = dut.get_utilization()
         plot_transient_util(util, show_plot=False)
 
     plot_transient_data(data, show_plot=False)
