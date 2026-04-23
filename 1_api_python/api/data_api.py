@@ -62,6 +62,12 @@ class DataAPI:
         else:
             return True
 
+    @property
+    def is_layout_available(self) -> bool:
+        """"""
+        content = self.get_layout_information()[0]
+        return len(content) > 0
+
     def select_file(self, file_number: int) -> None:
         """Selecting file by number
         :param file_number: Integer with number of the file
@@ -105,7 +111,7 @@ class DataAPI:
         with h5py.File(path2file, "r") as f:
             self.__logger.info(f"Datasets in file: {list(f.keys())}")
             self.__logger.info(f"Meta info: {list(f.attrs.keys())}")
-            if not f.attrs["is_util_tracked"]:
+            if 0 in f["util_time"].shape:
                 raise ValueError("Utilization data is not available - Please disable the option!")
             else:
                 time = np.array(f["util_time"][:] - f["util_time"][0])
@@ -128,3 +134,18 @@ class DataAPI:
         if not self.__file:
             raise ValueError("Please select a file first!")
         return self.__read_util_file(self.__file)
+
+    def __read_layout_file(self, path2file: Path) -> tuple[list[str], list[int]]:
+        with h5py.File(path2file, "r") as f:
+            layout = f["channel_index"][:].tolist()
+            names = f["channel_names"].asstr()[:].tolist()
+            f.close()
+        return names, layout
+
+    def get_layout_information(self) -> tuple[list[str], list[int]]:
+        """Reading channel layout from file
+        :return:                List with channel names
+        """
+        if not self.__file:
+            raise ValueError("Please select a file first!")
+        return self.__read_layout_file(self.__file)

@@ -87,11 +87,14 @@ if __name__ == "__main__":
     read_util = False
 
     path2data = Path(get_path_to_project()) / "data"
-    use_case = -2
+    use_case = -1
 
     dut = DataAPI(path2data, data_prefix='data')
     dut.select_file(use_case)
     data = dut.get_sensor_data()
+
+    if dut.is_layout_available:
+        layout = dut.get_layout_information()
 
     if read_util and dut.is_utilization_available:
         util = dut.get_utilization()

@@ -1,6 +1,6 @@
 import numpy as np
 from logging import getLogger, Logger
-from h5py import File
+from h5py import File, string_dtype
 from datetime import datetime
 from pathlib import Path
 from time import sleep
@@ -395,10 +395,12 @@ class ThreadLSL:
                 with self._lock:
                     self._exception.put(e)
 
-    def lsl_record_stream(self, stim_idx: int, name: str, path2save: Path | str, track_util: bool=False) -> None:
+    def lsl_record_stream(self, stim_idx: int, name: str, path2save: Path | str, channel_idx: list[int], channel_names: list[str], track_util: bool=False) -> None:
         """Function for recording and saving the data pushed on LSL stream
         :param stim_idx:            Integer with array index to write into heartbeat feedback array
         :param name:                String with name of the LSL stream to catch it
+        :param channel_idx:         List of integers with channel indices to save
+        :param channel_names:       List of strings with channel names to save
         :param path2save:           Path to save the data (if it is a string, it will be auto-converted)
         :param track_util:          Boolean to track the utilization of the host computer
         :return: None
@@ -421,7 +423,10 @@ class ThreadLSL:
             f.attrs["type"] = sys_type
             f.attrs["creation_date"] = datetime.today().strftime('%Y-%m-%d')
             f.attrs["data_format"] = data_format
-            f.attrs["is_util_tracked"] = track_util
+            dt = string_dtype(encoding="utf-8")
+            f.create_dataset("channel_index", data=channel_idx)
+            f.create_dataset("channel_names", data=channel_names, dtype=dt)
+
             data_time = f.create_dataset("data_time", (0,), maxshape=(None,), dtype=float)
             data_time.attrs["unit"] = "s"
             match data_format:

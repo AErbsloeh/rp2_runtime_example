@@ -50,6 +50,11 @@ class InterfaceSerial:
             )
 
     @property
+    def is_open(self) -> bool:
+        """Return True if the device is open, False otherwise"""
+        return self.__device.is_open
+
+    @property
     def total_num_bytes(self) -> int:
         """Returning the total number of bytes for each transmission"""
         return self.__BYTES_DATA + self.__BYTES_HEAD
@@ -68,10 +73,6 @@ class InterfaceSerial:
         transmit = data.to_bytes(self.__BYTES_DATA, byteorder='little')
         transmit += head.to_bytes(self.__BYTES_HEAD, byteorder='little')
         return transmit
-
-    def is_open(self) -> bool:
-        """Return True if the device is open, False otherwise"""
-        return self.__device.is_open
 
     def read(self, no_bytes: int) -> bytes:
         """Read content from device"""

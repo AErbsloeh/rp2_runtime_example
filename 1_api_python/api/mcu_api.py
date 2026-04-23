@@ -41,6 +41,8 @@ class DeviceAPI:
     __usb_vid: int = 0x2E8A
     __last_idx: int = 255
     __num_package_loss: int = 0
+    __layout_channels: list[int] = list()
+    __layout_names: list[str] = list()
     # PID of RP2350 = 0x0009 and RP2040 = 0x000A
     _pin_names: list[str] = ['LED_USER']
     _state_names: list[str] = ["ERROR", "RESET", "INIT", "IDLE", "TEST", "DAQ"]
@@ -90,7 +92,7 @@ class DeviceAPI:
     @property
     def is_com_port_active(self) -> bool:
         """Boolean for checking if serial communication is open and used"""
-        return self.__device.is_open()
+        return self.__device.is_open
 
     @property
     def is_daq_running(self) -> bool:
@@ -168,6 +170,14 @@ class DeviceAPI:
         :return:        None
         """
         self.__write_without_feedback(Commands.TOGGLE_LED)
+
+    def define_channel_layout(self, channel_layout: list[int], channel_names: list[str]=[]) -> None:
+        """Defining the channel layout of the real DAQ system
+        :param channel_layout:   List of strings with channel number
+        :param channel_names:    List of strings with channel names
+        """
+        self.__layout_channels = channel_layout
+        self.__layout_names = channel_names
 
     def _update_daq_sampling_rate(self, sampling_rate: float) -> None:
         """Updating the sampling rate of the DAQ
@@ -298,7 +308,7 @@ class DeviceAPI:
         func = self._thread_read_batch if do_batch else self._thread_read_frame
         self.__threads.register(func=self.__threads.lsl_stream_util, args=(0, 'util', 2.))
         self.__threads.register(func=self.__threads.lsl_stream_data, args=(1, 'data', func, self.__daq_config.num_channels, self.__daq_config.sampling_rate))
-        self.__threads.register(func=self.__threads.lsl_record_stream, args=(2, 'data', path2data, track_util))
+        self.__threads.register(func=self.__threads.lsl_record_stream, args=(2, 'data', path2data, self.__layout_channels, self.__layout_names, track_util))
         if do_plot:
             self.__threads.register(func=self.__threads.lsl_plot_stream, args=(3, 'data', window_sec))
 
@@ -321,7 +331,7 @@ class DeviceAPI:
             self.__logger.info(f"Number of package losses: {self.__num_package_loss}")
 
     def wait_daq(self, time_sec: float) -> None:
-        """Waiting Routine incl. returning possible thread errors
+        """Waiting routine incl. returning possible thread errors
         :param time_sec:    Float with time value for waiting
         :return:            None
         """
