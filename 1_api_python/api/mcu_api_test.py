@@ -2,6 +2,7 @@ import pytest
 from random import randint
 from shutil import rmtree
 from time import sleep
+from logging import basicConfig, DEBUG
 from api.mcu_api import (
     get_path_to_project,
     DeviceAPI
@@ -18,6 +19,7 @@ def dut():
     mcu_api = DeviceAPI(
         com_name="AUTOCOM"
     )
+    mcu_api.open()
     yield mcu_api
     mcu_api.do_reset()
     path = get_path_to_project("temp_data")
@@ -97,7 +99,6 @@ def test_control_daq_sample(dut: DeviceAPI):
     dut.start_daq(sampling_rate=1., do_batch=False, folder_name="temp_data")
     sleep(1.)
     dut.stop_daq()
-    sleep(1.)
 
 
 def test_control_daq_batch(dut: DeviceAPI):
@@ -105,8 +106,8 @@ def test_control_daq_batch(dut: DeviceAPI):
 
     dut.start_daq(sampling_rate=1., do_batch=True, folder_name="temp_data")
     sleep(1.)
+    assert dut.is_daq_running == True
     dut.stop_daq()
-    sleep(1.)
 
 
 def test_config_daq_sample_100hz(dut: DeviceAPI):
@@ -158,5 +159,20 @@ def test_system_states(dut: DeviceAPI):
     assert rslt == check
 
 
+def test_define_layout(dut: DeviceAPI):
+    sets = dut.get_daq_characteristics()
+    result_layout = [idx for idx in range(sets.num_channels)]
+    result_labels = [f"CH{idx}" for idx in range(sets.num_channels)]
+
+    dut.define_channel_layout(
+        channel_layout=result_layout,
+        channel_names=result_labels
+    )
+    check_layout, check_labels = dut.get_channel_layout()
+    assert check_layout == result_layout
+    assert check_labels == result_labels
+
+
 if __name__ == "__main__":
+    basicConfig(level=DEBUG)
     pytest.main([__file__])

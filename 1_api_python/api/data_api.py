@@ -6,8 +6,8 @@ from pathlib import Path
 
 
 @dataclass(frozen=True)
-class RawRecording:
-    """Data class with measured transient data
+class StreamRecording:
+    """Data class with recorded transient data
     Attributes:
         sampling_rate:  Float with defined sampling rate [Hz]
         num_channels:   Integer with number of channels
@@ -15,6 +15,9 @@ class RawRecording:
         data:           Numpy array with raw data
         file:           String with path to file
         type:           Type of data, e.g. "sensor" or "utilization"
+        units:          List with string of unit information, like "%", "V"
+        label:          List with string name / label of each channel
+        layout:         Layout information with where is each electrode device
     """
     sampling_rate: float
     num_channels: int
@@ -22,6 +25,9 @@ class RawRecording:
     data: np.ndarray
     type: str
     file: str
+    units: list[str]
+    label: list[str]
+    layout: list[int]
 
     @property
     def get_sampling_rate(self) -> float:
@@ -37,15 +43,14 @@ class DataAPI:
     __logger: Logger
     __file: Path
 
-    def __init__(self, path2data: Path | str, data_prefix: str="data") -> None:
+    def __init__(self, path2data: Path | str) -> None:
         """Class for loading and processing the measured DAQ data
         :param path2data:   Path or string with path to the folder in which data is saved
-        :param data_prefix: String with prefix of the data file name
         :return:            None
         """
         path = Path(path2data) if type(path2data) == str else path2data
         self.__logger = getLogger(__name__)
-        self.__overview = [file.absolute() for file in path.glob(f"*{data_prefix}.h5")]
+        self.__overview = [file.absolute() for file in path.glob("*.h5")]
 
     @property
     def get_overview_files(self) -> list[Path]:
@@ -62,17 +67,24 @@ class DataAPI:
         else:
             return True
 
-    @property
-    def is_layout_available(self) -> bool:
-        """"""
-        content = self.get_layout_information()[0]
-        return len(content) > 0
+    def get_overview_datatypes(self) -> list[str]:
+        """Get a list with available datatypes to load from file"""
+        if not self.__file:
+            raise ValueError("Please select a file first!")
+        with h5py.File(self.__file, "r") as f:
+            overview = [type.split("_")[0] for type in f.keys() if "_data" in type]
+            f.close()
+        return overview
 
     def select_file(self, file_number: int) -> None:
-        """Selecting file by number
+        """Selecting file by number for processing
         :param file_number: Integer with number of the file
         :return:            None
         """
+        if not self.get_overview_files:
+            raise ValueError(f"No files available at : {self.__overview}")
+        if file_number > len(self.get_overview_files):
+            raise ValueError(f"Only {len(self.get_overview_files)} files are available")
         self.__file = self.get_overview_files[file_number]
         self.__logger.info(f"Read file: {self.__file}")
 
@@ -84,68 +96,38 @@ class DataAPI:
         """Returning the path to the data file"""
         return str(self.__file)
 
-    def __read_data_file(self, path2file: Path) -> RawRecording:
-        with h5py.File(path2file, "r") as f:
+    def __read_data_file(self, name: str) -> StreamRecording:
+        with h5py.File(self.__file, "r") as f:
             self.__logger.info(f"Datasets in file: {list(f.keys())}")
             self.__logger.info(f"Meta info: {list(f.attrs.keys())}")
-            data = RawRecording(
-                sampling_rate=f.attrs["sampling_rate"],
-                num_channels=f.attrs["channel_count"],
-                time=np.array(f["data_time"][:] - f["data_time"][0]),
-                data=np.transpose(f["data_raw"][:]),
-                type=f.attrs["type"],
-                file=str(path2file)
+
+            data = StreamRecording(
+                sampling_rate=f[f"{name}_data"].attrs["sampling_rate"],
+                num_channels=f[f"{name}_data"].attrs["channel_count"],
+                time=np.array(f[f"{name}_time"][:] - f[f"{name}_time"][0]),
+                data=np.transpose(f[f"{name}_data"][:]),
+                type=f[f"{name}_data"].attrs["type"],
+                file=str(self.__file),
+                units=f[f"{name}_data"].attrs["unit"],
+                label=f[f"{name}_data"].attrs["label"],
+                layout=f[f"{name}_data"].attrs["layout"],
             )
             f.close()
         return data
 
-    def get_sensor_data(self) -> RawRecording:
+    def get_data(self, name: str) -> StreamRecording:
         """Reading data content from file
-        :return:                Class RawRecording with information, timestamps and raw data
+        :param name:    Name of the dataset subset, available in the file
+        :return:        Class RawRecording with information, timestamps and raw data
         """
         if not self.__file:
             raise ValueError("Please select a file first!")
-        return self.__read_data_file(self.__file)
+        if not name in self.get_overview_datatypes():
+            raise ValueError(f"Dataset with {name} is not available ({self.get_overview_datatypes()}")
+        return self.__read_data_file(name)
 
-    def __read_util_file(self, path2file: Path) -> RawRecording:
-        with h5py.File(path2file, "r") as f:
-            self.__logger.info(f"Datasets in file: {list(f.keys())}")
-            self.__logger.info(f"Meta info: {list(f.attrs.keys())}")
-            if 0 in f["util_time"].shape:
-                raise ValueError("Utilization data is not available - Please disable the option!")
-            else:
-                time = np.array(f["util_time"][:] - f["util_time"][0])
-                sampling_rate = float(1 / np.mean(np.diff(time)))
-                data = RawRecording(
-                    sampling_rate=sampling_rate,
-                    num_channels=2,
-                    time=time,
-                    data=np.transpose(f["util_data"][:]),
-                    type="utilization",
-                    file=str(path2file)
-                )
-                f.close()
-                return data
-
-    def get_utilization(self) -> RawRecording:
+    def get_utilization(self) -> StreamRecording:
         """Reading utilization content from file
-        :return:                Class RawRecording with information, timestamps and raw data
+        :return:        Class RawRecording with information, timestamps and raw data
         """
-        if not self.__file:
-            raise ValueError("Please select a file first!")
-        return self.__read_util_file(self.__file)
-
-    def __read_layout_file(self, path2file: Path) -> tuple[list[str], list[int]]:
-        with h5py.File(path2file, "r") as f:
-            layout = f["channel_index"][:].tolist()
-            names = f["channel_names"].asstr()[:].tolist()
-            f.close()
-        return names, layout
-
-    def get_layout_information(self) -> tuple[list[str], list[int]]:
-        """Reading channel layout from file
-        :return:                List with channel names
-        """
-        if not self.__file:
-            raise ValueError("Please select a file first!")
-        return self.__read_layout_file(self.__file)
+        return self.get_data('util')

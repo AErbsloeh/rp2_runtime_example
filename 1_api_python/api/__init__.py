@@ -6,5 +6,5 @@ from .mcu_api import (
 )
 from .data_api import (
     DataAPI,
-    RawRecording
+    StreamRecording
 )

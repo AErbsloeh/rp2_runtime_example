@@ -2,6 +2,7 @@ from enum import IntEnum
 from logging import getLogger, Logger
 from time import sleep
 import numpy as np
+import pylsl
 
 from api.interface import (
     get_comport_name,
@@ -42,7 +43,7 @@ class DeviceAPI:
     __last_idx: int = 255
     __num_package_loss: int = 0
     __layout_channels: list[int] = list()
-    __layout_names: list[str] = list()
+    __layout_labels: list[str] = list()
     # PID of RP2350 = 0x0009 and RP2040 = 0x000A
     _pin_names: list[str] = ['LED_USER']
     _state_names: list[str] = ["ERROR", "RESET", "INIT", "IDLE", "TEST", "DAQ"]
@@ -97,7 +98,7 @@ class DeviceAPI:
     @property
     def is_daq_running(self) -> bool:
         """Returning if DAQ is still running"""
-        return self.get_state().system == "DAQ" and self.__threads.is_alive
+        return self.__threads.is_alive
 
     def open(self) -> None:
         """Opening the serial communication between API and device"""
@@ -113,6 +114,7 @@ class DeviceAPI:
             self.__threads.stop()
             self.stop_daq()
         self.__write_without_feedback(Commands.RESET)
+        self.close()
         sleep(4)
 
     def echo(self, data: str) -> str:
@@ -171,13 +173,19 @@ class DeviceAPI:
         """
         self.__write_without_feedback(Commands.TOGGLE_LED)
 
-    def define_channel_layout(self, channel_layout: list[int], channel_names: list[str]=[]) -> None:
+    def define_channel_layout(self, channel_layout: list[int], channel_names: list[str]) -> None:
         """Defining the channel layout of the real DAQ system
         :param channel_layout:   List of strings with channel number
         :param channel_names:    List of strings with channel names
         """
         self.__layout_channels = channel_layout
-        self.__layout_names = channel_names
+        self.__layout_labels = channel_names
+
+    def get_channel_layout(self) -> tuple[list[int], list[str]]:
+        """Returning the channel meta information of the DAQ system
+        :return:    Tuple with (1) layout and (2) labels of the channel layout
+        """
+        return self.__layout_channels, self.__layout_labels
 
     def _update_daq_sampling_rate(self, sampling_rate: float) -> None:
         """Updating the sampling rate of the DAQ
@@ -289,13 +297,12 @@ class DeviceAPI:
         except Exception:
             return [], None
 
-    def start_daq(self, sampling_rate: float, window_sec: float= 30., do_batch: bool=True, do_plot: bool=False, track_util: bool=False, folder_name: str="data") -> None:
+    def start_daq(self, sampling_rate: float, window_sec: float= 30., do_batch: bool=True, do_plot: bool=False, folder_name: str="data") -> None:
         """Changing the state of the DAQ with starting it
         :param sampling_rate:   Float with sampling rate [Hz]
         :param do_batch:        True for sending batches outside otherwise sample-wise
         :param do_plot:         True to plot the data in real-time
         :param window_sec:      Floating value with window length [in seconds] for live plotting
-        :param track_util:      If true, the utilization (CPU / RAM) of the host computer will be tracked during recording session
         :param folder_name:     String with folder name to save data in project folder
         :return:                None
         """
@@ -304,13 +311,17 @@ class DeviceAPI:
         self._update_daq_sampling_rate(sampling_rate)
         self.__daq_config = self.get_daq_characteristics()
         path2data = get_path_to_project(new_folder=folder_name)
+        if not self.__layout_labels:
+            self.__layout_labels = [f"CH{idx}" for idx in range(self.__daq_config.num_channels)]
+            self.__layout_channels = [idx for idx in range(self.__daq_config.num_channels)]
 
         func = self._thread_read_batch if do_batch else self._thread_read_frame
-        self.__threads.register(func=self.__threads.lsl_stream_util, args=(0, 'util', 2.))
-        self.__threads.register(func=self.__threads.lsl_stream_data, args=(1, 'data', func, self.__daq_config.num_channels, self.__daq_config.sampling_rate))
-        self.__threads.register(func=self.__threads.lsl_record_stream, args=(2, 'data', path2data, self.__layout_channels, self.__layout_names, track_util))
+        self.__threads.register(func=self.__threads.lsl_stream_util, args=(0, 'util'))
+        self.__threads.register(func=self.__threads.lsl_stream_system, args=(1, 'data', func, self.__daq_config.sampling_rate, self.__layout_labels, self.__layout_channels, "V"))
+        self.__threads.register(func=self.__threads.lsl_process_stream, args=(2, 'data', 'filt', 16, self.__process_stream_init, self.__process_stream_func))
+        self.__threads.register(func=self.__threads.lsl_record_stream, args=(3, ['filt', 'util'], path2data))
         if do_plot:
-            self.__threads.register(func=self.__threads.lsl_plot_stream, args=(3, 'data', window_sec))
+            self.__threads.register(func=self.__threads.lsl_plot_stream, args=(4, 'filt', window_sec))
 
         self.__device.timeout = 2 / self.__daq_config.sampling_rate
         self.__threads.start()
@@ -329,6 +340,7 @@ class DeviceAPI:
         self.__device.empty_buffer()
         if self.__num_package_loss > 0:
             self.__logger.info(f"Number of package losses: {self.__num_package_loss}")
+        sleep(1.)
 
     def wait_daq(self, time_sec: float) -> None:
         """Waiting routine incl. returning possible thread errors
@@ -336,3 +348,13 @@ class DeviceAPI:
         :return:            None
         """
         self.__threads.wait_for_seconds(time_sec)
+
+    def __process_stream_init(self, sampling_rate: float) -> None:
+        pass
+
+    def __process_stream_func(self, data_in: list) -> list:
+        data_out = list()
+        for data in data_in:
+            dat = [data[0]-32768, data[1]]
+            data_out.append(dat)
+        return data_out

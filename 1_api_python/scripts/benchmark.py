@@ -28,9 +28,9 @@ def run_experiment(sampling_rate: float, do_batch: bool, run_trial_sec: float, r
 def extract_results(path: Path) -> list:
     results = list()
 
-    dut = DataAPI(path, data_prefix='data')
-    for idx, file in enumerate(path.glob("*_data.h5")):
-        data = dut.get_sensor_data(idx)
+    dut = DataAPI(path)
+    for idx, file in enumerate(path.glob("*_filt.h5")):
+        data = dut.get_data(idx)
         dt = np.diff(data.time)
         results.append(dt)
     return results
