@@ -15,8 +15,7 @@ if __name__ == '__main__':
         sampling_rate=500.,
         do_batch=True,
         do_plot=True,
-        window_sec=4.,
-        track_util=True
+        window_sec=4.
     )
     dut.wait_daq(0.5* 60)
     dut.stop_daq()

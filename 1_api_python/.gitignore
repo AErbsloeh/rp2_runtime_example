@@ -1,7 +1,7 @@
 **/.idea
 **/__pycache__
 **/.pytest_cache
-**/*data
+**/*data*
 **/dist
 .venv
 .python-version
