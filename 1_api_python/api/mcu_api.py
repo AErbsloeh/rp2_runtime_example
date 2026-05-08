@@ -39,16 +39,16 @@ class DeviceAPI:
     __daq_config: DataAcquisitionConfig
     __timeout_default: float
     __usb_vid: int = 0x2E8A
+    # PID of RP2350 = 0x0009 and RP2040 = 0x000A
     __last_idx: int = 255
     __num_package_loss: int = 0
     __layout_channels: list[int] = list()
     __layout_labels: list[str] = list()
-    # PID of RP2350 = 0x0009 and RP2040 = 0x000A
     _pin_names: list[str] = ['LED_USER']
     _state_names: list[str] = ["ERROR", "RESET", "INIT", "IDLE", "TEST", "DAQ"]
 
     def __init__(self, com_name: str="AUTOCOM", timeout: float=0.1) -> None:
-        """Init. of the device with name and baudrate of the device
+        """Interface class for handling with a custom DAQ device
         :param com_name:    String with the serial port name of the used device
         :param timeout:     Floating value with timeout for the communication [Default, not during DAQ]
         """
@@ -66,7 +66,17 @@ class DeviceAPI:
             self.__device.close()
         self.__device.open()
 
-    def __write_with_feedback(self, head: Commands, data: int=0, size: int=0) -> bytes:
+    def extend_pins_list(self, new_pins: list[str]) -> None:
+        for pin in new_pins:
+            if pin not in self._pin_names:
+                self._pin_names.append(pin)
+
+    def extend_states_list(self, new_states: list[str]) -> None:
+        for state in new_states:
+            if state not in self._state_names:
+                self._state_names.append(state)
+
+    def _write_with_feedback(self, head: Commands, data: int=0, size: int=0) -> bytes:
         data = self.__device.write_wfb(
             data=self.__device.convert(head, data),
             size=size
@@ -75,7 +85,7 @@ class DeviceAPI:
             raise ValueError(f"Get: {data}")
         return data[1:]
 
-    def __write_without_feedback(self, head: Commands, data: int=0) -> None:
+    def _write_without_feedback(self, head: Commands, data: int=0) -> None:
         self.__device.write(
             data=self.__device.convert(head, data),
         )
@@ -112,7 +122,7 @@ class DeviceAPI:
         if self.__threads.is_alive:
             self.__threads.stop()
             self.stop_daq()
-        self.__write_without_feedback(Commands.RESET)
+        self._write_without_feedback(Commands.RESET)
         self.close()
         sleep(4)
 
@@ -124,7 +134,7 @@ class DeviceAPI:
         do_padding = len(data) % self.__device.num_bytes == 1
         val = bytes()
         for chunk in self.__device.serialize_string(data, do_padding):
-            val += self.__write_with_feedback(Commands.ECHO, chunk)
+            val += self._write_with_feedback(Commands.ECHO, chunk)
         return self.__device.deserialize_string(val, do_padding)
 
     @property
@@ -143,7 +153,7 @@ class DeviceAPI:
         """Returning the state of the system
         :return:    Class SystemState with information about pin state, system state and actual runtime of the system
         """
-        ret = self.__write_with_feedback(Commands.GET_CHARAC_STATE, size=19)
+        ret = self._write_with_feedback(Commands.GET_CHARAC_STATE, size=19)
         frame = np.frombuffer(ret, dtype=self._package_system_state)[0]
         return SystemState(
             pins=convert_pin_state(int(frame['pins']), self._pin_names),
@@ -158,19 +168,19 @@ class DeviceAPI:
         """Changing the state of the LED with enabling it
         :return:        None
         """
-        self.__write_without_feedback(Commands.ENABLE_LED)
+        self._write_without_feedback(Commands.ENABLE_LED)
 
     def disable_led(self) -> None:
         """Changing the state of the LED with disabling it
         :return:        None
         """
-        self.__write_without_feedback(Commands.DISABLE_LED)
+        self._write_without_feedback(Commands.DISABLE_LED)
 
     def toggle_led(self) -> None:
         """Changing the state of the LED with toggling it
         :return:        None
         """
-        self.__write_without_feedback(Commands.TOGGLE_LED)
+        self._write_without_feedback(Commands.TOGGLE_LED)
 
     def define_channel_layout(self, channel_layout: list[int], channel_names: list[str]) -> None:
         """Defining the channel layout of the real DAQ system
@@ -181,7 +191,7 @@ class DeviceAPI:
         self.__layout_labels = channel_names
 
     def get_channel_layout(self) -> tuple[list[int], list[str]]:
-        """Returning the channel meta information of the DAQ system
+        """Returning the channel information of the DAQ system
         :return:    Tuple with (1) layout and (2) labels of the channel layout
         """
         return self.__layout_channels, self.__layout_labels
@@ -194,14 +204,14 @@ class DeviceAPI:
         sampling_limits = [0, 10e3]
         if not sampling_limits[0] < sampling_rate < sampling_limits[1]:
             raise ValueError(f"Sampling rate cannot be smaller than [{sampling_limits[0], sampling_limits[1]}] Hz")
-        self.__write_without_feedback(Commands.SET_PERIOD_DAQ, int(sampling_rate))
+        self._write_without_feedback(Commands.SET_PERIOD_DAQ, int(sampling_rate))
 
     def _enable_batch_daq(self, use_batches: bool=True) -> None:
         """Enabling or disabling the batch transmission mode of the DAQ
         :param use_batches:     Boolean with True for enabling batch mode otherwise sample-wise
         :return:                None
         """
-        self.__write_without_feedback(Commands.SET_BATCH_DAQ, int(use_batches))
+        self._write_without_feedback(Commands.SET_BATCH_DAQ, int(use_batches))
 
     def _check_package_loss(self, new_idx: int) -> None:
         if 1 < new_idx - self.__last_idx < 255:
@@ -227,7 +237,7 @@ class DeviceAPI:
         """Get number of channels for acquiring data
         :return:    Integer with number of DAQ channels
         """
-        ret = self.__write_with_feedback(Commands.GET_CHARAC_DAQ, size=20)
+        ret = self._write_with_feedback(Commands.GET_CHARAC_DAQ, size=20)
         frame = np.frombuffer(ret, dtype=self._package_daq_config)[0]
         return DataAcquisitionConfig(
             head_cmd=int(frame['head']),
@@ -324,13 +334,13 @@ class DeviceAPI:
 
         self.__device.timeout = 2 / self.__daq_config.sampling_rate
         self.__threads.start()
-        self.__write_without_feedback(Commands.START_DAQ)
+        self._write_without_feedback(Commands.START_DAQ)
 
     def stop_daq(self) -> None:
         """Changing the state of the DAQ with stopping it
         :return:            None
         """
-        self.__write_without_feedback(Commands.STOP_DAQ)
+        self._write_without_feedback(Commands.STOP_DAQ)
         sleep(0.5)
         self.__device.timeout = self.__timeout_default
         while self.__threads.is_alive:

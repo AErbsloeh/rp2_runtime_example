@@ -82,6 +82,23 @@ class SystemState:
     temp: float
 
 
+@dataclass(frozen=True)
+class FlashInfos:
+    """Dataclass for handling the information from Flash device
+    Attributes:
+        manu_id:    Manufacturer ID
+        dev_id:     Device ID
+        mem_type:   Memory Type
+        capacity:   Capacity in MB
+        status:     Status Register
+    """
+    manu_id: int
+    dev_id: int
+    mem_type: int
+    capacity: int
+    status: int
+
+
 def convert_pin_state(state: int, pin_list: list[str]) -> str:
     """Function for converting the pin state
     :param state:       Integer with pin state from MCU
