@@ -7,7 +7,7 @@ from logging import basicConfig, DEBUG
 import pylsl
 
 from api import get_path_to_project
-from api.lsl import (
+from api.src._lsl import (
     RingBuffer,
     ThreadLSL
 )
