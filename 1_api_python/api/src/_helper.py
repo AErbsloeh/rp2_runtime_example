@@ -82,7 +82,7 @@ class SystemState:
     temp: float
 
 
-def _convert_pin_state(state: int, pin_list: list[str]) -> str:
+def convert_pin_state(state: int, pin_list: list[str]) -> str:
     """Function for converting the pin state
     :param state:       Integer with pin state from MCU
     :param pin_list:    List with stings of pin names in right order, defined in the firmware
@@ -100,7 +100,7 @@ def _convert_pin_state(state: int, pin_list: list[str]) -> str:
         return ret_text
 
 
-def _convert_system_state(state: int, state_list: list[str]) -> str:
+def convert_system_state(state: int, state_list: list[str]) -> str:
     """Function for converting the pin state
     :param state:           Integer with pin state from MCU
     :param state_list:      List with stings of pin names in right order, defined in the firmware
@@ -111,7 +111,7 @@ def _convert_system_state(state: int, state_list: list[str]) -> str:
     return state_list[state]
 
 
-def _convert_rp2_adc_value(raw: int) -> float:
+def convert_rp2_adc_value(raw: int) -> float:
     """Function for converting the RP2 ADC value from integer to float"""
     if raw >= 4095:
         val0 = 4095
@@ -122,7 +122,7 @@ def _convert_rp2_adc_value(raw: int) -> float:
     return val0 * 3.3 / 4095
 
 
-def _convert_rp2_temp_value(raw: int) -> float:
+def convert_rp2_temp_value(raw: int) -> float:
     """Function for converting the RP2 temperatur value from integer to float"""
-    volt = _convert_rp2_adc_value(raw)
+    volt = convert_rp2_adc_value(raw)
     return 27 - (volt - 0.706) / 0.001721

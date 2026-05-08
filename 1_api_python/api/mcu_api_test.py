@@ -5,11 +5,9 @@ from time import sleep
 from logging import basicConfig, DEBUG
 from api.mcu_api import (
     get_path_to_project,
-    DeviceAPI
-)
-from api.helper import (
-    _convert_pin_state,
-    _convert_system_state
+    DeviceAPI,
+    convert_pin_state,
+    convert_system_state
 )
 
 
@@ -148,14 +146,14 @@ def test_config_daq_batch_10hz(dut: DeviceAPI):
 def test_pin_states(dut: DeviceAPI):
     data_in = [idx for idx in range(2)]
     check = ["NONE", "LED_USER"]
-    rslt = [_convert_pin_state(idx, dut._pin_names) for idx in data_in]
+    rslt = [convert_pin_state(idx, dut._pin_names) for idx in data_in]
     assert rslt == check
 
 
 def test_system_states(dut: DeviceAPI):
     data_in = [idx for idx in range(6)]
     check = ["ERROR", "RESET", "INIT", "IDLE", "TEST", "DAQ"]
-    rslt = [_convert_system_state(idx, dut._state_names) for idx in data_in]
+    rslt = [convert_system_state(idx, dut._state_names) for idx in data_in]
     assert rslt == check
 
 

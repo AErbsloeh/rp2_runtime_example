@@ -2,17 +2,16 @@ from enum import IntEnum
 from logging import getLogger, Logger
 from time import sleep
 import numpy as np
-import pylsl
 
-from api.interface import (
+from .src._interface_serial import (
     get_comport_name,
     InterfaceSerial
 )
-from api.lsl import ThreadLSL
-from api.helper import (
-    _convert_pin_state,
-    _convert_system_state,
-    _convert_rp2_temp_value,
+from .src._lsl import ThreadLSL
+from .src._helper import (
+    convert_pin_state,
+    convert_system_state,
+    convert_rp2_temp_value,
     get_path_to_project,
     DataAcquisitionConfig,
     SystemState
@@ -147,12 +146,12 @@ class DeviceAPI:
         ret = self.__write_with_feedback(Commands.GET_CHARAC_STATE, size=19)
         frame = np.frombuffer(ret, dtype=self._package_system_state)[0]
         return SystemState(
-            pins=_convert_pin_state(int(frame['pins']), self._pin_names),
-            system=_convert_system_state(int(frame['state']), self._state_names),
+            pins=convert_pin_state(int(frame['pins']), self._pin_names),
+            system=convert_system_state(int(frame['state']), self._state_names),
             runtime=float(1e-6 * frame['runtime']),
             clock=10 * int(frame['clock']),
             firmware=f"{frame['major']}.{frame['minor']}",
-            temp=_convert_rp2_temp_value(int(frame['temp']))
+            temp=convert_rp2_temp_value(int(frame['temp']))
         )
 
     def enable_led(self) -> None:
