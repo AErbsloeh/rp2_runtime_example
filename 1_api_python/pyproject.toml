@@ -15,6 +15,9 @@ packages = ["api"]
 exclude = ['scripts', 'test_data', 'data', 'docs', '**/*_test.py']
 only-packages = true
 
+[tool.uv.sources]
+elasticai-hw-measurements = { git = "ssh://git@github.com/es-ude/elastic-ai.hw-measurements.git" }
+
 
 [project]
 name = "rp2_runtime_example"
@@ -38,5 +41,7 @@ dev = [
     "hatch",
     "pytest>=8.4.2",
     "matplotlib>=3.10.7",
-    "snakeviz>=2.2.2"
+    "snakeviz>=2.2.2",
+    "elasticai-hw-measurements",
+    "elasticai-creator>=0.68.0",
 ]

@@ -89,14 +89,28 @@ class FlashInfos:
         manu_id:    Manufacturer ID
         dev_id:     Device ID
         mem_type:   Memory Type
-        capacity:   Capacity in MB
+        capacity:   Capacity in bytes
         status:     Status Register
+        pagesize:   Number of bytes in each page
+        blocksize:  Number of bytes in each block
     """
     manu_id: int
     dev_id: int
     mem_type: int
     capacity: int
     status: int
+    pagesize: int
+    blocksize: int
+
+    @property
+    def num_pages(self) -> int:
+        """Returning the number of pages in the flash device"""
+        return self.capacity // self.pagesize
+
+    @property
+    def num_blocks(self) -> int:
+        """Returning the number of blocks in the flash device"""
+        return self.capacity // self.blocksize
 
 
 def convert_pin_state(state: int, pin_list: list[str]) -> str:

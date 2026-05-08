@@ -23,7 +23,7 @@ if (EXISTS ${picoVscode})
     include(${picoVscode})
 endif()
 # ====================================================================================
-set(PICO_BOARD pico2_w CACHE STRING "Board type")
+set(PICO_BOARD pico CACHE STRING "Board type")
 set(PROGRAM_VERSION "0.1")
 
 # Pull in Raspberry Pi Pico SDK (must be before project)
@@ -100,8 +100,8 @@ target_link_libraries(main
     #peri_w5500
     #peri_ws2812
     #peri_oled4440
-    #peri_fpga_flash
-    #peri_fpga_spi
+    peri_fpga_flash
+    peri_fpga_spi
     # ---- Include digital potentiometer libraries
     #poti_ad526x   
     #poti_ad528x
