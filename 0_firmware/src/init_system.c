@@ -76,6 +76,10 @@ bool set_system_state(system_state_t new_state){
     if((system_state != new_state)){
         system_state = new_state;
         switch(new_state){
+            case STATE_ERROR:
+                set_state_default_led(true);
+                valid_state = false;
+                break;
             case STATE_INIT:
                 set_state_default_led(false);
                 valid_state = true;
@@ -84,10 +88,18 @@ bool set_system_state(system_state_t new_state){
                 set_state_default_led(true);
                 valid_state = true;
                 break;
-            case STATE_ERROR:
+            case STATE_TEST:
                 set_state_default_led(true);
-                valid_state = false;
+                valid_state = true;
                 break;
+            case STATE_DAQ:
+                set_state_default_led(false);
+                valid_state = true;
+                break;
+            case STATE_ERASE_FLASH:
+                set_state_default_led(false);
+                valid_state = true;
+                break;            
             default:
                 set_state_default_led(false);
                 valid_state = false;

@@ -13,7 +13,8 @@ typedef enum{
     STATE_INIT,
     STATE_IDLE,
     STATE_TEST,
-    STATE_DAQ
+    STATE_DAQ,
+    STATE_ERASE_FLASH,
 } system_state_t;
 
 

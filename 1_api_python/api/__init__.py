@@ -10,3 +10,6 @@ from .src._helper import (
     DataAcquisitionConfig,
     SystemState
 )
+from .fpga_api import (
+    AccessFPGA
+)
