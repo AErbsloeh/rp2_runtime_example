@@ -112,6 +112,11 @@ class FlashInfos:
         """Returning the number of blocks in the flash device"""
         return self.capacity // self.blocksize
 
+    @property
+    def num_pages_per_block(self) -> int:
+        """Returning the number of pages in each block"""
+        return self.blocksize // self.pagesize
+
 
 def convert_pin_state(state: int, pin_list: list[str]) -> str:
     """Function for converting the pin state

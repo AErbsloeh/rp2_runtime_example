@@ -3,23 +3,6 @@
 #include "version.h"
 
 
-// ============================= COMMANDS =============================
-typedef enum {
-    ECHO = 0,
-    RESET,
-    GET_SYSTEM_STATE,
-    GET_CHARAC_DAQ,
-    ENABLE_LED,
-    DISABLE_LED,
-    TOGGLE_LED,
-    START_DAQ,
-    STOP_DAQ,
-    SET_PERIOD_DAQ,
-    SET_BATCH_DAQ,
-    USB_CMD_COUNT   // Just for getting the number of commands, not an actual command
-} usb_cmd_t;
-
-
 // ========================== PROCOTOL FUNCS ==========================
 void echo(char* buffer, size_t length){
     usb_send_bytes(buffer, length);
@@ -42,7 +25,7 @@ void get_charac_system(void){
     buffer_send[3] = (uint8_t)(clk_val >> 0);
     buffer_send[4] = (uint8_t)(clk_val >> 8);
     /* PIN STATE for byte 5 & 6 */
-    buffer_send[5] = (uint8_t)((get_state_default_led() << 0x00) | (gpio_get(23) << 0x01));
+    buffer_send[5] = (uint8_t)((get_state_default_led() << 0x00));
     buffer_send[6] = 0x00;
     buffer_send[7] = (uint8_t)(temp_raw >> 0);
     buffer_send[8] = (uint8_t)(temp_raw >> 8);
@@ -125,178 +108,6 @@ void set_batch_daq(char* buffer){
 }
 
 
-
-// ======================== FLASH / FPGA CMDS ==========================
-#include "peri/fpga/flash.h"
-#include "peri/fpga/fpga_spi.h"
-#include "peri/fpga/fpga_config.h"
-
-
-#define FPGA_EN_POWER_GPIO 23
-
-static flash_fpga_t *flash_config = &flash_env5;
-static uint8_t flash_buffer_data[256] = {0};
-static uint32_t flash_address = 0;
-static uint16_t flash_page_position = 0; 
-
-
-typedef enum {
-    FPGA_INIT_PIN = USB_CMD_COUNT,
-    FPGA_POWER_STATE,
-    FLASH_INFOS,
-    FLASH_START_ERASE_ALL,
-    FLASH_START_ERASE_SEC,
-    FLASH_CHECK_ERASE,
-    FLASH_SET_ADDR_UPPER,
-    FLASH_SET_ADDR_LOWER,
-    FLASH_GET_ADDR,
-    FLASH_READ_DATA,
-    FLASH_WRITE_BUFFER,
-    FLASH_WRITE_DATA,
-    FPGA_DO_RESET,
-    FPGA_SEND_DATA
-} fpga_cmd_t;
-
-
-void init_pin_fpga(void){
-    gpio_init(FPGA_EN_POWER_GPIO);
-    gpio_set_dir(FPGA_EN_POWER_GPIO, GPIO_OUT);
-    gpio_put(FPGA_EN_POWER_GPIO, false);
-
-    uint8_t num_init = 0;
-    if(fpga_program_init(flash_config))
-        num_init++;
-
-    if(fpga_spi_init(&fpga_env5))
-        num_init++;
-
-    char buffer_send[3] = {FPGA_INIT_PIN};
-    buffer_send[1] = 0x00;
-    buffer_send[2] = num_init == 0x02;
-    usb_send_bytes(buffer_send, sizeof(buffer_send));
-}
-
-
-void set_state_fpga_power(char* buffer){
-    bool state = (buffer[2] == 0x01);
-    gpio_put(FPGA_EN_POWER_GPIO, state);
-}
-
-
-void get_flash_infos(void){
-    uint8_t manu_id = fpga_flash_get_manufacturer_id(flash_config);
-    uint16_t device_id = fpga_flash_get_device_id(flash_config);
-    uint16_t jedec_id = fpga_flash_get_jedec_id(flash_config);
-    uint16_t status_reg = fpga_flash_get_status_register(flash_config);
-
-    char buffer_send[12] = {FLASH_INFOS};
-    buffer_send[1] = (uint8_t)(manu_id >> 0);
-    buffer_send[2] = (uint8_t)(device_id >> 8);
-    buffer_send[3] = (uint8_t)(device_id >> 0);
-    buffer_send[4] = (uint8_t)(jedec_id >> 8);
-    buffer_send[5] = (uint8_t)(jedec_id >> 0);
-    buffer_send[6] = (uint8_t)(status_reg >> 8);
-    buffer_send[7] = (uint8_t)(status_reg >> 0);
-    buffer_send[8] = (uint8_t)(flash_config->page_size >> 0);
-    buffer_send[9] = (uint8_t)(flash_config->page_size >> 8);
-    buffer_send[10] = (uint8_t)(flash_config->block_size >> 0);
-    buffer_send[11] = (uint8_t)(flash_config->block_size >> 8);
-    usb_send_bytes(buffer_send, sizeof(buffer_send));
-}
-
-
-void start_erasing_flash_all(void){
-    set_system_state(STATE_ERASE_FLASH);
-    fpga_flash_erasing_all_start(flash_config);
-}
-
-
-void start_erasing_flash_sector(void){
-    set_system_state(STATE_ERASE_FLASH);
-    fpga_flash_erasing_sector_start(flash_config, flash_address);
-}
-
-
-void check_erasing_flash(void){
-    bool state = false;
-    if(get_system_state() == STATE_ERASE_FLASH){
-        if(fpga_flash_erasing_is_done(flash_config)){
-            state = true;
-            fpga_flash_erasing_stop(flash_config);
-            set_system_state(STATE_IDLE);
-        }
-    }
-
-    char buffer_send[3] = {FLASH_CHECK_ERASE};
-    buffer_send[1] = 0x00;
-    buffer_send[2] = (uint8_t)(state);
-    usb_send_bytes(buffer_send, sizeof(buffer_send));
-}
-
-
-void set_flash_starting_address_upper(char* buffer){
-    uint16_t upper = (buffer[1] << 8) | buffer[2];
-    flash_address = (uint32_t)(upper << 16);
-}
-
-
-void set_flash_starting_address_lower(char* buffer){
-    uint16_t lower = (buffer[1] << 8) | buffer[2];
-    flash_address |= lower;
-}
-
-
-void get_flash_starting_address(void){
-    char buffer_send[1 + sizeof(flash_address)] = {FLASH_GET_ADDR};
-    for(size_t idx = 0; idx < sizeof(flash_address); idx++){
-        buffer_send[1 + idx] = (uint8_t)(flash_address >> (idx * 8));
-    }
-    usb_send_bytes(buffer_send, sizeof(buffer_send));
-}
-
-
-void read_flash_data(void){
-    fpga_flash_read_data(flash_config, flash_address, flash_buffer_data, sizeof(flash_buffer_data));
-
-    char buffer_send[1 + sizeof(flash_buffer_data)] = {FLASH_READ_DATA};
-    for(size_t idx = 0; idx < sizeof(flash_buffer_data); idx++){
-        buffer_send[1 + idx] = (uint8_t)(flash_buffer_data[idx]);
-    }
-    usb_send_bytes(buffer_send, sizeof(buffer_send));
-}
-
-
-void write_data_into_flash_buffer(char* buffer){    
-    flash_buffer_data[flash_page_position++] = buffer[1];   
-    flash_buffer_data[flash_page_position++] = buffer[2];
-}
-
-
-void write_buffer_into_flash(void){
-    bool state = fpga_flash_write_data(flash_config, flash_address, flash_buffer_data, sizeof(flash_buffer_data));
-    flash_page_position = 0;
-
-    char buffer_send[3] = {FLASH_WRITE_DATA};
-    buffer_send[1] = 0x00;
-    buffer_send[2] = (uint8_t)(state);
-    usb_send_bytes(buffer_send, sizeof(buffer_send));
-}
-
-
-void fpga_do_reset(char* buffer){
-    fpga_program_reset_do(flash_config);
-    fpga_spi_reset_cycle(&fpga_env5, buffer[2]);
-}
-
-
-void fpga_toggle_led(void){
-    uint8_t data_rx0[3] = {0};
-    uint8_t data_toggle_led[3] = {0x08, 0x00, 0x00};
-    
-    fpga_spi_send_data(&fpga_env5, data_toggle_led, data_rx0);
-}
-
-
 // ======================== CALLABLE FUNCS ==========================
 bool apply_rpc_callback(char* buffer, size_t length, bool ready){    
     if(ready){
@@ -312,21 +123,6 @@ bool apply_rpc_callback(char* buffer, size_t length, bool ready){
             case STOP_DAQ:              stop_daq();                                 break;
             case SET_PERIOD_DAQ:        update_period_daq(buffer);                  break;
             case SET_BATCH_DAQ:         set_batch_daq(buffer);                      break;
-            /* ADDON FOR FLASH / FPGA INTERACTION */
-            case FPGA_INIT_PIN:         init_pin_fpga();                            break;
-            case FPGA_POWER_STATE:      set_state_fpga_power(buffer);               break;
-            case FPGA_DO_RESET:         fpga_do_reset(buffer);                      break;
-            case FLASH_INFOS:           get_flash_infos();                          break;
-            case FLASH_START_ERASE_ALL: start_erasing_flash_all();                  break;
-            case FLASH_START_ERASE_SEC: start_erasing_flash_sector();               break;
-            case FLASH_CHECK_ERASE:     check_erasing_flash();                      break;
-            case FLASH_SET_ADDR_UPPER:  set_flash_starting_address_upper(buffer);   break;
-            case FLASH_SET_ADDR_LOWER:  set_flash_starting_address_lower(buffer);   break;
-            case FLASH_GET_ADDR:        get_flash_starting_address();               break;
-            case FLASH_READ_DATA:       read_flash_data();                          break;
-            case FLASH_WRITE_BUFFER:    write_data_into_flash_buffer(buffer);       break;
-            case FLASH_WRITE_DATA:      write_buffer_into_flash();                  break;
-            case FPGA_SEND_DATA:        fpga_toggle_led();                          break;
             default:                    tight_loop_contents();                      break;        
         }  
     }

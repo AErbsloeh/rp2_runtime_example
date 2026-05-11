@@ -47,18 +47,18 @@ def test_check_flash_infos(dut: AccessFPGA):
     assert result.manu_id == 1
     assert result.dev_id == 24
     assert result.mem_type == 2
-    assert result.capacity == 32
+    assert result.capacity == 33554432
     assert result.status == 0
     assert result.pagesize == 256
     assert result.num_pages == 131072
-    assert result.num_blocks == 262144
+    assert result.num_blocks == 1024
 
 
 def test_check_starting_address_in_range(dut: AccessFPGA):
     for _ in range(100):
         a = randint(a=0, b=2**32-1)
-        dut.set_flash_starting_address(a)
-        assert dut.get_flash_starting_address() == a
+        dut._set_flash_starting_address(a)
+        assert dut._get_flash_starting_address() == a
 
 
 def test_check_starting_address_out_of_range(dut: AccessFPGA):
@@ -66,7 +66,7 @@ def test_check_starting_address_out_of_range(dut: AccessFPGA):
     stimuli.extend([randint(a=2**32, b=2**32+100) for _ in range(10)])
     for val in stimuli:
         try:
-            dut.set_flash_starting_address(val)
+            dut._set_flash_starting_address(val)
         except ValueError:
             assert True
         else:
@@ -77,7 +77,7 @@ def test_read_page_from_flash(dut: AccessFPGA):
     page = 0
     page_size = dut.get_flash_infos().pagesize
 
-    data = dut.read_page_from_flash(page, page_size)
+    data = dut._read_page_from_flash(page, page_size)
     assert len(data) == page_size
 
 
