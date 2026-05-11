@@ -5,6 +5,7 @@ from time import sleep
 
 if __name__ == "__main__":
     do_flash = True
+    do_erase = False
     AccessFPGA().do_reset()
 
     dut = AccessFPGA()
@@ -12,14 +13,16 @@ if __name__ == "__main__":
         path2stream = Path(get_path_to_project()) / "file"
         file = [file for file in path2stream.glob("*.bit")][0]
         bitstream = read_bitstream_file_amd(file)
+        if do_erase:
+            dut.erase_flash_all()
 
-        #dut.erase_flash_all()
         dut.write_bitstream_into_flash(
             bitstream=bitstream,
             start_page=0,
-            do_check=False
+            do_check=True
         )
-        print(dut.check_bitstream_from_flash(bitstream, 0))
+        if not dut.check_bitstream_from_flash(bitstream, 0):
+            raise ValueError("Bitstream is not equal to the content of the FPGA flash!")
 
     dut.set_power_state(True)
     dut.fpga_do_program_reset()

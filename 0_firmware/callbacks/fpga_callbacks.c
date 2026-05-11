@@ -82,12 +82,14 @@ void check_erasing_flash(void){
 void set_flash_starting_address_upper(char* buffer){
     uint16_t upper = (buffer[1] << 8) | buffer[2];
     flash_config->flash_data.address = (uint32_t)(upper << 16);
+    flash_config->flash_data.position = 0;
 }
 
 
 void set_flash_starting_address_lower(char* buffer){
     uint16_t lower = (buffer[1] << 8) | buffer[2];
     flash_config->flash_data.address |= lower;
+    flash_config->flash_data.position = 0;
 }
 
 

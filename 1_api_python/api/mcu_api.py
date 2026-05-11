@@ -90,6 +90,13 @@ class DeviceAPI:
             data=self.__device.convert(head, data),
         )
 
+    def _write_bytes(self, data: bytes, size: int=0) -> bytes:
+        ret = self.__device.write_wfb(
+            data=data,
+            size=size
+        )
+        return ret
+
     @staticmethod
     def _bytes_to_int(data: bytes, signed: bool=False) -> int:
         return int.from_bytes(data, byteorder='little', signed=signed)

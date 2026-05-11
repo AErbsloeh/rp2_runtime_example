@@ -168,12 +168,26 @@ class AccessFPGA(DeviceAPI):
         :param do_check:    Boolean value with the check of the data after writing
         :return:            None
         """
-        self._set_flash_starting_address(page * bytes_page)
-        for a, b in zip(data[::2], data[1::2]):
-            send_data = a * 256 + b
-            self._write_without_feedback(Commands.FLASH_WRITE_BUFFER, send_data)
-        ret = self._write_with_feedback(Commands.FLASH_WRITE_DATA)
-        if ret[1] != 1:
+        addr = page * bytes_page
+        upper = (addr >> 16) & 0xFFFF
+        lower = addr & 0xFFFF
+
+        out = bytearray()
+        out.extend(upper.to_bytes(2, "little"))
+        out.append(Commands.FLASH_SET_ADDR_UPPER)
+        out.extend(lower.to_bytes(2, "little"))
+        out.append(Commands.FLASH_SET_ADDR_LOWER)
+        out.extend(lower.to_bytes(2, "little"))
+        out.append(Commands.FLASH_SET_ADDR_LOWER)
+        out.extend(
+            x
+            for a, b in zip(data[::2], data[1::2])
+            for x in (b, a, Commands.FLASH_WRITE_BUFFER)
+        )
+        out.extend((0, 0, Commands.FLASH_WRITE_DATA))
+
+        ret = self._write_bytes(bytes(out), size=3)
+        if ret[-1] != 1 and ret[0] != Commands.FLASH_WRITE_DATA:
             raise ValueError("Write process was not correct!")
         if do_check:
             data_check = bytes(self._read_page_from_flash(page, bytes_page))
@@ -182,12 +196,18 @@ class AccessFPGA(DeviceAPI):
 
     @staticmethod
     def _split_stream_into_pages(bitstream: bytes, pagesize: int) -> list[bytes]:
-        pages = []
-        for idx in range(0, len(bitstream), pagesize):
-            page = bitstream[idx:idx + pagesize]
-            if len(page) < pagesize:
-                page += b'\xFF' * (pagesize - len(page))
-            pages.append(page)
+        pages = [bitstream[idx:idx + pagesize] for idx in range(0, len(bitstream), pagesize)]
+        if not len(pages[-1]) == pagesize:
+            last_page = pages[-1]
+            last_page += bytes([0xFF for _ in range(pagesize - len(last_page))])
+            pages[-1] = last_page
+        return pages
+
+    @staticmethod
+    def _add_filling_bytes_into_pages(bitstream_pages: list[bytes], pagesize: int, num_ends: int) -> list[bytes]:
+        pages = bitstream_pages.copy()
+        for _ in range(num_ends):
+            pages.append(bytes([255 for _ in range(pagesize)]))
         return pages
 
     def write_bitstream_into_flash(self, bitstream: bytes, start_page: int=0, do_check: bool=False) -> None:
@@ -199,8 +219,8 @@ class AccessFPGA(DeviceAPI):
         """
         sets = self.get_flash_infos()
         bitstream_chunks = self._split_stream_into_pages(bitstream, sets.pagesize)
-        bitstream_chunks.append(bytes([255 for _ in range(sets.pagesize)]))
-        bitstream_chunks.append(bytes([255 for _ in range(sets.pagesize)]))
+        bitstream_chunks = self._add_filling_bytes_into_pages(bitstream_chunks, sets.pagesize, 4)
+
         if len(bitstream_chunks) > sets.num_pages:
             raise ValueError("Bitstream is too long!")
 
@@ -223,13 +243,13 @@ class AccessFPGA(DeviceAPI):
         :return:            Boolean value with the result of the check
         """
         sets = self.get_flash_infos()
-        bitstream_chunks = self._split_stream_into_pages(bitstream, sets.pagesize)
-        if len(bitstream_chunks) > sets.num_pages:
-            raise ValueError("Bitstream is too long!")
+        data_rd = bytes()
+        for page, data in enumerate(tqdm(range(int(len(bitstream) / sets.pagesize)), desc="Checking the bitstream in FPGA flash: ")):
+            data_rd += bytes(self._read_page_from_flash(page + start_page, sets.pagesize))
 
-        for page, data in enumerate(tqdm(bitstream_chunks, desc="Checking the bitstream in FPGA flash: ")):
-            data_rd = bytes(self._read_page_from_flash(page + start_page, sets.pagesize))
-            if data != data_rd:
+        for i, (a, b) in enumerate(zip(bitstream, data_rd)):
+            if a != b:
+                print(f"Error @ byte {i}: expected=0x{a:02X}, get=0x{b:02X}")
                 return False
         return True
 
