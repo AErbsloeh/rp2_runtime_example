@@ -38,6 +38,7 @@ add_executable(main
     main.c 
     callbacks/gpio_callbacks.c
     callbacks/rpc_callbacks.c
+    #callbacks/fpga_callbacks.c
     src/init_system.c
     src/testbench.c
     hardware_io.c
@@ -100,8 +101,8 @@ target_link_libraries(main
     #peri_w5500
     #peri_ws2812
     #peri_oled4440
-    peri_fpga_flash
-    peri_fpga_spi
+    #peri_fpga_flash
+    #peri_fpga_spi
     # ---- Include digital potentiometer libraries
     #poti_ad526x   
     #poti_ad528x

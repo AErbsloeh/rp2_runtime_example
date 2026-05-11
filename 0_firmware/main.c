@@ -1,8 +1,10 @@
 #include "hardware_io.h"
 #include "callbacks/rpc_callbacks.h"
+//#include "callbacks/fpga_callbacks.h"
 #ifdef ADD_CYW43_SUPPORT
     #include "pico/cyw43_arch.h"
 #endif
+
 
 int main(){   
     #ifdef ADD_CYW43_SUPPORT
@@ -21,6 +23,7 @@ int main(){
         // --- USB Protocol Handling --- 
         usb_handling_fifo_buffer(&usb_buffer);
         apply_rpc_callback(usb_buffer.data, usb_buffer.length, usb_buffer.ready);
+        //apply_fpga_callback(usb_buffer.data, usb_buffer.length, usb_buffer.ready);
 
         // --- Sending data in main ---
         if(daq_check_send_data(&daq_config_raw))
