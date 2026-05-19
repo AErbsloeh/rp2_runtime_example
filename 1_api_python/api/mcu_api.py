@@ -286,7 +286,7 @@ class DeviceAPI:
             return [], None
 
     @property
-    def _thread_batch_datatype(self) -> np.dtype:
+    def _package_daq_batch(self) -> np.dtype:
         return np.dtype([
             ('head', 'u1'),
             ('index', 'u1'),
@@ -300,7 +300,7 @@ class DeviceAPI:
             buffer = self.__device.read(self.__daq_config.num_bytes_total)
             if not buffer:
                 raise Exception
-            frames = np.frombuffer(buffer, dtype=self._thread_batch_datatype)[0]
+            frames = np.frombuffer(buffer, dtype=self._package_daq_batch)[0]
             mask = (frames['head'], frames['tail']) == (self.__daq_config.head_cmd, self.__daq_config.tail_cmd)
             if mask:
                 self._check_package_loss(int(frames['index']))
