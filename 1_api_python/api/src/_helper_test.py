@@ -4,7 +4,8 @@ from api.src._helper import (
     convert_system_state,
     convert_rp2_adc_value,
     convert_rp2_temp_value,
-    DataAcquisitionConfig
+    DataAcquisitionConfig,
+    build_checksum,
 )
 
 
@@ -83,6 +84,14 @@ def test_daq_config_signed_4bytes():
     )
     assert rslt.dtype_sample == '<i4'
     assert rslt.data_shape == (16, 600)
+
+
+def test_building_checksum():
+    data = bytes([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    assert build_checksum(data) == 55
+
+    data = bytes([2, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    assert build_checksum(data) == 56
 
 
 if __name__ == "__main__":

@@ -162,3 +162,8 @@ def convert_rp2_temp_value(raw: int) -> float:
     """Function for converting the RP2 temperatur value from integer to float"""
     volt = convert_rp2_adc_value(raw)
     return 27 - (volt - 0.706) / 0.001721
+
+
+def build_checksum(data: bytes) -> int:
+    """Function for calculating the checksum of the data"""
+    return sum(data) % 2**16
