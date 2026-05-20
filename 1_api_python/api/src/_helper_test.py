@@ -6,6 +6,7 @@ from api.src._helper import (
     convert_rp2_temp_value,
     DataAcquisitionConfig,
     build_checksum,
+    build_crc16,
 )
 
 
@@ -92,6 +93,30 @@ def test_building_checksum():
 
     data = bytes([2, 2, 3, 4, 5, 6, 7, 8, 9, 10])
     assert build_checksum(data) == 56
+
+
+def test_building_crc16():
+    data = b"123456789"
+    assert build_crc16(data) == 0x29B1
+
+
+def test_daq_config_crc_detection():
+    """Verify that the DAQ configuration correctly identifies the presence of a CRC field and its type based on the total number of bytes."""
+    result = DataAcquisitionConfig(
+        num_samples=2,
+        num_channels=4,
+        sampling_rate=2000.,
+        send_batch=True,
+        head_cmd=255,
+        tail_cmd=160,
+        num_bytes_total=1 + 1 + 16 + 4 * 2 * 2 + 2 + 1,
+        bytes_sample=2,
+        is_signed=False
+    )
+
+    assert result.has_crc is True
+    assert result.crc_bytes == 2
+    assert result.crc_type == '<u2'
 
 
 if __name__ == "__main__":
