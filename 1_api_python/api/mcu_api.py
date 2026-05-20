@@ -9,6 +9,7 @@ from .src._interface_serial import (
 )
 from .src._lsl import ThreadLSL
 from .src._helper import (
+    build_crc16,
     convert_pin_state,
     convert_system_state,
     convert_rp2_temp_value,
@@ -226,6 +227,15 @@ class DeviceAPI:
             self.__logger.debug(f"Package loss detected: {self.__num_package_loss}")
         self.__last_idx = new_idx
 
+    def _check_crc(self, buffer: bytes, crc_value: int) -> bool:
+        if not self.__daq_config.has_crc:
+            return True
+        if self.__daq_config.crc_bytes not in (2, 4):
+            return False
+        crc_pos = len(buffer) - self.__daq_config.crc_bytes - 1
+        payload = buffer[:crc_pos] + buffer[crc_pos + self.__daq_config.crc_bytes:]
+        return build_crc16(payload) == crc_value
+
     @property
     def _package_daq_config(self) -> np.dtype:
         return np.dtype([
@@ -260,13 +270,16 @@ class DeviceAPI:
 
     @property
     def _package_daq_sample(self) -> np.dtype:
-        return np.dtype([
+        structure = [
             ('head', 'u1'),
             ('index', 'u1'),
             ('timestamp', '<u8'),
-            ('data', self.__daq_config.dtype_sample, self.__daq_config.data_shape),
-            ('tail', 'u1')
-        ])
+            ('data', self.__daq_config.dtype_sample, self.__daq_config.data_shape)
+        ]
+        if self.__daq_config.has_crc:
+            structure.append(('crc', self.__daq_config.crc_type))
+        structure.append(('tail', 'u1'))
+        return np.dtype(structure)
 
     def _thread_read_frame(self) -> tuple[list, float]:
         try:
@@ -277,6 +290,11 @@ class DeviceAPI:
             mask = (frames['head'], frames['tail']) == (self.__daq_config.head_cmd, self.__daq_config.tail_cmd)
             if mask:
                 self._check_package_loss(int(frames['index']))
+                if self.__daq_config.has_crc:
+                    crc_is_valid = self._check_crc(buffer, int(frames['crc']))
+                    if not crc_is_valid:
+                        self.__logger.warning("DAQ frame CRC mismatch")
+                        raise Exception
                 timestamps = 1e-6 * float(frames['timestamp'])
                 data = frames['data'].tolist()
                 return data, timestamps
@@ -287,13 +305,16 @@ class DeviceAPI:
 
     @property
     def _package_daq_batch(self) -> np.dtype:
-        return np.dtype([
+        structure = [
             ('head', 'u1'),
             ('index', 'u1'),
             ('timestamp', '<u8', (2,)),
-            ('data', self.__daq_config.dtype_sample, self.__daq_config.data_shape),
-            ('tail', 'u1')
-        ])
+            ('data', self.__daq_config.dtype_sample, self.__daq_config.data_shape)
+        ]
+        if self.__daq_config.has_crc:
+            structure.append(('crc', self.__daq_config.crc_type))
+        structure.append(('tail', 'u1'))
+        return np.dtype(structure)
 
     def _thread_read_batch(self) -> tuple[list[list], list[float]]:
         try:
@@ -304,6 +325,11 @@ class DeviceAPI:
             mask = (frames['head'], frames['tail']) == (self.__daq_config.head_cmd, self.__daq_config.tail_cmd)
             if mask:
                 self._check_package_loss(int(frames['index']))
+                if self.__daq_config.has_crc:
+                    crc_is_valid = self._check_crc(buffer, int(frames['crc']))
+                    if not crc_is_valid:
+                        self.__logger.warning("DAQ batch CRC mismatch")
+                        raise Exception
                 dt = (frames['timestamp'][1] - frames['timestamp'][0]) / (self.__daq_config.num_samples-1)
                 timestamps = [float(1e-6 * (frames['timestamp'][0] + dt*idx)) for idx in range(self.__daq_config.num_samples)]
                 data = frames['data'].tolist()
