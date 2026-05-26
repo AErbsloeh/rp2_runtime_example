@@ -9,6 +9,8 @@ from .src._interface_serial import (
 )
 from .src._lsl import ThreadLSL
 from .src._helper import (
+    build_crc16_ccitt,
+    build_crc_excluding_endframe,
     convert_pin_state,
     convert_system_state,
     convert_rp2_temp_value,
@@ -16,6 +18,7 @@ from .src._helper import (
     DataAcquisitionConfig,
     SystemState
 )
+ 
     
 
 class Commands(IntEnum):
@@ -170,7 +173,6 @@ class DeviceAPI:
             firmware=f"{frame['major']}.{frame['minor']}",
             temp=convert_rp2_temp_value(int(frame['temp']))
         )
-
     def enable_led(self) -> None:
         """Changing the state of the LED with enabling it
         :return:        None
@@ -226,6 +228,18 @@ class DeviceAPI:
             self.__logger.debug(f"Package loss detected: {self.__num_package_loss}")
         self.__last_idx = new_idx
 
+   
+
+    def _check_crc(self, packet: bytes, received_crc: int) -> bool:
+        """Verify CRC of a received packet using helper.verify_crc.
+
+        The function is defensive: it logs and returns False on errors.
+        """
+        calculated_crc = build_crc_excluding_endframe(packet)
+        return calculated_crc == received_crc
+    
+
+
     @property
     def _package_daq_config(self) -> np.dtype:
         return np.dtype([
@@ -265,6 +279,7 @@ class DeviceAPI:
             ('index', 'u1'),
             ('timestamp', '<u8'),
             ('data', self.__daq_config.dtype_sample, self.__daq_config.data_shape),
+            ('crc', self.__daq_config.crc_type),
             ('tail', 'u1')
         ])
 
@@ -277,6 +292,11 @@ class DeviceAPI:
             mask = (frames['head'], frames['tail']) == (self.__daq_config.head_cmd, self.__daq_config.tail_cmd)
             if mask:
                 self._check_package_loss(int(frames['index']))
+            if self.__daq_config.has_crc:
+                crc_is_valid = self._check_crc(buffer, int(frames['crc']))
+            if not crc_is_valid:
+                self.__logger.debug("CRC check failed for received DAQ sample.")
+                raise Exception("CRC check failed.")
                 timestamps = 1e-6 * float(frames['timestamp'])
                 data = frames['data'].tolist()
                 return data, timestamps
@@ -292,6 +312,7 @@ class DeviceAPI:
             ('index', 'u1'),
             ('timestamp', '<u8', (2,)),
             ('data', self.__daq_config.dtype_sample, self.__daq_config.data_shape),
+            ('crc', self.__daq_config.crc_type),
             ('tail', 'u1')
         ])
 
@@ -304,6 +325,11 @@ class DeviceAPI:
             mask = (frames['head'], frames['tail']) == (self.__daq_config.head_cmd, self.__daq_config.tail_cmd)
             if mask:
                 self._check_package_loss(int(frames['index']))
+            if self.__daq_config.has_crc:
+                crc_is_valid = self._check_crc(buffer, int(frames['crc']))
+            if not crc_is_valid:
+                self.__logger.debug("CRC check failed for received DAQ sample.")
+                raise Exception("CRC check failed.")
                 dt = (frames['timestamp'][1] - frames['timestamp'][0]) / (self.__daq_config.num_samples-1)
                 timestamps = [float(1e-6 * (frames['timestamp'][0] + dt*idx)) for idx in range(self.__daq_config.num_samples)]
                 data = frames['data'].tolist()
