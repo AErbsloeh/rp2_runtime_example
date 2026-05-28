@@ -16,18 +16,21 @@ int main(){
     // Init Phase 
     init_gpio_pico(false);
     init_system();
-    run_testbench(TB_NONE);    
+    run_testbench(TB_NONE);   
+    
+    static bool valid_rpc[1] = {false};
 
     // Main Loop
     while (true) {  
         // --- USB Protocol Handling --- 
         usb_handling_fifo_buffer(&usb_buffer);
-        apply_rpc_callback(usb_buffer.data, usb_buffer.length, usb_buffer.ready);
-        //apply_fpga_callback(usb_buffer.data, usb_buffer.length, usb_buffer.ready);
-
+        valid_rpc[0] = apply_rpc_callback(usb_buffer.data, usb_buffer.length, usb_buffer.ready);
+        //valid_rpc[1] = apply_fpga_callback(usb_buffer.data, usb_buffer.length, usb_buffer.ready);
+        if(!valid_rpc[0]){
+            set_system_state(STATE_ERROR);
+        }
         // --- Sending data in main ---
-        if(daq_check_send_data(&daq_config_raw))
-            toggle_state_default_led();
+        daq_check_send_data(&daq_config_raw);
     };
 }
 

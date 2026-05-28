@@ -1,4 +1,4 @@
-from api import AccessFPGA, get_path_to_project
+from api import FlashFPGA, get_path_to_project
 from pathlib import Path
 from elasticai.fpga_testing.scripts_build.bin_build import read_bitstream_file_amd
 from time import sleep
@@ -6,9 +6,9 @@ from time import sleep
 if __name__ == "__main__":
     do_flash = True
     do_erase = False
-    AccessFPGA().do_reset()
+    FlashFPGA().do_reset()
 
-    dut = AccessFPGA()
+    dut = FlashFPGA()
     if do_flash:
         path2stream = Path(get_path_to_project()) / "file"
         file = [file for file in path2stream.glob("*.bit")][0]

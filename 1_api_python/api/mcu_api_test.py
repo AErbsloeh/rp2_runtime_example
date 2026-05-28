@@ -119,12 +119,14 @@ def test_config_daq_sample_100hz(dut: DeviceAPI):
     assert rslt.bytes_sample == 2
     assert rslt.sampling_rate == 100.
     assert rslt.send_batch == False
-    assert rslt.num_bytes_total == 15
+    assert rslt.num_bytes_total == 17
     assert rslt.tail_cmd == 255
     assert rslt.head_cmd == 160
     assert rslt.is_signed == False
     assert rslt.data_shape == (2,)
     assert rslt.dtype_sample == '<u2'
+    assert rslt.is_signed == False
+    assert rslt.has_crc == True
 
 
 def test_config_daq_batch_10hz(dut: DeviceAPI):
@@ -137,11 +139,13 @@ def test_config_daq_batch_10hz(dut: DeviceAPI):
     assert rslt.bytes_sample == 2
     assert rslt.sampling_rate == 10.
     assert rslt.send_batch == True
-    assert rslt.num_bytes_total == 83
+    assert rslt.num_bytes_total == 85
     assert rslt.tail_cmd == 255
     assert rslt.head_cmd == 160
     assert rslt.data_shape == (2, 16)
     assert rslt.dtype_sample == '<u2'
+    assert rslt.is_signed == False
+    assert rslt.has_crc == True
 
 
 def test_pin_states(dut: DeviceAPI):
@@ -171,22 +175,27 @@ def test_define_layout(dut: DeviceAPI):
     assert check_layout == result_layout
     assert check_labels == result_labels
 
-def test_check_crc_valid():
-    api = DeviceAPI.__new__(DeviceAPI)  # Create instance without calling __init__
 
-    payload = b"123456789"  # Example payload
-    crc = build_crc16_ccitt(payload)  # Calculate CRC for the payload
-    packet = payload + crc.to_bytes(2, byteorder='little') + bytes([0xA0])  # Append CRC and end-frame to payloadd
-    assert api._check_crc(packet, crc) == True
+def test_check_crc_valid(dut: DeviceAPI):
+    payload = b"123456789"
+    crc = build_crc16_ccitt(payload)
+    packet = payload + crc.to_bytes(2, byteorder='little') + bytes([0xA0])
+    assert dut._check_crc(packet, crc) == True
 
-def test_check_crc_invalid():
-    api = DeviceAPI.__new__(DeviceAPI)  # Create instance without calling __init__
 
-    payload = b"123456789"  # Example payload
-    crc = build_crc16_ccitt(payload)  # Calculate CRC for the payload
-    wrong_crc = (crc + 1)   # Create an incorrect CRC by adding 1
-    packet = payload + wrong_crc.to_bytes(2, byteorder='little') + bytes([0xA0])  # Append incorrect CRC and end-frame to payload
-    assert api._check_crc(packet, wrong_crc) == False
+def test_check_crc_invalid(dut: DeviceAPI):
+    payload = b"123456789"
+    crc = build_crc16_ccitt(payload)
+    wrong_crc = (crc + 1)
+    packet = payload + wrong_crc.to_bytes(2, byteorder='little') + bytes([0xA0])
+    try:
+        dut._check_crc(packet, wrong_crc)
+    except RuntimeError:
+        assert True
+    else:
+        assert False
+
+
 if __name__ == "__main__":
     basicConfig(level=DEBUG)
     pytest.main([__file__])

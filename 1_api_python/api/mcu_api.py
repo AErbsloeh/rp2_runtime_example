@@ -9,7 +9,6 @@ from .src._interface_serial import (
 )
 from .src._lsl import ThreadLSL
 from .src._helper import (
-    build_crc16_ccitt,
     build_crc_excluding_endframe,
     convert_pin_state,
     convert_system_state,
@@ -228,15 +227,13 @@ class DeviceAPI:
             self.__logger.debug(f"Package loss detected: {self.__num_package_loss}")
         self.__last_idx = new_idx
 
-
     def _check_crc(self, packet: bytes, received_crc: int) -> bool:
-        """Verify CRC of a received packet using helper.verify_crc.
-
-        The function is defensive: it logs and returns False on errors.
-        """
+        """Verify CRC of a received packet. If failed program will be stopped"""
         calculated_crc = build_crc_excluding_endframe(packet)
-        return calculated_crc == received_crc
-
+        state = calculated_crc == received_crc
+        if not state:
+            raise RuntimeError("CRC check failed.")
+        return state
 
     @property
     def _package_daq_config(self) -> np.dtype:
@@ -272,12 +269,12 @@ class DeviceAPI:
 
     @property
     def _package_daq_sample(self) -> np.dtype:
-        structure = [
+        return np.dtype([
             ('head', 'u1'),
             ('index', 'u1'),
             ('timestamp', '<u8'),
             ('data', self.__daq_config.dtype_sample, self.__daq_config.data_shape),
-            ('crc', self.__daq_config.crc_type),
+            ('crc', '<u2'),
             ('tail', 'u1')
         ])
 
@@ -290,11 +287,8 @@ class DeviceAPI:
             mask = (frames['head'], frames['tail']) == (self.__daq_config.head_cmd, self.__daq_config.tail_cmd)
             if mask:
                 self._check_package_loss(int(frames['index']))
-            if self.__daq_config.has_crc:
-                crc_is_valid = self._check_crc(buffer, int(frames['crc']))
-            if not crc_is_valid:
-                self.__logger.debug("CRC check failed for received DAQ sample.")
-                raise Exception("CRC check failed.")
+                if self.__daq_config.has_crc:
+                    self._check_crc(buffer, int(frames['crc']))
                 timestamps = 1e-6 * float(frames['timestamp'])
                 data = frames['data'].tolist()
                 return data, timestamps
@@ -305,12 +299,12 @@ class DeviceAPI:
 
     @property
     def _package_daq_batch(self) -> np.dtype:
-        structure = [
+        return np.dtype([
             ('head', 'u1'),
             ('index', 'u1'),
             ('timestamp', '<u8', (2,)),
             ('data', self.__daq_config.dtype_sample, self.__daq_config.data_shape),
-            ('crc', self.__daq_config.crc_type),
+            ('crc', '<u2'),
             ('tail', 'u1')
         ])
 
@@ -323,11 +317,8 @@ class DeviceAPI:
             mask = (frames['head'], frames['tail']) == (self.__daq_config.head_cmd, self.__daq_config.tail_cmd)
             if mask:
                 self._check_package_loss(int(frames['index']))
-            if self.__daq_config.has_crc:
-                crc_is_valid = self._check_crc(buffer, int(frames['crc']))
-            if not crc_is_valid:
-                self.__logger.debug("CRC check failed for received DAQ sample.")
-                raise Exception("CRC check failed.")
+                if self.__daq_config.has_crc:
+                    self._check_crc(buffer, int(frames['crc']))
                 dt = (frames['timestamp'][1] - frames['timestamp'][0]) / (self.__daq_config.num_samples-1)
                 timestamps = [float(1e-6 * (frames['timestamp'][0] + dt*idx)) for idx in range(self.__daq_config.num_samples)]
                 data = frames['data'].tolist()
@@ -354,6 +345,8 @@ class DeviceAPI:
         if not self.__layout_labels:
             self.__layout_labels = [f"CH{idx}" for idx in range(self.__daq_config.num_channels)]
             self.__layout_channels = [idx for idx in range(self.__daq_config.num_channels)]
+        if not len(self.__layout_labels) == self.__daq_config.num_channels == self.__daq_config.num_channels:
+            raise ValueError(f"Number of channels in layout ({self.__daq_config.num_channels}) does not match number of channels in DAQ ({len(self.__layout_labels)})")
 
         func = self._thread_read_batch if do_batch else self._thread_read_frame
         self.__threads.register(func=self.__threads.lsl_stream_util, args=(0, 'util'))

@@ -69,9 +69,9 @@ class DataAcquisitionConfig:
         Layout assumed: head(1) + index(1) + timestamp(8) + data + tail(1)
         where data = num_channels * num_samples * bytes_sample
         """
-        timestamp_bytes = 8
+        timestamp_bytes = 8 if not self.send_batch else 16
         data_bytes = self.num_channels * self.num_samples * self.bytes_sample
-        return 1 + 1 + timestamp_bytes + data_bytes + 1
+        return 3 + timestamp_bytes + data_bytes
 
     @property
     def crc_bytes(self) -> int:
@@ -83,41 +83,6 @@ class DataAcquisitionConfig:
     def has_crc(self) -> bool:
         """True when packet contains a 2-byte CRC at the end."""
         return self.crc_bytes == 2
-
-    @property
-    def crc_type(self) -> str | None:
-        """Return dtype string for CRC when present (e.g. 'u2'), otherwise None."""
-        return 'u2' if self.has_crc else None
-
-    @property
-    def _expected_bytes_without_crc(self) -> int:
-        """Expected total packet bytes for DAQ transmission without CRC fields."""
-        if self.send_batch:
-            data_bytes = self.num_channels * self.num_samples * self.bytes_sample
-            timestamp_bytes = 16
-        else:
-            data_bytes = self.num_channels * self.bytes_sample
-            timestamp_bytes = 8
-
-        return 1 + 1 + timestamp_bytes + data_bytes + 1
-
-    @property
-    def crc_bytes(self) -> int:
-        """Number of CRC bytes added to each DAQ frame."""
-        extra = self.num_bytes_total - self._expected_bytes_without_crc
-        return extra if extra == 2 else 0
-
-    @property
-    def has_crc(self) -> bool:
-        """Flag indicating whether the DAQ packet includes a CRC field."""
-        return self.crc_bytes == 2
-
-    @property
-    def crc_type(self) -> str | None:
-        """NumPy datatype string for the CRC field."""
-        if self.crc_bytes == 2:
-             return '<u2'
-        return None
 
 
 @dataclass(frozen=True)
