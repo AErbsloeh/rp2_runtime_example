@@ -89,6 +89,36 @@ class DataAcquisitionConfig:
         """Return dtype string for CRC when present (e.g. 'u2'), otherwise None."""
         return 'u2' if self.has_crc else None
 
+    @property
+    def _expected_bytes_without_crc(self) -> int:
+        """Expected total packet bytes for DAQ transmission without CRC fields."""
+        if self.send_batch:
+            data_bytes = self.num_channels * self.num_samples * self.bytes_sample
+            timestamp_bytes = 16
+        else:
+            data_bytes = self.num_channels * self.bytes_sample
+            timestamp_bytes = 8
+
+        return 1 + 1 + timestamp_bytes + data_bytes + 1
+
+    @property
+    def crc_bytes(self) -> int:
+        """Number of CRC bytes added to each DAQ frame."""
+        extra = self.num_bytes_total - self._expected_bytes_without_crc
+        return extra if extra == 2 else 0
+
+    @property
+    def has_crc(self) -> bool:
+        """Flag indicating whether the DAQ packet includes a CRC field."""
+        return self.crc_bytes == 2
+
+    @property
+    def crc_type(self) -> str | None:
+        """NumPy datatype string for the CRC field."""
+        if self.crc_bytes == 2:
+             return '<u2'
+        return None
+
 
 @dataclass(frozen=True)
 class SystemState:

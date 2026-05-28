@@ -228,7 +228,6 @@ class DeviceAPI:
             self.__logger.debug(f"Package loss detected: {self.__num_package_loss}")
         self.__last_idx = new_idx
 
-   
 
     def _check_crc(self, packet: bytes, received_crc: int) -> bool:
         """Verify CRC of a received packet using helper.verify_crc.
@@ -237,7 +236,6 @@ class DeviceAPI:
         """
         calculated_crc = build_crc_excluding_endframe(packet)
         return calculated_crc == received_crc
-    
 
 
     @property
@@ -274,7 +272,7 @@ class DeviceAPI:
 
     @property
     def _package_daq_sample(self) -> np.dtype:
-        return np.dtype([
+        structure = [
             ('head', 'u1'),
             ('index', 'u1'),
             ('timestamp', '<u8'),
@@ -307,7 +305,7 @@ class DeviceAPI:
 
     @property
     def _package_daq_batch(self) -> np.dtype:
-        return np.dtype([
+        structure = [
             ('head', 'u1'),
             ('index', 'u1'),
             ('timestamp', '<u8', (2,)),
