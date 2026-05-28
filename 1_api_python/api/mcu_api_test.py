@@ -1,3 +1,4 @@
+from api.src._helper import build_crc16_ccitt
 import pytest
 from random import randint
 from shutil import rmtree
@@ -10,7 +11,7 @@ from api.mcu_api import (
     convert_system_state
 )
 
-
+#Uncomment the following lines to run the tests with the actual device. Make sure to have the device connected and the correct COM port set in mcu_api.py before running.
 @pytest.fixture(scope="session", autouse=True)
 def dut():
     DeviceAPI().do_reset()
@@ -170,7 +171,22 @@ def test_define_layout(dut: DeviceAPI):
     assert check_layout == result_layout
     assert check_labels == result_labels
 
+def test_check_crc_valid():
+    api = DeviceAPI.__new__(DeviceAPI)  # Create instance without calling __init__
 
+    payload = b"123456789"  # Example payload
+    crc = build_crc16_ccitt(payload)  # Calculate CRC for the payload
+    packet = payload + crc.to_bytes(2, byteorder='little') + bytes([0xA0])  # Append CRC and end-frame to payloadd
+    assert api._check_crc(packet, crc) == True
+
+def test_check_crc_invalid():
+    api = DeviceAPI.__new__(DeviceAPI)  # Create instance without calling __init__
+
+    payload = b"123456789"  # Example payload
+    crc = build_crc16_ccitt(payload)  # Calculate CRC for the payload
+    wrong_crc = (crc + 1)   # Create an incorrect CRC by adding 1
+    packet = payload + wrong_crc.to_bytes(2, byteorder='little') + bytes([0xA0])  # Append incorrect CRC and end-frame to payload
+    assert api._check_crc(packet, wrong_crc) == False
 if __name__ == "__main__":
     basicConfig(level=DEBUG)
     pytest.main([__file__])
