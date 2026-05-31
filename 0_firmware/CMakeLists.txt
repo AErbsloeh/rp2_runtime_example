@@ -41,6 +41,7 @@ add_executable(main
     #callbacks/fpga_callbacks.c
     src/init_system.c
     src/testbench.c
+    src/transport_usb.c
     hardware_io.c
 )
 
