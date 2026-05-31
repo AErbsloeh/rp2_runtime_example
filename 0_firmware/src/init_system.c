@@ -1,4 +1,5 @@
 #include "src/init_system.h"
+#include "src/transport.h"
 #include "hardware/watchdog.h"
 #include "hardware_io.h"
 #include "callbacks/gpio_callbacks.h"
@@ -30,9 +31,9 @@ bool init_gpio_pico(bool block_usb){
     gpio_set_irq_enabled_with_callback(BUTTON_BOARD, GPIO_IRQ_EDGE_FALL, true, &irq_gpio_callbacks);*/
 
     // --- Init of Serial COM-Port
-    usb_init(&usb_buffer);
-    if(block_usb){
-        usb_wait_until_connected();
+    transport_init(&rx_buffer);
+    if (block_usb) {
+        transport_wait_until_connected();
     }
     sleep_ms(1000);
     return true;
