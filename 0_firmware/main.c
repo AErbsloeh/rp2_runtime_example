@@ -1,6 +1,6 @@
 #include "hardware_io.h"
 #include "callbacks/rpc_callbacks.h"
-#include "src/transport.h"
+#include "hal/transport/transport.h"
 // #include "callbacks/fpga_callbacks.h"
 #ifdef ADD_CYW43_SUPPORT
     #include "pico/cyw43_arch.h"

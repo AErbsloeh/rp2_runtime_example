@@ -26,6 +26,10 @@ endif()
 set(PICO_BOARD pico2 CACHE STRING "Board type")
 set(PROGRAM_VERSION "0.1")
 
+# set the transport backend (either usb or wifi)
+set(TRANSPORT_BACKEND "usb" CACHE STRING "Transport backend: usb or wifi")
+set_property(CACHE TRANSPORT_BACKEND PROPERTY STRINGS usb wifi)
+
 # Pull in Raspberry Pi Pico SDK (must be before project)
 include(pico_sdk_import.cmake)
 project(main C CXX ASM)
@@ -41,7 +45,6 @@ add_executable(main
     #callbacks/fpga_callbacks.c
     src/init_system.c
     src/testbench.c
-    src/transport_usb.c
     hardware_io.c
 )
 
@@ -50,15 +53,30 @@ pico_set_program_version(main "${PROGRAM_VERSION}")
 configure_file(version.h.in version.h @ONLY)
 target_include_directories(main PRIVATE ${CMAKE_BINARY_DIR})
 
-# Adding custom device/HAL library
-include(FetchContent)
-FetchContent_Declare(
-    custom_library
-    GIT_REPOSITORY https://github.com/AErbsloeh/rp2_runtime_library.git
-    GIT_TAG        main
-)
-FetchContent_MakeAvailable(custom_library)
-#add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../rp2_runtime_library custom_library)
+option(USE_LOCAL_RUNTIME_LIBRARY "Use local rp2_runtime_library" ON)
+
+if(USE_LOCAL_RUNTIME_LIBRARY)
+    add_subdirectory(
+        ${CMAKE_CURRENT_LIST_DIR}/../../rp2_runtime_library
+        ${CMAKE_BINARY_DIR}/rp2_runtime_library
+    )
+else()
+    include(FetchContent)
+    FetchContent_Declare(
+        custom_library
+        GIT_REPOSITORY https://github.com/AErbsloeh/rp2_runtime_library.git
+        GIT_TAG        main
+    )
+    FetchContent_MakeAvailable(custom_library)
+endif()
+
+if(TRANSPORT_BACKEND STREQUAL "usb")
+    target_link_libraries(main hal_transport_usb)
+elseif(TRANSPORT_BACKEND STREQUAL "wifi")
+    target_link_libraries(main hal_transport_wifi)
+else()
+    message(FATAL_ERROR "Unsupported TRANSPORT_BACKEND: ${TRANSPORT_BACKEND}")
+endif()
 
 # Modify the below lines to enable/disable output over UART/USB
 pico_enable_stdio_uart(main false)

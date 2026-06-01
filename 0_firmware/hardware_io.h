@@ -9,11 +9,10 @@
 #include "hal/tmr/tmr.h"
 #include "hal/adc/adc.h"
 #include "hal/daq/daq.h"
+#include "hal/transport/transport.h"
 
 #include "src/init_system.h"
 #include "src/testbench.h"
-#include "src/transport.h"
-
 
 extern system_state_t system_state;
 // ==================== PIN DEFINITION =====================
