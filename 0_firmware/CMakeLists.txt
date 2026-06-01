@@ -104,7 +104,6 @@ target_link_libraries(main
     hal_spi
     hal_tmr
     #hal_uart
-    hal_usb
     #hal_wifi_tcp
     #hal_wifi_udp
      # ---- Include ADC libraries
