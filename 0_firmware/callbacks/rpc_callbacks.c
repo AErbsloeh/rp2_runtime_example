@@ -1,7 +1,7 @@
 #include "callbacks/rpc_callbacks.h"
 #include "hardware_io.h"
 #include "version.h"
-#include "src/transport.h"
+#include "hal/transport/transport.h"
 
 
 // ========================== PROCOTOL FUNCS ==========================
