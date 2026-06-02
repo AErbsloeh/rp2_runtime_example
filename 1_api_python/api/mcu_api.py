@@ -7,6 +7,7 @@ from .src._interface_serial import (
     get_comport_name,
     InterfaceSerial
 )
+from .src._interface_wifi import InterfaceWifi
 from .src._lsl import ThreadLSL
 from .src._helper import (
     build_crc_excluding_endframe,
@@ -36,7 +37,7 @@ class Commands(IntEnum):
 
 class DeviceAPI:
     __logger: Logger
-    __device: InterfaceSerial
+    __device: InterfaceSerial | InterfaceWifi
     __threads: ThreadLSL
     __daq_config: DataAcquisitionConfig
     __timeout_default: float
@@ -49,21 +50,39 @@ class DeviceAPI:
     _pin_names: list[str] = ['LED_USER']
     _state_names: list[str] = ["ERROR", "RESET", "INIT", "IDLE", "TEST", "DAQ"]
 
-    def __init__(self, com_name: str="AUTOCOM", timeout: float=0.1) -> None:
+    def __init__(self, com_name: str="AUTOCOM", timeout: float=0.1, transport: str="usb", host: str | None=None, port: int=4242) -> None:
         """Interface class for handling with a custom DAQ device
         :param com_name:    String with the serial port name of the used device
         :param timeout:     Floating value with timeout for the communication [Default, not during DAQ]
+        :param transport:   String with transport backend, either "usb" or "wifi"
+        :param host:        String with IP address or hostname for WiFi transport
+        :param port:        Integer with TCP port for WiFi transport
         """
         self.__logger = getLogger(__name__)
         self.__threads = ThreadLSL()
         self.__timeout_default = timeout
-        self.__device = InterfaceSerial(
-            com_name=com_name if com_name != "AUTOCOM" else get_comport_name(usb_vid=self.__usb_vid),
-            baud=230400,
-            num_bytes_head=1,
-            num_bytes_data=2,
-            timeout=self.__timeout_default
-        )
+        transport = transport.lower()
+        if transport == "usb":
+            self.__device = InterfaceSerial(
+                com_name=com_name if com_name != "AUTOCOM" else get_comport_name(usb_vid=self.__usb_vid),
+                baud=230400,
+                num_bytes_head=1,
+                num_bytes_data=2,
+                timeout=self.__timeout_default
+            )
+        elif transport == "wifi":
+            if host is None:
+                raise ValueError("host must be set when using WiFi transport")
+            self.__device = InterfaceWifi(
+                host=host,
+                port=port,
+                num_bytes_head=1,
+                num_bytes_data=2,
+                timeout=self.__timeout_default
+            )
+        else:
+            raise ValueError(f"Unsupported transport: {transport}")
+
         if self.is_com_port_active:
             self.__device.close()
         self.__device.open()
