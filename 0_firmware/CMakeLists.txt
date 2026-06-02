@@ -23,12 +23,19 @@ if (EXISTS ${picoVscode})
     include(${picoVscode})
 endif()
 # ====================================================================================
-set(PICO_BOARD pico2 CACHE STRING "Board type")
 set(PROGRAM_VERSION "0.1")
 
 # set the transport backend (either usb or wifi)
-set(TRANSPORT_BACKEND "usb" CACHE STRING "Transport backend: usb or wifi")
+set(TRANSPORT_BACKEND "wifi" CACHE STRING "Transport backend: usb or wifi")
 set_property(CACHE TRANSPORT_BACKEND PROPERTY STRINGS usb wifi)
+
+if(TRANSPORT_BACKEND STREQUAL "wifi")
+    set(PICO_BOARD pico2_w CACHE STRING "Board type" FORCE)
+    set(PICO_WIFI_TCP_ENABLED ON CACHE BOOL "Enable Wifi TCP HAL library" FORCE)
+else()
+    set(PICO_BOARD pico2 CACHE STRING "Board type" FORCE)
+    set(PICO_WIFI_TCP_ENABLED OFF CACHE BOOL "Disable Wifi TCP HAL library" FORCE)
+endif()
 
 # Pull in Raspberry Pi Pico SDK (must be before project)
 include(pico_sdk_import.cmake)
@@ -138,7 +145,7 @@ target_link_libraries(main
 get_target_property(LINK_LIBS main LINK_LIBRARIES)
 
 # Define definition and set flags if used (necessary for external file handling)
-if(PICO_BOARD MATCHES "_w")
+if(PICO_BOARD MATCHES "_w" AND NOT (TRANSPORT_BACKEND STREQUAL "wifi"))
     target_compile_definitions(main PUBLIC ADD_CYW43_SUPPORT)
 endif()
 
@@ -148,7 +155,7 @@ else()
     set(PICO_BTSTACK_ENABLED OFF CACHE BOOL "Disable Bluetooth SPP HAL library" FORCE)
 endif()
 
-if("hal_wifi_tcp" IN_LIST LINK_LIBS)
+if(TRANSPORT_BACKEND STREQUAL "wifi" OR "hal_wifi_tcp" IN_LIST LINK_LIBS OR "hal_transport_wifi" IN_LIST LINK_LIBS)
     set(PICO_WIFI_TCP_ENABLED ON CACHE BOOL "Enable Wifi TCP HAL library" FORCE)
 else()
     set(PICO_WIFI_TCP_ENABLED OFF CACHE BOOL "Disable Wifi TCP HAL library" FORCE)
