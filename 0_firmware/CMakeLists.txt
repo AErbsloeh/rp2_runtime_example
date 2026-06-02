@@ -23,7 +23,7 @@ if (EXISTS ${picoVscode})
     include(${picoVscode})
 endif()
 # ====================================================================================
-set(PICO_BOARD pico2 CACHE STRING "Board type")
+set(PICO_BOARD adafruit_kb2040 CACHE STRING "Board type")
 set(PROGRAM_VERSION "0.1")
 
 # Pull in Raspberry Pi Pico SDK (must be before project)
@@ -39,6 +39,8 @@ add_executable(main
     callbacks/gpio_callbacks.c
     callbacks/rpc_callbacks.c
     #callbacks/fpga_callbacks.c
+    #sens/w5500/w5500_udp.c
+    #sens/w5500/wizchip_spi.c
     src/init_system.c
     src/testbench.c
     hardware_io.c
