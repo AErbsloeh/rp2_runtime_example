@@ -1,24 +1,26 @@
 #include "hardware_io.h"
 #include "callbacks/rpc_callbacks.h"
 #include "hal/transport/transport.h"
+#include "pico/stdio.h"
 // #include "callbacks/fpga_callbacks.h"
 #ifdef ADD_CYW43_SUPPORT
-    #include "pico/cyw43_arch.h"
+#include "pico/cyw43_arch.h"
 #endif
 
+int main()
+{
+#ifdef ADD_CYW43_SUPPORT
+    if (cyw43_arch_init())
+    {
+        return -1;
+    }
+#endif
 
-int main(){   
-    #ifdef ADD_CYW43_SUPPORT
-        if (cyw43_arch_init()) {
-            return -1;
-        }
-    #endif
-
-    // Init Phase 
+    // Init Phase
     init_gpio_pico(false);
     init_system();
-    run_testbench(TB_NONE);   
-    
+    run_testbench(TB_NONE);
+
     static bool valid_rpc[1] = {false};
 
     // Main Loop
