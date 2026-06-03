@@ -111,16 +111,17 @@ class ThreadLSL:
             case _:
                 raise ValueError(f"Unknown LSL datatype format")
 
-    def register(self, func, args) -> None:
+    def register(self, func, args, kwargs: dict | None=None) -> None:
         """Registering a thread with a custom instruction
         :param func:    Function object for further processing in own thread
         :param args:    Arguments of the object for starting it
+        :param kwargs:  Keyword arguments of the object for starting it
         :return:        None
         """
         if not len(self._thread):
             self._thread = [Thread(target=self._thread_watchdog_heartbeat, args=())]
             self._logger.debug("Registering thread: heartbeat")
-        self._thread.append(Thread(target=func, args=args))
+        self._thread.append(Thread(target=func, args=args, kwargs=kwargs or {}))
         self._logger.debug(f"Registering thread: {func.__name__}")
 
     def start(self) -> None:
@@ -345,7 +346,7 @@ class ThreadLSL:
         with self._lock:
             self._thread_active[stim_idx] = False
 
-    def lsl_stream_system(self, stim_idx: int, name: str, daq_func, sampling_rate: float, channel_labels: list[str], channel_layout: list[int], channel_units: str, format: int=pylsl.cf_int32) -> None:
+    def lsl_stream_system(self, stim_idx: int, name: str, daq_func, sampling_rate: float, channel_labels: list[str], channel_layout: list[int], channel_units: str, format: int=pylsl.cf_int32, require_consumers: bool=True) -> None:
         """Process for starting a Lab Streaming Layer (LSL) to process the data stream from DAQ system
         :param stim_idx:        Integer with array index to write into heartbeat feedback array
         :param name:            String with name of the LSL stream (must match with a recording process)
@@ -355,6 +356,7 @@ class ThreadLSL:
         :param channel_layout:  List with integers to define the DAQ layout (spatial information)
         :param channel_units:   List with units of each channel
         :param format:          Defined LSL datatype for saving data in the stream
+        :param require_consumers:Boolean for requiring connected LSL consumers
         :return:                None
         """
         outlet = self._establish_lsl_outlet(
@@ -366,7 +368,8 @@ class ThreadLSL:
             channel_num=len(channel_labels),
             channel_labels=channel_labels,
             channel_layout=channel_layout,
-            channel_type=format
+            channel_type=format,
+            check_for_consumers=require_consumers
         )
 
         use_batch_mode = 'batch' in daq_func.__name__
@@ -386,7 +389,7 @@ class ThreadLSL:
                     )
                     # Heartbeat
                     with self._lock:
-                        self._thread_active[stim_idx] = outlet.have_consumers()
+                        self._thread_active[stim_idx] = (not require_consumers) or outlet.have_consumers()
                 except Exception as e:
                     with self._lock:
                         self._exception.put(e)
@@ -406,7 +409,7 @@ class ThreadLSL:
                     )
                     # Heartbeat
                     with self._lock:
-                        self._thread_active[stim_idx] = outlet.have_consumers()
+                        self._thread_active[stim_idx] = (not require_consumers) or outlet.have_consumers()
                 except Exception as e:
                     with self._lock:
                         self._exception.put(e)
@@ -496,7 +499,7 @@ class ThreadLSL:
         with self._lock:
             self._thread_active[stim_idx] = False
 
-    def lsl_process_stream(self, stim_idx: int, name_in: str, name_out: str, num_samples: int, func_init_daq, func_process_daq, lsl_format: int=0) -> None:
+    def lsl_process_stream(self, stim_idx: int, name_in: str, name_out: str, num_samples: int, func_init_daq, func_process_daq, lsl_format: int=0, require_consumers: bool=True) -> None:
         """Function for processing the incoming data from LSL stream
         :param stim_idx:        Integer with array index to write into heartbeat feedback array
         :param name_in:         String with name of the LSL stream to catch it
@@ -505,6 +508,7 @@ class ThreadLSL:
         :param func_init_daq:   Function to initialize the DAQ device (needs input: sampling rate)
         :param func_process_daq:Function to process the data from a DAQ device (needs input: list with chunk data, returned: chunk output)
         :param lsl_format:      Integer with lsl datatype format cf_*
+        :param require_consumers:Boolean for requiring connected LSL consumers
         :return:                None
         """
         inlet = self._establish_lsl_inlet(name_in)
@@ -540,7 +544,7 @@ class ThreadLSL:
                     pushthrough=True
                 )
                 with self._lock:
-                    self._thread_active[stim_idx] = outlet.have_consumers()
+                    self._thread_active[stim_idx] = (not require_consumers) or outlet.have_consumers()
             except Exception as e:
                 with self._lock:
                     self._exception.put(e)
