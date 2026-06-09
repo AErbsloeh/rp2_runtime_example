@@ -1,0 +1,9 @@
+**/.idea
+**/__pycache__
+**/.pytest_cache
+**/*data*
+**/dist
+.venv
+.python-version
+uv.lock
+*.out
