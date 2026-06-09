@@ -4,7 +4,9 @@ from api.src._helper import (
     convert_system_state,
     convert_rp2_adc_value,
     convert_rp2_temp_value,
-    DataAcquisitionConfig
+    DataAcquisitionConfig,
+    build_checksum,
+    build_crc16_ccitt
 )
 
 
@@ -83,6 +85,46 @@ def test_daq_config_signed_4bytes():
     )
     assert rslt.dtype_sample == '<i4'
     assert rslt.data_shape == (16, 600)
+
+def test_build_checksum():
+    data = bytes([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    assert build_checksum(data) == 55
+
+    
+def test_build_crc16_ccitt():
+    data = b"123456789"
+    assert build_crc16_ccitt(data) == 0x29B1
+
+def test_daq_config_crc_detection_false():
+    result = DataAcquisitionConfig(
+        num_samples=2,
+        num_channels=4,
+        sampling_rate=2000.,
+        send_batch=True,
+        head_cmd=255,
+        tail_cmd=160,
+        num_bytes_total=1 + 1 + 16 + 2 * 4 * 2 + 1,  # header + tail + timestamp + data
+        bytes_sample=2,
+        is_signed=False
+    )
+    assert result.has_crc == False
+    assert result.crc_bytes == 0
+
+
+def test_daq_config_crc_detection_true():
+    result = DataAcquisitionConfig(
+        num_samples=2,
+        num_channels=4,
+        sampling_rate=2000.,
+        send_batch=True,
+        head_cmd=255,
+        tail_cmd=160,
+        num_bytes_total=1 + 1 + 16 + 2 * 4 * 2 + 2 + 1,  # header + tail + timestamp + data + checksum
+        bytes_sample=2,
+        is_signed=False
+    )
+    assert result.has_crc == True
+    assert result.crc_bytes == 2
 
 
 if __name__ == "__main__":

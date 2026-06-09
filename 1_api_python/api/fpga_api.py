@@ -34,11 +34,11 @@ class Commands(IntEnum):
     FPGA_TOGGLE_LED = len(CmdsBasic) + 0x10
 
 
-class AccessFPGA(DeviceAPI):
+class FlashFPGA(DeviceAPI):
     __logger: Logger
 
     def __init__(self, com_name: str = "AUTOCOM", timeout: float = 1.) -> None:
-        """Interface class for handling with a custom DAQ device (with FPGA/Flash access)
+        """Interface class for flashing the FPGA on a custom DAQ device
         :param com_name:    String with the serial port name of the used device
         :param timeout:     Floating value with timeout for the communication [Default, not during DAQ]
         """

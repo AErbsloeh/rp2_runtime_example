@@ -11,5 +11,5 @@ from .src._helper import (
     SystemState
 )
 from .fpga_api import (
-    AccessFPGA
+    FlashFPGA
 )

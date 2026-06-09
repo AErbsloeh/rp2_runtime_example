@@ -1,3 +1,4 @@
+import binascii
 from dataclasses import dataclass
 
 
@@ -61,6 +62,27 @@ class DataAcquisitionConfig:
         """Returning string with numpy data type definition for each data sample during data acquisition"""
         datatype = 'i' if self.is_signed else 'u'
         return f'<{datatype}{self.bytes_sample}'
+    
+    @property
+    def expected_bytes_without_crc(self) -> int:
+        """Return expected number of bytes for a DAQ packet without CRC bytes.
+        Layout assumed: head(1) + index(1) + timestamp(8) + data + tail(1)
+        where data = num_channels * num_samples * bytes_sample
+        """
+        timestamp_bytes = 8 if not self.send_batch else 16
+        data_bytes = self.num_channels * self.num_samples * self.bytes_sample
+        return 3 + timestamp_bytes + data_bytes
+
+    @property
+    def crc_bytes(self) -> int:
+        """Number of extra CRC bytes appended to the packet (0 or 2)."""
+        extra = self.num_bytes_total - self.expected_bytes_without_crc
+        return extra if extra == 2 else 0
+
+    @property
+    def has_crc(self) -> bool:
+        """True when packet contains a 2-byte CRC at the end."""
+        return self.crc_bytes == 2
 
 
 @dataclass(frozen=True)
@@ -116,6 +138,7 @@ class FlashInfos:
     def num_pages_per_block(self) -> int:
         """Returning the number of pages in each block"""
         return self.blocksize // self.pagesize
+    
 
 
 def convert_pin_state(state: int, pin_list: list[str]) -> str:
@@ -162,3 +185,33 @@ def convert_rp2_temp_value(raw: int) -> float:
     """Function for converting the RP2 temperatur value from integer to float"""
     volt = convert_rp2_adc_value(raw)
     return 27 - (volt - 0.706) / 0.001721
+
+def build_checksum(data: bytes) -> int:
+    """Function for calculating the CRC-16-CCITT checksum for the given data bytes"""
+    return sum(data) % 2**16
+def build_crc16_ccitt(data: bytes) -> int:
+    """Function for calculating the CRC-16-CCITT checksum for the given data bytes"""
+    return binascii.crc_hqx(data, 0xffff)
+
+def build_crc_excluding_endframe(packet: bytes, crc_len: int = 2, exclude_endframe: bool = True) -> int:
+    """Compute CRC over packet excluding the CRC field and optionally excluding the end-frame byte.
+
+    Typical layout assumed: <payload> | CRC (crc_len bytes, little-endian) | END_FRAME (1 byte)
+
+    This function returns the CRC computed over the payload (i.e. everything before the CRC field
+    and before the optional end-frame byte).
+    :param packet: full packet bytes
+    :param crc_len: length of CRC field in bytes (default 2)
+    :param exclude_endframe: when True, assume final byte is an end-frame and exclude it
+    :return: integer CRC value
+    """
+    if crc_len < 0:
+        raise ValueError("crc_len must be non-negative")
+    min_len = crc_len + (1 if exclude_endframe else 0)
+    if len(packet) < min_len:
+        raise ValueError("Packet too short to contain CRC and optional end-frame")
+    end = -1 if exclude_endframe else None
+    crc_start = -min_len
+    # payload is everything up to the CRC field
+    payload = packet[:crc_start]
+    return build_crc16_ccitt(payload)

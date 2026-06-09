@@ -52,6 +52,7 @@ daq_data_t daq_config_raw = {
     .iteration = 0,
     .runtime_first = 0,
     .runtime_last = 0,
+    .is_signed = false,
     .num_channels = 2,
     .num_samples = 16,
     .data = &daq_fifo,

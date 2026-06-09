@@ -52,7 +52,7 @@ void get_charac_daq(void){
     char buffer_send[20] = {GET_CHARAC_DAQ};
     buffer_send[1] = (uint8_t)(data->packet_id);
     buffer_send[2] = 0xFF;  // tail command
-    buffer_send[3] = 0x00;  // is sample signed datatype? 
+    buffer_send[3] = (uint8_t)(data->is_signed);
     buffer_send[4] = (uint8_t)(data->send_batch);
     buffer_send[5] = (uint8_t)(data->num_channels >> 0);
     buffer_send[6] = (uint8_t)(data->num_channels >> 8);
@@ -110,6 +110,7 @@ void set_batch_daq(char* buffer){
 
 // ======================== CALLABLE FUNCS ==========================
 bool apply_rpc_callback(char* buffer, size_t length, bool ready){    
+    bool valid_state = true;
     if(ready){
         switch(buffer[0]){
             case ECHO:                  echo(buffer, length);                       break;
@@ -123,9 +124,9 @@ bool apply_rpc_callback(char* buffer, size_t length, bool ready){
             case STOP_DAQ:              stop_daq();                                 break;
             case SET_PERIOD_DAQ:        update_period_daq(buffer);                  break;
             case SET_BATCH_DAQ:         set_batch_daq(buffer);                      break;
-            default:                    tight_loop_contents();                      break;        
+            default:                    valid_state = false;                        break;        
         }  
     }
-    return true;
+    return valid_state;
 }
       

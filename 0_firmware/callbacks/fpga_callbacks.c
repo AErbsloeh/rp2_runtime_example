@@ -182,6 +182,7 @@ void fpga_logic_data_transmission(char* buffer){
 
 // ======================== CALLABLE FUNCS ==========================
 bool apply_fpga_callback(char* buffer, size_t length, bool ready){    
+    bool valid_state = true;
     if(ready){
         switch(buffer[0]){
             case FLASH_INIT:            flash_init_phase();                         break;
@@ -201,8 +202,8 @@ bool apply_fpga_callback(char* buffer, size_t length, bool ready){
             case FPGA_PROGRAM_CYCLE:    fpga_program_do_cycle();                    break;
             case FPGA_LOGIC_RESET:      fpga_logic_do_reset(buffer);                break;
             case FPGA_LOGIC_RXTX:       fpga_logic_data_transmission(buffer);       break;
-            default:                    tight_loop_contents();                      break;        
+            default:                    valid_state = false;                        break;        
         }  
     }
-    return true;
+    return valid_state;
 }
