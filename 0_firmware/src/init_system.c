@@ -25,8 +25,8 @@ bool init_gpio_pico(bool block_usb){
 
     // --- Init of GPIOs
     //set_gpio_default_led(LED_PIN_DEFAULT); // Activate only for custom boards (KB2040 -> WS2812, PICO1/2_W -> CYW43)
-    init_default_led();
     set_system_state(STATE_INIT);
+    init_default_led();
 
     // --- Init GPIO + IRQ (Low Level)
     /*gpio_init(BUTTON_BOARD);
