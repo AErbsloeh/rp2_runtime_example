@@ -26,7 +26,7 @@ endif()
 set(PROGRAM_VERSION "0.1")
 
 # set the transport backend (either usb or wifi)
-set(TRANSPORT_BACKEND "wifi" CACHE STRING "Transport backend: usb or wifi")
+set(TRANSPORT_BACKEND "usb" CACHE STRING "Transport backend: usb or wifi")
 set_property(CACHE TRANSPORT_BACKEND PROPERTY STRINGS usb wifi)
 
 if(TRANSPORT_BACKEND STREQUAL "wifi")
