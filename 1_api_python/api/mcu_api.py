@@ -18,8 +18,7 @@ from .src._helper import (
     DataAcquisitionConfig,
     SystemState
 )
- 
-    
+
 
 class Commands(IntEnum):
     ECHO = 0x00
@@ -50,7 +49,7 @@ class DeviceAPI:
     _pin_names: list[str] = ['LED_USER']
     _state_names: list[str] = ["ERROR", "RESET", "INIT", "IDLE", "TEST", "DAQ"]
 
-    def __init__(self, com_name: str="AUTOCOM", timeout: float=0.1, transport: str="usb", host: str | None=None, port: int=4242) -> None:
+    def __init__(self, com_name: str="AUTOCOM", timeout: float=0.1, transport: str="usb", host: str ="", port: int=4242) -> None:
         """Interface class for handling with a custom DAQ device
         :param com_name:    String with the serial port name of the used device
         :param timeout:     Floating value with timeout for the communication [Default, not during DAQ]
@@ -61,23 +60,26 @@ class DeviceAPI:
         self.__logger = getLogger(__name__)
         self.__threads = ThreadLSL()
         self.__timeout_default = timeout
+
+        num_bytes_head = 1
+        num_bytes_data = 2
         transport = transport.lower()
         if transport == "usb":
             self.__device = InterfaceSerial(
                 com_name=com_name if com_name != "AUTOCOM" else get_comport_name(usb_vid=self.__usb_vid),
                 baud=230400,
-                num_bytes_head=1,
-                num_bytes_data=2,
+                num_bytes_head=num_bytes_head,
+                num_bytes_data=num_bytes_data,
                 timeout=self.__timeout_default
             )
         elif transport == "wifi":
-            if host is None:
+            if host is "":
                 raise ValueError("host must be set when using WiFi transport")
             self.__device = InterfaceWifi(
                 host=host,
                 port=port,
-                num_bytes_head=1,
-                num_bytes_data=2,
+                num_bytes_head=num_bytes_head,
+                num_bytes_data=num_bytes_data,
                 timeout=self.__timeout_default
             )
         else:

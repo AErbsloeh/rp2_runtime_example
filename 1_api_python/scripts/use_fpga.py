@@ -3,6 +3,7 @@ from pathlib import Path
 from elasticai.fpga_testing.scripts_build.bin_build import read_bitstream_file_amd
 from time import sleep
 
+
 if __name__ == "__main__":
     do_flash = True
     do_erase = False
@@ -11,6 +12,9 @@ if __name__ == "__main__":
     dut = FlashFPGA()
     if do_flash:
         path2stream = Path(get_path_to_project()) / "file"
+        if not path2stream.exists():
+            raise FileNotFoundError()
+
         file = [file for file in path2stream.glob("*.bit")][0]
         bitstream = read_bitstream_file_amd(file)
         if do_erase:
