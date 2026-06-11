@@ -24,7 +24,7 @@ void flash_init_phase(void){
     char buffer_send[3] = {FLASH_INIT};
     buffer_send[1] = 0x00;
     buffer_send[2] = (uint8_t)(state);
-    usb_send_bytes(buffer_send, sizeof(buffer_send));
+    transport_write(buffer_send, sizeof(buffer_send));
 }
 
 
@@ -46,7 +46,7 @@ void get_flash_infos(void){
     buffer_send[9] = (uint8_t)(flash_config->page_size >> 8);
     buffer_send[10] = (uint8_t)(flash_config->block_size >> 0);
     buffer_send[11] = (uint8_t)(flash_config->block_size >> 8);
-    usb_send_bytes(buffer_send, sizeof(buffer_send));
+    transport_write(buffer_send, sizeof(buffer_send));
 }
 
 
@@ -75,7 +75,7 @@ void check_erasing_flash(void){
     char buffer_send[3] = {FLASH_CHECK_ERASE};
     buffer_send[1] = 0x00;
     buffer_send[2] = (uint8_t)(state);
-    usb_send_bytes(buffer_send, sizeof(buffer_send));
+    transport_write(buffer_send, sizeof(buffer_send));
 }
 
 
@@ -98,7 +98,7 @@ void get_flash_starting_address(void){
     for(size_t idx = 0; idx < sizeof(flash_config->flash_data.address); idx++){
         buffer_send[1 + idx] = (uint8_t)(flash_config->flash_data.address >> (idx * 8));
     }
-    usb_send_bytes(buffer_send, sizeof(buffer_send));
+    transport_write(buffer_send, sizeof(buffer_send));
 }
 
 
@@ -110,7 +110,7 @@ void read_flash_data(void){
     for(size_t idx = 0; idx < flash_config->flash_data.position_max; idx++){
         buffer_send[1 + idx] = (uint8_t)(flash_config->flash_data.data[idx]);
     }
-    usb_send_bytes(buffer_send, sizeof(buffer_send));
+    transport_write(buffer_send, sizeof(buffer_send));
 }
 
 
@@ -126,7 +126,7 @@ void write_buffer_into_flash(void){
     char buffer_send[3] = {FLASH_WRITE_DATA};
     buffer_send[1] = 0x00;
     buffer_send[2] = (uint8_t)(state);
-    usb_send_bytes(buffer_send, sizeof(buffer_send));
+    transport_write(buffer_send, sizeof(buffer_send));
 }
 
 
@@ -140,7 +140,7 @@ void fpga_init_phase(void){
     char buffer_send[3] = {FPGA_INIT};
     buffer_send[1] = 0x00;
     buffer_send[2] = (uint8_t)(state);
-    usb_send_bytes(buffer_send, sizeof(buffer_send));
+    transport_write(buffer_send, sizeof(buffer_send));
 }
 
 
@@ -176,7 +176,7 @@ void fpga_logic_data_transmission(char* buffer){
     for(size_t idx = 0; idx < sizeof(data_rx0); idx++){
         buffer_send[1 + idx] = (uint8_t)(data_rx0[idx]);
     }
-    usb_send_bytes(buffer_send, sizeof(buffer_send));
+    transport_write(buffer_send, sizeof(buffer_send));
 }
 
 
