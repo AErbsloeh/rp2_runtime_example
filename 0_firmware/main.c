@@ -1,7 +1,5 @@
 #include "hardware_io.h"
 #include "callbacks/rpc_callbacks.h"
-#include "hal/transport/transport.h"
-#include "pico/stdio.h"
 // #include "callbacks/fpga_callbacks.h"
 #ifdef ADD_CYW43_SUPPORT
     #include "pico/cyw43_arch.h"
@@ -19,16 +17,16 @@ int main(){
     init_system();
     run_testbench(TB_NONE);
 
-    static bool valid_rpc[1] = {false};
+    static bool valid_rpc = false;
 
     // Main Loop
     while (true)
     {
         // --- USB Protocol Handling ---
         transport_poll_rx(&rx_buffer);
-        valid_rpc[0] = apply_rpc_callback(rx_buffer.data, rx_buffer.length, rx_buffer.ready);
-        // valid_rpc[1] = apply_fpga_callback(rx_buffer.data, rx_buffer.length, rx_buffer.ready);
-        if (!valid_rpc[0]){
+        valid_rpc = apply_rpc_callback(rx_buffer.data, rx_buffer.length, rx_buffer.ready);
+        // valid_rpc &= apply_fpga_callback(rx_buffer.data, rx_buffer.length, rx_buffer.ready);
+        if (!valid_rpc){
             set_system_state(STATE_ERROR);
         }
         // --- Sending data in main ---

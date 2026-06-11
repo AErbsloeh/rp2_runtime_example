@@ -23,19 +23,13 @@ if (EXISTS ${picoVscode})
     include(${picoVscode})
 endif()
 # ====================================================================================
+set(PICO_BOARD pico2_w CACHE STRING "Board type")
+option(USE_LOCAL_RUNTIME_LIBRARY "Use local rp2_runtime_library" OFF)
 set(PROGRAM_VERSION "0.1")
 
 # set the transport backend (either usb or wifi)
 set(TRANSPORT_BACKEND "usb" CACHE STRING "Transport backend: usb or wifi")
 set_property(CACHE TRANSPORT_BACKEND PROPERTY STRINGS usb wifi)
-
-if(TRANSPORT_BACKEND STREQUAL "wifi")
-    set(PICO_BOARD pico2_w CACHE STRING "Board type" FORCE)
-    set(PICO_WIFI_TCP_ENABLED ON CACHE BOOL "Enable Wifi TCP HAL library" FORCE)
-else()
-    set(PICO_BOARD pico2 CACHE STRING "Board type" FORCE)
-    set(PICO_WIFI_TCP_ENABLED OFF CACHE BOOL "Disable Wifi TCP HAL library" FORCE)
-endif()
 
 # Pull in Raspberry Pi Pico SDK (must be before project)
 include(pico_sdk_import.cmake)
@@ -60,8 +54,6 @@ pico_set_program_version(main "${PROGRAM_VERSION}")
 configure_file(version.h.in version.h @ONLY)
 target_include_directories(main PRIVATE ${CMAKE_BINARY_DIR})
 
-option(USE_LOCAL_RUNTIME_LIBRARY "Use local rp2_runtime_library" ON)
-
 if(USE_LOCAL_RUNTIME_LIBRARY)
     add_subdirectory(
         ${CMAKE_CURRENT_LIST_DIR}/../../rp2_runtime_library
@@ -77,6 +69,7 @@ else()
     FetchContent_MakeAvailable(custom_library)
 endif()
 
+# --- Define Transport Backend
 if(TRANSPORT_BACKEND STREQUAL "usb")
     target_link_libraries(main hal_transport_usb)
 elseif(TRANSPORT_BACKEND STREQUAL "wifi")
@@ -84,6 +77,13 @@ elseif(TRANSPORT_BACKEND STREQUAL "wifi")
 else()
     message(FATAL_ERROR "Unsupported TRANSPORT_BACKEND: ${TRANSPORT_BACKEND}")
 endif()
+
+if(TRANSPORT_BACKEND STREQUAL "wifi")
+    set(PICO_WIFI_TCP_ENABLED ON CACHE BOOL "Enable Wifi TCP HAL library" FORCE)
+else()
+    set(PICO_WIFI_TCP_ENABLED OFF CACHE BOOL "Disable Wifi TCP HAL library" FORCE)
+endif()
+
 
 # Modify the below lines to enable/disable output over UART/USB
 pico_enable_stdio_uart(main false)
@@ -159,12 +159,6 @@ if(TRANSPORT_BACKEND STREQUAL "wifi" OR "hal_wifi_tcp" IN_LIST LINK_LIBS OR "hal
     set(PICO_WIFI_TCP_ENABLED ON CACHE BOOL "Enable Wifi TCP HAL library" FORCE)
 else()
     set(PICO_WIFI_TCP_ENABLED OFF CACHE BOOL "Disable Wifi TCP HAL library" FORCE)
-endif()
-
-if("hal_wifi_udp" IN_LIST LINK_LIBS)
-    set(PICO_WIFI_UDP_ENABLED ON CACHE BOOL "Enable Wifi UDP HAL library" FORCE)
-else()
-    set(PICO_WIFI_UDP_ENABLED OFF CACHE BOOL "Disable Wifi UDP HAL library" FORCE)
 endif()
 
 if("peri_sd" IN_LIST LINK_LIBS)
