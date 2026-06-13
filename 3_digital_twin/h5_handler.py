@@ -14,9 +14,11 @@ class H5Metadata:
 class H5Handler:
     _recording_name: str
     _metadata: H5Metadata
+    _data_typ: dtype
     _h5file: h5py.File
     _grp_ad7779: h5py.Group
-    _length_ad7779: int
+    _num_of_data_in_buffer: int
+    _file_length: int
 
     def __init__(self, recording_name: str, metadata: H5Metadata, data_typ= dtype) -> None:
         """Class to handle H5 file writing for EEG data, including initialization and appending data
