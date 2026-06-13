@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling", "wheel"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "*.py",
+    "README.md",
+]
+exclude = ['.git', '__pycache__', '*.egg-info', '.venv', 'uv.lock']
+
+[tool.hatch.build.targets.wheel]
+packages = ["."]
+only-packages = false
+
+[project]
+name = "digital-twin"
+version = "0.1.0"
+description = "Digital Twin for hardware simulation with LSL streaming"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "h5py>=3.15.1",
+    "pylsl>=1.18.1",
+    "scipy>=1.13.0",
+    "numpy>=1.26.0",
+]
