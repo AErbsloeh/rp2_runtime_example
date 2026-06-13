@@ -35,8 +35,19 @@ class InstrumentationAmplifier:
 
 class ADCAD7779:
     @staticmethod
-    def two_complement_to_voltage(voltage: np.ndarray, v_ref: float=2.5, pga_gain: float=1., g_extra: float=1.) -> np.ndarray[np.float32]:
-        value = ((voltage * pga_gain * g_extra) /(v_ref * 2) * (2**24))
+    def two_complement_to_voltage(signal_values: np.ndarray, v_ref: float=2.5, pga_gain: float=1., g_extra: float=1.) -> np.ndarray[np.float32]:
+        """Convert two's complement values to voltage values
+
+        Args:
+            signal_values (np.ndarray): The two's complement values to be converted
+            v_ref (float, optional): The reference voltage in volts. Defaults to 2.5.
+            pga_gain (float, optional): The gain of the programmable gain amplifier. Defaults to 1..
+            g_extra (float, optional): The extra gain factor. Defaults to 1..
+
+        Returns:
+            np.ndarray[np.float32]: The converted voltage values
+        """        
+        value = ((signal_values * pga_gain * g_extra) /(v_ref * 2) * (2**24))
         return value.astype(np.float32)
     
 
@@ -62,6 +73,12 @@ class ADCAD7779:
 
 class OPA1637:
     def __init__(self, fs: float = 1000, number_of_channels: int = 4) -> None:
+        """Initialize the OPA1637 bandpass filter with the specified sampling frequency and number of channels
+
+        Args:
+            fs (float, optional): The sampling frequency in Hz. Defaults to 1000.
+            number_of_channels (int, optional): The number of channels for the filter. Defaults to 4.
+        """        
         self.sos = butter(N=1, Wn=[0.33, 400.0], btype='bandpass', fs=fs, output='sos')
         self.zi = []
         for i in range(number_of_channels):

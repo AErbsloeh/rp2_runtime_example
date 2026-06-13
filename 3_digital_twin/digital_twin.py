@@ -38,6 +38,11 @@ class DigitalTwin:
     _processed_data_inlet: StreamInlet  # LSL inlet for receiving processed data from the "DigitalTwinOutput" stream, used for recording purposes
     _deployed_h5_handler: H5Handler     # H5Handler instance for managing the H5 file where processed data will be recorded, initialized if save_h5 is True in the configuration
     def __init__(self, config: DigitalTwinConfig):
+        """Loading configuraion and setting up the digital twin, including connecting to the specified LSL stream for data input, creating an LSL outlet for processed data output, and initializing the H5 handler if saving to H5 is enabled in the configuration
+
+        Args:
+            config (DigitalTwinConfig): Configuration object containing the necessary settings for the digital twin
+        """        
         self._config = config
         self._pipeline = config.pipeline
         self._is_running = False
@@ -127,8 +132,7 @@ class DigitalTwin:
             data, timestamps =self._processed_data_inlet.pull_chunk(timeout=0.0001, max_samples=1024)
             if not data:
                 continue
-            #ToDo: Update allgemein
-            timestamps = np.array(data)[:,4]
+            timestamps = np.array(data)[:,-1]
             data = np.array(data)[:,:-1]
             self._deployed_h5_handler.append_data(timestamps=timestamps, measurements=data)
         self._deployed_h5_handler.close_h5_file()
