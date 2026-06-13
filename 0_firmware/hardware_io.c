@@ -37,10 +37,11 @@ rp2_adc_t adc_temp = {
 };
 
 // --- USB PROTOCOL
-usb_rp2_t usb_buffer = {
+transport_rx_buffer_t rx_buffer = {
 	.ready = false,
 	.length = 3,
-	.position = 2
+	.position = 2,
+    .data = NULL
 };  
 
 // --- DAQ Sampling

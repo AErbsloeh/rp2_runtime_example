@@ -7,18 +7,17 @@
 #include "hal/helper/helper.h"
 #include "hal/led/led.h"
 #include "hal/tmr/tmr.h"
-#include "hal/usb/usb.h"
 #include "hal/adc/adc.h"
 #include "hal/daq/daq.h"
+#include "hal/transport/transport.h"
 
 #include "src/init_system.h"
 #include "src/testbench.h"
 
-
 extern system_state_t system_state;
 // ==================== PIN DEFINITION =====================
 #define BUTTON_BOARD        11
-#define LED_DEFAULT    25
+#define LED_DEFAULT         25
 
 // ==================== I2C DEFINITION =====================
 //extern i2c_rp2_t i2c_mod;
@@ -33,7 +32,7 @@ extern system_state_t system_state;
 extern rp2_adc_t adc_temp;
 
 // --- USB Communication
-extern usb_rp2_t usb_buffer;
+extern transport_rx_buffer_t rx_buffer;
 
 // --- DAQ Sampling
 extern daq_data_t daq_config_raw;

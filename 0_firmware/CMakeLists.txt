@@ -24,7 +24,12 @@ if (EXISTS ${picoVscode})
 endif()
 # ====================================================================================
 set(PICO_BOARD pico2 CACHE STRING "Board type")
+option(USE_LOCAL_RUNTIME_LIBRARY "Use local rp2_runtime_library" OFF)
 set(PROGRAM_VERSION "0.1")
+
+# set the transport backend (either usb or wifi)
+set(TRANSPORT_BACKEND "usb" CACHE STRING "Transport backend: usb or wifi")
+set_property(CACHE TRANSPORT_BACKEND PROPERTY STRINGS usb wifi)
 
 # Pull in Raspberry Pi Pico SDK (must be before project)
 include(pico_sdk_import.cmake)
@@ -49,15 +54,36 @@ pico_set_program_version(main "${PROGRAM_VERSION}")
 configure_file(version.h.in version.h @ONLY)
 target_include_directories(main PRIVATE ${CMAKE_BINARY_DIR})
 
-# Adding custom device/HAL library
-include(FetchContent)
-FetchContent_Declare(
-    custom_library
-    GIT_REPOSITORY https://github.com/AErbsloeh/rp2_runtime_library.git
-    GIT_TAG        main
-)
-FetchContent_MakeAvailable(custom_library)
-#add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../rp2_runtime_library custom_library)
+if(USE_LOCAL_RUNTIME_LIBRARY)
+    add_subdirectory(
+        ${CMAKE_CURRENT_LIST_DIR}/../../rp2_runtime_library
+        ${CMAKE_BINARY_DIR}/rp2_runtime_library
+    )
+else()
+    include(FetchContent)
+    FetchContent_Declare(
+        custom_library
+        GIT_REPOSITORY https://github.com/AErbsloeh/rp2_runtime_library.git
+        GIT_TAG        main
+    )
+    FetchContent_MakeAvailable(custom_library)
+endif()
+
+# --- Define Transport Backend
+if(TRANSPORT_BACKEND STREQUAL "usb")
+    target_link_libraries(main hal_transport_usb)
+elseif(TRANSPORT_BACKEND STREQUAL "wifi")
+    target_link_libraries(main hal_transport_wifi)
+else()
+    message(FATAL_ERROR "Unsupported TRANSPORT_BACKEND: ${TRANSPORT_BACKEND}")
+endif()
+
+if(TRANSPORT_BACKEND STREQUAL "wifi")
+    set(PICO_WIFI_TCP_ENABLED ON CACHE BOOL "Enable Wifi TCP HAL library" FORCE)
+else()
+    set(PICO_WIFI_TCP_ENABLED OFF CACHE BOOL "Disable Wifi TCP HAL library" FORCE)
+endif()
+
 
 # Modify the below lines to enable/disable output over UART/USB
 pico_enable_stdio_uart(main false)
@@ -85,7 +111,6 @@ target_link_libraries(main
     hal_spi
     hal_tmr
     #hal_uart
-    hal_usb
     #hal_wifi_tcp
     #hal_wifi_udp
      # ---- Include ADC libraries
@@ -120,7 +145,7 @@ target_link_libraries(main
 get_target_property(LINK_LIBS main LINK_LIBRARIES)
 
 # Define definition and set flags if used (necessary for external file handling)
-if(PICO_BOARD MATCHES "_w")
+if(PICO_BOARD MATCHES "_w" AND NOT (TRANSPORT_BACKEND STREQUAL "wifi"))
     target_compile_definitions(main PUBLIC ADD_CYW43_SUPPORT)
 endif()
 
@@ -130,16 +155,10 @@ else()
     set(PICO_BTSTACK_ENABLED OFF CACHE BOOL "Disable Bluetooth SPP HAL library" FORCE)
 endif()
 
-if("hal_wifi_tcp" IN_LIST LINK_LIBS)
+if(TRANSPORT_BACKEND STREQUAL "wifi" OR "hal_wifi_tcp" IN_LIST LINK_LIBS OR "hal_transport_wifi" IN_LIST LINK_LIBS)
     set(PICO_WIFI_TCP_ENABLED ON CACHE BOOL "Enable Wifi TCP HAL library" FORCE)
 else()
     set(PICO_WIFI_TCP_ENABLED OFF CACHE BOOL "Disable Wifi TCP HAL library" FORCE)
-endif()
-
-if("hal_wifi_udp" IN_LIST LINK_LIBS)
-    set(PICO_WIFI_UDP_ENABLED ON CACHE BOOL "Enable Wifi UDP HAL library" FORCE)
-else()
-    set(PICO_WIFI_UDP_ENABLED OFF CACHE BOOL "Disable Wifi UDP HAL library" FORCE)
 endif()
 
 if("peri_sd" IN_LIST LINK_LIBS)

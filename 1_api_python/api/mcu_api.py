@@ -7,6 +7,7 @@ from .src._interface_serial import (
     get_comport_name,
     InterfaceSerial
 )
+from .src._interface_wifi import InterfaceWifi
 from .src._lsl import ThreadLSL
 from .src._helper import (
     build_crc_excluding_endframe,
@@ -17,8 +18,7 @@ from .src._helper import (
     DataAcquisitionConfig,
     SystemState
 )
- 
-    
+
 
 class Commands(IntEnum):
     ECHO = 0x00
@@ -36,7 +36,7 @@ class Commands(IntEnum):
 
 class DeviceAPI:
     __logger: Logger
-    __device: InterfaceSerial
+    __device: InterfaceSerial | InterfaceWifi
     __threads: ThreadLSL
     __daq_config: DataAcquisitionConfig
     __timeout_default: float
@@ -49,21 +49,42 @@ class DeviceAPI:
     _pin_names: list[str] = ['LED_USER']
     _state_names: list[str] = ["ERROR", "RESET", "INIT", "IDLE", "TEST", "DAQ"]
 
-    def __init__(self, com_name: str="AUTOCOM", timeout: float=0.1) -> None:
+    def __init__(self, com_name: str="AUTOCOM", timeout: float=0.1, transport: str="usb", host: str ="", port: int=4242) -> None:
         """Interface class for handling with a custom DAQ device
         :param com_name:    String with the serial port name of the used device
         :param timeout:     Floating value with timeout for the communication [Default, not during DAQ]
+        :param transport:   String with transport backend, either "usb" or "wifi"
+        :param host:        String with IP address or hostname for WiFi transport
+        :param port:        Integer with TCP port for WiFi transport
         """
         self.__logger = getLogger(__name__)
         self.__threads = ThreadLSL()
         self.__timeout_default = timeout
-        self.__device = InterfaceSerial(
-            com_name=com_name if com_name != "AUTOCOM" else get_comport_name(usb_vid=self.__usb_vid),
-            baud=230400,
-            num_bytes_head=1,
-            num_bytes_data=2,
-            timeout=self.__timeout_default
-        )
+
+        num_bytes_head = 1
+        num_bytes_data = 2
+        transport = transport.lower()
+        if transport == "usb":
+            self.__device = InterfaceSerial(
+                com_name=com_name if com_name != "AUTOCOM" else get_comport_name(usb_vid=self.__usb_vid),
+                baud=230400,
+                num_bytes_head=num_bytes_head,
+                num_bytes_data=num_bytes_data,
+                timeout=self.__timeout_default
+            )
+        elif transport == "wifi":
+            if host is "":
+                raise ValueError("host must be set when using WiFi transport")
+            self.__device = InterfaceWifi(
+                host=host,
+                port=port,
+                num_bytes_head=num_bytes_head,
+                num_bytes_data=num_bytes_data,
+                timeout=self.__timeout_default
+            )
+        else:
+            raise ValueError(f"Unsupported transport: {transport}")
+
         if self.is_com_port_active:
             self.__device.close()
         self.__device.open()
@@ -328,11 +349,13 @@ class DeviceAPI:
         except Exception:
             return [], None
 
-    def start_daq(self, sampling_rate: float, window_sec: float= 30., do_batch: bool=True, do_plot: bool=False, folder_name: str="data") -> None:
+    def start_daq(self, sampling_rate: float, window_sec: float=30., do_batch: bool=True, do_plot: bool=False, do_record: bool=True, do_process: bool=True, folder_name: str="data") -> None:
         """Changing the state of the DAQ with starting it
         :param sampling_rate:   Float with sampling rate [Hz]
         :param do_batch:        True for sending batches outside otherwise sample-wise
         :param do_plot:         True to plot the data in real-time
+        :param do_record:       True to record the LSL stream to a HDF5 file
+        :param do_process:      True to publish the processed LSL stream
         :param window_sec:      Floating value with window length [in seconds] for live plotting
         :param folder_name:     String with folder name to save data in project folder
         :return:                None
@@ -341,20 +364,61 @@ class DeviceAPI:
         self._enable_batch_daq(do_batch)
         self._update_daq_sampling_rate(sampling_rate)
         self.__daq_config = self.get_daq_characteristics()
-        path2data = get_path_to_project(new_folder=folder_name)
         if not self.__layout_labels:
             self.__layout_labels = [f"CH{idx}" for idx in range(self.__daq_config.num_channels)]
             self.__layout_channels = [idx for idx in range(self.__daq_config.num_channels)]
-        if not len(self.__layout_labels) == self.__daq_config.num_channels == self.__daq_config.num_channels:
+        if not len(self.__layout_labels) == len(self.__layout_channels) == self.__daq_config.num_channels:
             raise ValueError(f"Number of channels in layout ({self.__daq_config.num_channels}) does not match number of channels in DAQ ({len(self.__layout_labels)})")
 
         func = self._thread_read_batch if do_batch else self._thread_read_frame
-        self.__threads.register(func=self.__threads.lsl_stream_util, args=(0, 'util'))
-        self.__threads.register(func=self.__threads.lsl_stream_system, args=(1, 'data', func, self.__daq_config.sampling_rate, self.__layout_labels, self.__layout_channels, "V"))
-        self.__threads.register(func=self.__threads.lsl_process_stream, args=(2, 'data', 'filt', 16, self.__process_stream_init, self.__process_stream_func))
-        self.__threads.register(func=self.__threads.lsl_record_stream, args=(3, ['filt', 'util'], path2data))
+        stream_idx = 0
+        source_stream = 'data'
+        output_stream = source_stream
+
+        if do_record:
+            self.__threads.register(func=self.__threads.lsl_stream_util, args=(stream_idx, 'util'))
+            stream_idx += 1
+
+        require_system_consumers = do_process or do_record or do_plot
+        self.__threads.register(
+            func=self.__threads.lsl_stream_system,
+            args=(
+                stream_idx,
+                source_stream,
+                func,
+                self.__daq_config.sampling_rate,
+                self.__layout_labels,
+                self.__layout_channels,
+                "V"
+            ),
+            kwargs={"require_consumers": require_system_consumers}
+        )
+        stream_idx += 1
+
+        if do_process:
+            output_stream = 'filt'
+            require_process_consumers = do_record or do_plot
+            self.__threads.register(
+                func=self.__threads.lsl_process_stream,
+                args=(
+                    stream_idx,
+                    source_stream,
+                    output_stream,
+                    16,
+                    self.__process_stream_init,
+                    self.__process_stream_func
+                ),
+                kwargs={"require_consumers": require_process_consumers}
+            )
+            stream_idx += 1
+
+        if do_record:
+            path2data = get_path_to_project(new_folder=folder_name)
+            self.__threads.register(func=self.__threads.lsl_record_stream, args=(stream_idx, [output_stream, 'util'], path2data))
+            stream_idx += 1
+
         if do_plot:
-            self.__threads.register(func=self.__threads.lsl_plot_stream, args=(4, 'filt', window_sec))
+            self.__threads.register(func=self.__threads.lsl_plot_stream, args=(stream_idx, output_stream, window_sec))
 
         self.__device.timeout = 2 / self.__daq_config.sampling_rate
         self.__threads.start()

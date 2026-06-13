@@ -1,11 +1,12 @@
 #include "callbacks/rpc_callbacks.h"
 #include "hardware_io.h"
 #include "version.h"
+#include "hal/transport/transport.h"
 
 
 // ========================== PROCOTOL FUNCS ==========================
 void echo(char* buffer, size_t length){
-    usb_send_bytes(buffer, length);
+    transport_write(buffer, length);
 }
 
 
@@ -35,7 +36,7 @@ void get_charac_system(void){
         buffer_send[idx+11] = (uint8_t)runtime;
         runtime >>= 8;
     }
-    usb_send_bytes(buffer_send, sizeof(buffer_send));
+    transport_write(buffer_send, sizeof(buffer_send));
 }
 
 
@@ -65,7 +66,7 @@ void get_charac_daq(void){
         buffer_send[12+idx] = (uint8_t)runtime;
         runtime >>= 8;
     }
-    usb_send_bytes(buffer_send, sizeof(buffer_send));   
+    transport_write(buffer_send, sizeof(buffer_send));   
 }
 
 

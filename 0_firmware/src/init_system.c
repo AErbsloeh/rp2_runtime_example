@@ -1,4 +1,5 @@
 #include "src/init_system.h"
+#include "hal/transport/transport.h"
 #include "hardware/watchdog.h"
 #include "hardware_io.h"
 #include "callbacks/gpio_callbacks.h"
@@ -16,10 +17,15 @@ void reset_pico_mcu(bool wait_until_done){
 
 
 bool init_gpio_pico(bool block_usb){
-    set_system_state(STATE_INIT);
-    
+    // --- Init of transport before CYW43 LED usage on Pico W boards
+    transport_init(&rx_buffer);
+    if (block_usb) {
+        transport_wait_until_connected();
+    }
+
     // --- Init of GPIOs
     //set_gpio_default_led(LED_PIN_DEFAULT); // Activate only for custom boards (KB2040 -> WS2812, PICO1/2_W -> CYW43)
+    set_system_state(STATE_INIT);
     init_default_led();
 
     // --- Init GPIO + IRQ (Low Level)
@@ -29,11 +35,6 @@ bool init_gpio_pico(bool block_usb){
     gpio_set_slew_rate(BUTTON_BOARD, GPIO_SLEW_RATE_SLOW);
     gpio_set_irq_enabled_with_callback(BUTTON_BOARD, GPIO_IRQ_EDGE_FALL, true, &irq_gpio_callbacks);*/
 
-    // --- Init of Serial COM-Port
-    usb_init(&usb_buffer);
-    if(block_usb){
-        usb_wait_until_connected();
-    }
     sleep_ms(1000);
     return true;
 }

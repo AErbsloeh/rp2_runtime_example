@@ -23,7 +23,7 @@ elasticai-hw-measurements = { git = "ssh://git@github.com/es-ude/elastic-ai.hw-m
 name = "rp2_runtime_example"
 version = "0.0.1"
 description = "A Python API for handling an embedded system using RPi RP2xxx"
-requires-python = ">=3.13"
+requires-python = ">=3.13,<3.14"
 dependencies = [
     "pyserial>=3.5",
     "numpy>=2.3.4",
