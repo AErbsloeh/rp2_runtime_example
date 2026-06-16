@@ -45,20 +45,21 @@ transport_rx_buffer_t rx_buffer = {
 };  
 
 // --- DAQ Sampling
-fifo_t daq_fifo = {
-    .element_size = sizeof(uint16_t)
-};
+fifo_t a = {};
+fifo_t b = {};
 daq_data_t daq_config_raw = {
     .packet_id = 0xA0,
     .iteration = 0,
     .runtime_first = 0,
     .runtime_last = 0,
     .is_signed = false,
+    .element_size = sizeof(uint16_t),
     .num_channels = 2,
     .num_samples = 16,
-    .data = &daq_fifo,
-    .send_batch = true,
-    .new_data = false
+    .send_mode = DAQ_MODE_SAMPLE,
+    .new_data = false,
+    .data0 = &a,
+    .data1 = &b
 };
 
 uint16_t data[2] = {0, 0};

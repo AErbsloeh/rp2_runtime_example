@@ -73,7 +73,7 @@ class DeviceAPI:
                 timeout=self.__timeout_default
             )
         elif transport == "wifi":
-            if host is "":
+            if host == "":
                 raise ValueError("host must be set when using WiFi transport")
             self.__device = InterfaceWifi(
                 host=host,
@@ -332,6 +332,7 @@ class DeviceAPI:
     def _thread_read_batch(self) -> tuple[list[list], list[float]]:
         try:
             buffer = self.__device.read(self.__daq_config.num_bytes_total)
+            print(buffer)
             if not buffer:
                 raise Exception
             frames = np.frombuffer(buffer, dtype=self._package_daq_batch)[0]
@@ -340,6 +341,7 @@ class DeviceAPI:
                 self._check_package_loss(int(frames['index']))
                 if self.__daq_config.has_crc:
                     self._check_crc(buffer, int(frames['crc']))
+                print(frames['timestamp'])
                 dt = (frames['timestamp'][1] - frames['timestamp'][0]) / (self.__daq_config.num_samples-1)
                 timestamps = [float(1e-6 * (frames['timestamp'][0] + dt*idx)) for idx in range(self.__daq_config.num_samples)]
                 data = frames['data'].tolist()
@@ -349,10 +351,9 @@ class DeviceAPI:
         except Exception:
             return [], None
 
-    def start_daq(self, sampling_rate: float, window_sec: float=30., do_batch: bool=True, do_plot: bool=False, do_record: bool=True, do_process: bool=True, folder_name: str="data") -> None:
+    def start_daq(self, sampling_rate: float, window_sec: float=30., do_plot: bool=False, do_record: bool=True, do_process: bool=True, folder_name: str="data") -> None:
         """Changing the state of the DAQ with starting it
         :param sampling_rate:   Float with sampling rate [Hz]
-        :param do_batch:        True for sending batches outside otherwise sample-wise
         :param do_plot:         True to plot the data in real-time
         :param do_record:       True to record the LSL stream to a HDF5 file
         :param do_process:      True to publish the processed LSL stream
@@ -361,7 +362,6 @@ class DeviceAPI:
         :return:                None
         """
         self.__num_package_loss = 0
-        self._enable_batch_daq(do_batch)
         self._update_daq_sampling_rate(sampling_rate)
         self.__daq_config = self.get_daq_characteristics()
         if not self.__layout_labels:
@@ -370,7 +370,6 @@ class DeviceAPI:
         if not len(self.__layout_labels) == len(self.__layout_channels) == self.__daq_config.num_channels:
             raise ValueError(f"Number of channels in layout ({self.__daq_config.num_channels}) does not match number of channels in DAQ ({len(self.__layout_labels)})")
 
-        func = self._thread_read_batch if do_batch else self._thread_read_frame
         stream_idx = 0
         source_stream = 'data'
         output_stream = source_stream
@@ -385,7 +384,7 @@ class DeviceAPI:
             args=(
                 stream_idx,
                 source_stream,
-                func,
+                self._thread_read_batch if self.__daq_config.send_batch else self._thread_read_frame,
                 self.__daq_config.sampling_rate,
                 self.__layout_labels,
                 self.__layout_channels,
@@ -404,7 +403,7 @@ class DeviceAPI:
                     stream_idx,
                     source_stream,
                     output_stream,
-                    16,
+                    self.__daq_config.num_samples,
                     self.__process_stream_init,
                     self.__process_stream_func
                 ),

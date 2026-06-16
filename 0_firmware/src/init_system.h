@@ -25,10 +25,10 @@ void reset_pico_mcu(bool wait_until_done);
 
 
 /*! \brief  Function for initialisating the GPIO and modules of RP Pico (used in this system)
-*   \param block_usb    Boolean for waiting routine until serial port is opened
+*   \param block_com    Boolean for waiting routine until communication port is opened
 *   \return             Boolean for initialisation of RPi Pico device completed
 */
-bool init_gpio_pico(bool block_usb);
+bool init_gpio_pico(bool block_com);
 
 
 /*! \brief  Function for initialisating the System Functionalities

@@ -611,7 +611,6 @@ class ThreadLSL:
         with File(path.absolute() / f"{time}_{names[0]}.h5", "w") as f:
             f.attrs["creation_date"] = datetime.today().strftime('%Y-%m-%d')
             f.attrs["data_format"] = data_format
-            dt = string_dtype(encoding="utf-8")
 
             for idx, (name, inlet) in enumerate(zip(names, inlets)):
                 stream_time.append(f.create_dataset(f"{name}_time", (0,), maxshape=(None,), dtype=float))
@@ -640,7 +639,6 @@ class ThreadLSL:
                         else:
                             with self._lock:
                                 self._thread_active[stim_idx] = True
-
                             idx = len(time)
                             new = len(time_new)
                             time.resize((idx + new,))

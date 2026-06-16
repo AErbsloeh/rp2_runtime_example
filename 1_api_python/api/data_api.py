@@ -104,7 +104,7 @@ class DataAPI:
             data = StreamRecording(
                 sampling_rate=f[f"{name}_data"].attrs["sampling_rate"],
                 num_channels=f[f"{name}_data"].attrs["channel_count"],
-                time=np.array(f[f"{name}_time"][:] - f[f"{name}_time"][0]),
+                time=np.array(f[f"{name}_time"][:]),
                 data=np.transpose(f[f"{name}_data"][:]),
                 type=f[f"{name}_data"].attrs["type"],
                 file=str(self.__file),

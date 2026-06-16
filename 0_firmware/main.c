@@ -15,14 +15,11 @@ int main(){
 
     // Init Phase
     init_gpio_pico(false);
-    init_system();
+    bool valid_rpc = init_system();
     run_testbench(TB_NONE);
 
-    static bool valid_rpc = false;
-
     // Main Loop
-    while (true)
-    {
+    while (true){
         // --- USB Protocol Handling ---
         transport_poll_rx(&rx_buffer);
         valid_rpc = apply_rpc_callback(rx_buffer.data, rx_buffer.length, rx_buffer.ready);

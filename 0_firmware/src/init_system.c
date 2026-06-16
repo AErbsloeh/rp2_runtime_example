@@ -16,10 +16,10 @@ void reset_pico_mcu(bool wait_until_done){
 }
 
 
-bool init_gpio_pico(bool block_usb){
+bool init_gpio_pico(bool block_com){
     // --- Init of transport before CYW43 LED usage on Pico W boards
     transport_init(&rx_buffer);
-    if (block_usb) {
+    if (block_com) {
         transport_wait_until_connected();
     }
 
@@ -57,10 +57,6 @@ bool init_system(void){
         return true;
     } else {
         set_system_state(STATE_ERROR);
-        while(true){
-            sleep_ms(100);
-            toggle_state_default_led();
-        }
         return false;
     }
 }

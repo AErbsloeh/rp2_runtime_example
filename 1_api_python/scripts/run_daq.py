@@ -12,10 +12,9 @@ if __name__ == "__main__":
         channel_names=["CH0", "CH1"],
     )
     dut.start_daq(
-        sampling_rate=2000.0,
-        do_batch=True,
+        sampling_rate=500.0,
         do_plot=False,
         window_sec=4.0,
     )
-    dut.wait_daq(90)
+    dut.wait_daq(30)
     dut.stop_daq()

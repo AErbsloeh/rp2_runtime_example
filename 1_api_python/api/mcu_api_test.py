@@ -11,7 +11,7 @@ from api.mcu_api import (
     convert_system_state
 )
 
-#Uncomment the following lines to run the tests with the actual device. Make sure to have the device connected and the correct COM port set in mcu_api.py before running.
+
 @pytest.fixture(scope="session", autouse=True)
 def dut():
     DeviceAPI().do_reset()
@@ -95,7 +95,8 @@ def test_toggle_led(dut: DeviceAPI):
 def test_control_daq_sample(dut: DeviceAPI):
     assert dut.get_state().system == 'IDLE'
 
-    dut.start_daq(sampling_rate=1., do_batch=False, folder_name="temp_data")
+    dut._enable_batch_daq(False)
+    dut.start_daq(sampling_rate=1., folder_name="temp_data")
     sleep(1.)
     dut.stop_daq()
 
@@ -103,7 +104,8 @@ def test_control_daq_sample(dut: DeviceAPI):
 def test_control_daq_batch(dut: DeviceAPI):
     assert dut.get_state().system == 'IDLE'
 
-    dut.start_daq(sampling_rate=1., do_batch=True, folder_name="temp_data")
+    dut._enable_batch_daq(True)
+    dut.start_daq(sampling_rate=1., folder_name="temp_data")
     sleep(1.)
     assert dut.is_daq_running == True
     dut.stop_daq()
