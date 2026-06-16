@@ -46,22 +46,22 @@ void get_charac_daq(void){
 
     uint16_t num_bytes_sample = daq_get_number_bytes_per_sample(data);
     uint16_t num_bytes_batch = daq_get_number_bytes_per_batch(data);
-    uint16_t num_bytes = (data->send_batch) ? num_bytes_batch : num_bytes_sample;
-    uint16_t num_samples = (data->send_batch) ? data->num_samples : 1;
+    uint16_t num_bytes = (data->send_mode) ? num_bytes_batch : num_bytes_sample;
+    uint16_t num_samples = (data->send_mode) ? data->num_samples : 1;
     int64_t runtime = timer->period_us;
 
     char buffer_send[20] = {GET_CHARAC_DAQ};
     buffer_send[1] = (uint8_t)(data->packet_id);
     buffer_send[2] = 0xFF;  // tail command
     buffer_send[3] = (uint8_t)(data->is_signed);
-    buffer_send[4] = (uint8_t)(data->send_batch);
+    buffer_send[4] = (uint8_t)(data->send_mode);
     buffer_send[5] = (uint8_t)(data->num_channels >> 0);
     buffer_send[6] = (uint8_t)(data->num_channels >> 8);
     buffer_send[7] = (uint8_t)(num_samples >> 0);
     buffer_send[8] = (uint8_t)(num_samples >> 8);
     buffer_send[9] = (uint8_t)(num_bytes >> 0);
     buffer_send[10] = (uint8_t)(num_bytes >> 8);
-    buffer_send[11] = (uint8_t)(data->data->element_size);
+    buffer_send[11] = (uint8_t)(data->element_size);
     for(uint8_t idx = 0; idx < 8; idx++){
         buffer_send[12+idx] = (uint8_t)runtime;
         runtime >>= 8;
@@ -103,9 +103,9 @@ void update_period_daq(char* buffer){
     daq_update_sampling_rate(&tmr_daq0_hndl, new_rate_us);
 }
 
-
 void set_batch_daq(char* buffer){
-    daq_config_raw.send_batch = (buffer[2] == 0x01);
+    daq_config_raw.send_mode = (buffer[2] == 0x02);
+    daq_init_sampling(&tmr_daq0_hndl, &daq_config_raw);
 }
 
 

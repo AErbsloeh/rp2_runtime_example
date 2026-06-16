@@ -19,7 +19,6 @@ if __name__ == "__main__":
     try:
         dut.start_daq(
             sampling_rate=500.0,
-            do_batch=True,
             do_plot=False,
             do_record=False,
             do_process=True,

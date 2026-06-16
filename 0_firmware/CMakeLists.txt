@@ -22,7 +22,7 @@ set(picoVscode ${USERHOME}/.pico-sdk/cmake/pico-vscode.cmake)
 if (EXISTS ${picoVscode})
     include(${picoVscode})
 endif()
-# ====================================================================================
+# ===================================================================================
 set(PICO_BOARD pico2 CACHE STRING "Board type")
 option(USE_LOCAL_RUNTIME_LIBRARY "Use local rp2_runtime_library" OFF)
 set(PROGRAM_VERSION "0.1")
