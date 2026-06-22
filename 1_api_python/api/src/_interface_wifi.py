@@ -4,18 +4,28 @@ from socket import (
     TCP_NODELAY,
     create_connection,
     socket,
+)
+from socket import (
     timeout as SocketTimeout,
 )
+from typing import Optional
 
 
 class InterfaceWifi:
     __logger: Logger
-    __device: socket | None
+    __device: Optional[socket]
     __BYTES_HEAD: int
     __BYTES_DATA: int
     __timeout: float
 
-    def __init__(self, host: str, port: int=4242, num_bytes_head: int=1, num_bytes_data: int=2, timeout: float=1.) -> None:
+    def __init__(
+        self,
+        host: str,
+        port: int = 4242,
+        num_bytes_head: int = 1,
+        num_bytes_data: int = 2,
+        timeout: float = 1.0,
+    ) -> None:
         """Class for interacting with TCP devices using WiFi
         :param host:           String with IP address or hostname of the device
         :param port:           Integer with TCP port of the device
@@ -64,8 +74,8 @@ class InterfaceWifi:
         :param data:    Data to be converted
         :return:        Bytes converted from head + data
         """
-        transmit = data.to_bytes(self.__BYTES_DATA, byteorder='little')
-        transmit += head.to_bytes(self.__BYTES_HEAD, byteorder='little')
+        transmit = data.to_bytes(self.__BYTES_DATA, byteorder="little")
+        transmit += head.to_bytes(self.__BYTES_HEAD, byteorder="little")
         return transmit
 
     def _get_device(self) -> socket:
@@ -95,7 +105,7 @@ class InterfaceWifi:
         """Write content to device without feedback"""
         self._get_device().sendall(data)
 
-    def write_wfb(self, data: bytes, size: int=0) -> bytes:
+    def write_wfb(self, data: bytes, size: int = 0) -> bytes:
         """Write all information to device (specific bytes)"""
         self.write(data)
         return self.read(len(data) if size <= 0 else size)
@@ -110,7 +120,7 @@ class InterfaceWifi:
             if not chunk:
                 break
             ret += chunk
-            if chunk == b'\n':
+            if chunk == b"\n":
                 break
         return ret
 
@@ -119,13 +129,13 @@ class InterfaceWifi:
         """Serialize a string to bytes"""
         if do_padding:
             data += " "
-        chunks = [int.from_bytes(data[i:i + 2].encode('utf-8'), 'big') for i in range(0, len(data), 2)]
+        chunks = [int.from_bytes(data[i : i + 2].encode("utf-8"), "big") for i in range(0, len(data), 2)]
         return chunks
 
     @staticmethod
     def deserialize_string(data: bytes, do_padding: bool) -> str:
         val = data if not do_padding else data[:-1]
-        return val.decode('utf8')
+        return val.decode("utf8")
 
     def open(self) -> None:
         """Starting a connection to device"""
@@ -149,7 +159,7 @@ class InterfaceWifi:
         """Function for emptying input buffer"""
         device = self._get_device()
         old_timeout = self.__timeout
-        device.settimeout(0.)
+        device.settimeout(0.0)
 
         while True:
             try:

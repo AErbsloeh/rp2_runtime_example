@@ -1,12 +1,13 @@
 import pytest
+
 from api.src._helper import (
-    convert_pin_state,
-    convert_system_state,
-    convert_rp2_adc_value,
-    convert_rp2_temp_value,
     DataAcquisitionConfig,
     build_checksum,
-    build_crc16_ccitt
+    build_crc16_ccitt,
+    convert_pin_state,
+    convert_rp2_adc_value,
+    convert_rp2_temp_value,
+    convert_system_state,
 )
 
 
@@ -34,7 +35,16 @@ def test_adc_rp2_value():
 
 def test_adc_rp2_temp():
     data_in = [-1, 100, 800, 850, 900, 2048, 4000, 4100]
-    check = [437.22661243463097, 390.4014639244156, 62.625424352908325, 39.21285009780068, 15.800275842693033, -521.752429054579, -1435.7793279739822, -1480.2632190586867]
+    check = [
+        437.22661243463097,
+        390.4014639244156,
+        62.625424352908325,
+        39.21285009780068,
+        15.800275842693033,
+        -521.752429054579,
+        -1435.7793279739822,
+        -1480.2632190586867,
+    ]
     rslt = [convert_rp2_temp_value(val) for val in data_in]
     assert rslt == check
 
@@ -43,15 +53,15 @@ def test_daq_config_unsigned_2bytes():
     rslt = DataAcquisitionConfig(
         num_samples=2,
         num_channels=4,
-        sampling_rate=2000.,
+        sampling_rate=2000.0,
         send_batch=True,
         head_cmd=255,
         tail_cmd=160,
         num_bytes_total=1024,
         bytes_sample=2,
-        is_signed=False
+        is_signed=False,
     )
-    assert rslt.dtype_sample == '<u2'
+    assert rslt.dtype_sample == "<u2"
     assert rslt.data_shape == (4, 2)
 
 
@@ -59,15 +69,15 @@ def test_daq_config_signed_2bytes():
     rslt = DataAcquisitionConfig(
         num_samples=600,
         num_channels=16,
-        sampling_rate=2000.,
+        sampling_rate=2000.0,
         send_batch=True,
         head_cmd=255,
         tail_cmd=160,
         num_bytes_total=1024,
         bytes_sample=2,
-        is_signed=True
+        is_signed=True,
     )
-    assert rslt.dtype_sample == '<i2'
+    assert rslt.dtype_sample == "<i2"
     assert rslt.data_shape == (16, 600)
 
 
@@ -75,39 +85,41 @@ def test_daq_config_signed_4bytes():
     rslt = DataAcquisitionConfig(
         num_samples=600,
         num_channels=16,
-        sampling_rate=2000.,
+        sampling_rate=2000.0,
         send_batch=True,
         head_cmd=255,
         tail_cmd=160,
         num_bytes_total=1024,
         bytes_sample=4,
-        is_signed=True
+        is_signed=True,
     )
-    assert rslt.dtype_sample == '<i4'
+    assert rslt.dtype_sample == "<i4"
     assert rslt.data_shape == (16, 600)
+
 
 def test_build_checksum():
     data = bytes([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
     assert build_checksum(data) == 55
 
-    
+
 def test_build_crc16_ccitt():
     data = b"123456789"
     assert build_crc16_ccitt(data) == 0x29B1
+
 
 def test_daq_config_crc_detection_false():
     result = DataAcquisitionConfig(
         num_samples=2,
         num_channels=4,
-        sampling_rate=2000.,
+        sampling_rate=2000.0,
         send_batch=True,
         head_cmd=255,
         tail_cmd=160,
         num_bytes_total=1 + 1 + 16 + 2 * 4 * 2 + 1,  # header + tail + timestamp + data
         bytes_sample=2,
-        is_signed=False
+        is_signed=False,
     )
-    assert result.has_crc == False
+    assert not result.has_crc
     assert result.crc_bytes == 0
 
 
@@ -115,15 +127,15 @@ def test_daq_config_crc_detection_true():
     result = DataAcquisitionConfig(
         num_samples=2,
         num_channels=4,
-        sampling_rate=2000.,
+        sampling_rate=2000.0,
         send_batch=True,
         head_cmd=255,
         tail_cmd=160,
         num_bytes_total=1 + 1 + 16 + 2 * 4 * 2 + 2 + 1,  # header + tail + timestamp + data + checksum
         bytes_sample=2,
-        is_signed=False
+        is_signed=False,
     )
-    assert result.has_crc == True
+    assert result.has_crc
     assert result.crc_bytes == 2
 
 

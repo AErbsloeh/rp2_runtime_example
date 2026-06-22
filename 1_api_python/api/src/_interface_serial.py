@@ -1,10 +1,6 @@
 from logging import Logger, getLogger
-from serial import (
-    Serial,
-    PARITY_NONE,
-    STOPBITS_ONE,
-    EIGHTBITS
-)
+
+from serial import EIGHTBITS, PARITY_NONE, STOPBITS_ONE, Serial
 from serial.tools import list_ports
 
 
@@ -14,9 +10,15 @@ def get_comport_name(usb_vid: int) -> str:
     :return:        String with COM port name with matched VIP und PID properties
     """
     available_ports = list_ports.comports()
-    list_right_com = [port.device for port in available_ports if port.vid == usb_vid and (port.pid == 0x000A or port.pid == 0x0009)]
+    list_right_com = [
+        port.device
+        for port in available_ports
+        if port.vid == usb_vid and (port.pid == 0x000A or port.pid == 0x0009)
+    ]
     if len(list_right_com) == 0:
-        raise ConnectionError(f"No COM Port with right USB found - Please adapt the VID and PID values {[[port.name, port.vid, port.pid] for port in list_ports.comports()]}")
+        raise ConnectionError(
+            f"No COM Port with right USB found - Please adapt the VID and PID values {[[port.name, port.vid, port.pid] for port in list_ports.comports()]}"
+        )
     return list_right_com[0]
 
 
@@ -26,7 +28,14 @@ class InterfaceSerial:
     __BYTES_HEAD: int
     __BYTES_DATA: int
 
-    def __init__(self, com_name: str, baud: int=115200, num_bytes_head: int=1, num_bytes_data: int=2, timeout: float=1.) -> None:
+    def __init__(
+        self,
+        com_name: str,
+        baud: int = 115200,
+        num_bytes_head: int = 1,
+        num_bytes_data: int = 2,
+        timeout: float = 1.0,
+    ) -> None:
         """Class for interacting with the USB serial devices
         :param com_name:        String with name of the COM port to the device
         :param baud:            Integer with BAUDRATE for the communication between host and device
@@ -37,17 +46,17 @@ class InterfaceSerial:
         self.__BYTES_HEAD = num_bytes_head
         self.__BYTES_DATA = num_bytes_data
         self.__device = Serial(
-                port=com_name,
-                baudrate=baud,
-                parity=PARITY_NONE,
-                stopbits=STOPBITS_ONE,
-                bytesize=EIGHTBITS,
-                inter_byte_timeout=timeout,
-                xonxoff=False,
-                rtscts=False,
-                dsrdtr=False,
-                timeout=2*timeout
-            )
+            port=com_name,
+            baudrate=baud,
+            parity=PARITY_NONE,
+            stopbits=STOPBITS_ONE,
+            bytesize=EIGHTBITS,
+            inter_byte_timeout=timeout,
+            xonxoff=False,
+            rtscts=False,
+            dsrdtr=False,
+            timeout=timeout,
+        )
 
     @property
     def is_open(self) -> bool:
@@ -70,8 +79,8 @@ class InterfaceSerial:
         :param data:    Data to be converted
         :return:        Bytes converted from head + data
         """
-        transmit = data.to_bytes(self.__BYTES_DATA, byteorder='little')
-        transmit += head.to_bytes(self.__BYTES_HEAD, byteorder='little')
+        transmit = data.to_bytes(self.__BYTES_DATA, byteorder="little")
+        transmit += head.to_bytes(self.__BYTES_HEAD, byteorder="little")
         return transmit
 
     def read(self, no_bytes: int) -> bytes:
@@ -82,7 +91,7 @@ class InterfaceSerial:
         """Write content to device without feedback"""
         self.__device.write(data)
 
-    def write_wfb(self, data: bytes, size:int=0) -> bytes:
+    def write_wfb(self, data: bytes, size: int = 0) -> bytes:
         """Write all information to device (specific bytes)"""
         num = self.__device.write(data)
         return self.__device.read(num if size <= 0 else size)
@@ -97,13 +106,13 @@ class InterfaceSerial:
         """Serialize a string to bytes"""
         if do_padding:
             data += " "
-        chunks = [int.from_bytes(data[i:i + 2].encode('utf-8'), 'big') for i in range(0, len(data), 2)]
+        chunks = [int.from_bytes(data[i : i + 2].encode("utf-8"), "big") for i in range(0, len(data), 2)]
         return chunks
 
     @staticmethod
     def deserialize_string(data: bytes, do_padding: bool) -> str:
         val = data if not do_padding else data[:-1]
-        return val.decode('utf8')
+        return val.decode("utf8")
 
     def open(self) -> None:
         """Starting a connection to device"""

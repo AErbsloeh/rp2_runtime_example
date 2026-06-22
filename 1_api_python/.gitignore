@@ -3,7 +3,7 @@
 **/.pytest_cache
 **/*data*
 **/dist
+.devenv
 .venv
 .python-version
-uv.lock
 *.out

@@ -1,23 +1,21 @@
 from enum import IntEnum
-from logging import getLogger, Logger
+from logging import Logger, getLogger
 from time import sleep
+
 import numpy as np
 
-from .src._interface_serial import (
-    get_comport_name,
-    InterfaceSerial
-)
-from .src._interface_wifi import InterfaceWifi
-from .src._lsl import ThreadLSL
 from .src._helper import (
+    DataAcquisitionConfig,
+    SystemState,
     build_crc_excluding_endframe,
     convert_pin_state,
-    convert_system_state,
     convert_rp2_temp_value,
+    convert_system_state,
     get_path_to_project,
-    DataAcquisitionConfig,
-    SystemState
 )
+from .src._interface_serial import InterfaceSerial, get_comport_name
+from .src._interface_wifi import InterfaceWifi
+from .src._lsl import ThreadLSL
 
 
 class Commands(IntEnum):
@@ -46,10 +44,17 @@ class DeviceAPI:
     __num_package_loss: int = 0
     __layout_channels: list[int] = list()
     __layout_labels: list[str] = list()
-    _pin_names: list[str] = ['LED_USER']
+    _pin_names: list[str] = ["LED_USER"]
     _state_names: list[str] = ["ERROR", "RESET", "INIT", "IDLE", "TEST", "DAQ"]
 
-    def __init__(self, com_name: str="AUTOCOM", timeout: float=0.1, transport: str="usb", host: str ="", port: int=4242) -> None:
+    def __init__(
+        self,
+        com_name: str = "AUTOCOM",
+        timeout: float = 0.1,
+        transport: str = "usb",
+        host: str = "",
+        port: int = 4242,
+    ) -> None:
         """Interface class for handling with a custom DAQ device
         :param com_name:    String with the serial port name of the used device
         :param timeout:     Floating value with timeout for the communication [Default, not during DAQ]
@@ -70,7 +75,7 @@ class DeviceAPI:
                 baud=230400,
                 num_bytes_head=num_bytes_head,
                 num_bytes_data=num_bytes_data,
-                timeout=self.__timeout_default
+                timeout=self.__timeout_default,
             )
         elif transport == "wifi":
             if host == "":
@@ -80,7 +85,7 @@ class DeviceAPI:
                 port=port,
                 num_bytes_head=num_bytes_head,
                 num_bytes_data=num_bytes_data,
-                timeout=self.__timeout_default
+                timeout=self.__timeout_default,
             )
         else:
             raise ValueError(f"Unsupported transport: {transport}")
@@ -99,30 +104,24 @@ class DeviceAPI:
             if state not in self._state_names:
                 self._state_names.append(state)
 
-    def _write_with_feedback(self, head: Commands, data: int=0, size: int=0) -> bytes:
-        data = self.__device.write_wfb(
-            data=self.__device.convert(head, data),
-            size=size
-        )
+    def _write_with_feedback(self, head: Commands, data: int = 0, size: int = 0) -> bytes:
+        data = self.__device.write_wfb(data=self.__device.convert(head, data), size=size)
         if data[0] != head:
             raise ValueError(f"Get: {data}")
         return data[1:]
 
-    def _write_without_feedback(self, head: Commands, data: int=0) -> None:
+    def _write_without_feedback(self, head: Commands, data: int = 0) -> None:
         self.__device.write(
             data=self.__device.convert(head, data),
         )
 
-    def _write_bytes(self, data: bytes, size: int=0) -> bytes:
-        ret = self.__device.write_wfb(
-            data=data,
-            size=size
-        )
+    def _write_bytes(self, data: bytes, size: int = 0) -> bytes:
+        ret = self.__device.write_wfb(data=data, size=size)
         return ret
 
     @staticmethod
-    def _bytes_to_int(data: bytes, signed: bool=False) -> int:
-        return int.from_bytes(data, byteorder='little', signed=signed)
+    def _bytes_to_int(data: bytes, signed: bool = False) -> int:
+        return int.from_bytes(data, byteorder="little", signed=signed)
 
     @property
     def total_num_bytes(self) -> int:
@@ -169,15 +168,17 @@ class DeviceAPI:
 
     @property
     def _package_system_state(self) -> np.dtype:
-        return np.dtype([
-            ('state', '<u2'),
-            ('clock', '<u2'),
-            ('pins', '<u2'),
-            ('temp', '<u2'),
-            ('major', 'u1'),
-            ('minor', 'u1'),
-            ('runtime', '<u8')
-        ])
+        return np.dtype(
+            [
+                ("state", "<u2"),
+                ("clock", "<u2"),
+                ("pins", "<u2"),
+                ("temp", "<u2"),
+                ("major", "u1"),
+                ("minor", "u1"),
+                ("runtime", "<u8"),
+            ]
+        )
 
     def get_state(self) -> SystemState:
         """Returning the state of the system
@@ -186,13 +187,14 @@ class DeviceAPI:
         ret = self._write_with_feedback(Commands.GET_CHARAC_STATE, size=19)
         frame = np.frombuffer(ret, dtype=self._package_system_state)[0]
         return SystemState(
-            pins=convert_pin_state(int(frame['pins']), self._pin_names),
-            system=convert_system_state(int(frame['state']), self._state_names),
-            runtime=float(1e-6 * frame['runtime']),
-            clock=10 * int(frame['clock']),
+            pins=convert_pin_state(int(frame["pins"]), self._pin_names),
+            system=convert_system_state(int(frame["state"]), self._state_names),
+            runtime=float(1e-6 * frame["runtime"]),
+            clock=10 * int(frame["clock"]),
             firmware=f"{frame['major']}.{frame['minor']}",
-            temp=convert_rp2_temp_value(int(frame['temp']))
+            temp=convert_rp2_temp_value(int(frame["temp"])),
         )
+
     def enable_led(self) -> None:
         """Changing the state of the LED with enabling it
         :return:        None
@@ -232,10 +234,12 @@ class DeviceAPI:
         """
         sampling_limits = [0, 10e3]
         if not sampling_limits[0] < sampling_rate < sampling_limits[1]:
-            raise ValueError(f"Sampling rate cannot be smaller than [{sampling_limits[0], sampling_limits[1]}] Hz")
+            raise ValueError(
+                f"Sampling rate cannot be smaller than [{sampling_limits[0], sampling_limits[1]}] Hz"
+            )
         self._write_without_feedback(Commands.SET_PERIOD_DAQ, int(sampling_rate))
 
-    def _enable_batch_daq(self, use_batches: bool=True) -> None:
+    def _enable_batch_daq(self, use_batches: bool = True) -> None:
         """Enabling or disabling the batch transmission mode of the DAQ
         :param use_batches:     Boolean with True for enabling batch mode otherwise sample-wise
         :return:                None
@@ -258,17 +262,19 @@ class DeviceAPI:
 
     @property
     def _package_daq_config(self) -> np.dtype:
-        return np.dtype([
-            ('head', 'u1'),
-            ('tail', 'u1'),
-            ('signed', 'u1'),
-            ('mode', 'u1'),
-            ('num_channels', '<u2'),
-            ('num_samples', '<u2'),
-            ('num_bytes', '<u2'),
-            ('bytes_sample', 'u1'),
-            ('period', '<i8')
-        ])
+        return np.dtype(
+            [
+                ("head", "u1"),
+                ("tail", "u1"),
+                ("signed", "u1"),
+                ("mode", "u1"),
+                ("num_channels", "<u2"),
+                ("num_samples", "<u2"),
+                ("num_bytes", "<u2"),
+                ("bytes_sample", "u1"),
+                ("period", "<i8"),
+            ]
+        )
 
     def get_daq_characteristics(self) -> DataAcquisitionConfig:
         """Get number of channels for acquiring data
@@ -277,27 +283,29 @@ class DeviceAPI:
         ret = self._write_with_feedback(Commands.GET_CHARAC_DAQ, size=20)
         frame = np.frombuffer(ret, dtype=self._package_daq_config)[0]
         return DataAcquisitionConfig(
-            head_cmd=int(frame['head']),
-            tail_cmd=int(frame['tail']),
-            num_channels=int(frame['num_channels']),
-            num_samples=int(frame['num_samples']),
-            num_bytes_total=int(frame['num_bytes']),
-            send_batch=bool(frame['mode']),
-            bytes_sample=int(frame['bytes_sample']),
-            sampling_rate=float(-1e6 / frame['period']),
-            is_signed=bool(frame['signed'])
+            head_cmd=int(frame["head"]),
+            tail_cmd=int(frame["tail"]),
+            num_channels=int(frame["num_channels"]),
+            num_samples=int(frame["num_samples"]),
+            num_bytes_total=int(frame["num_bytes"]),
+            send_batch=bool(frame["mode"]),
+            bytes_sample=int(frame["bytes_sample"]),
+            sampling_rate=float(-1e6 / frame["period"]),
+            is_signed=bool(frame["signed"]),
         )
 
     @property
     def _package_daq_sample(self) -> np.dtype:
-        return np.dtype([
-            ('head', 'u1'),
-            ('index', 'u1'),
-            ('timestamp', '<u8'),
-            ('data', self.__daq_config.dtype_sample, self.__daq_config.data_shape),
-            ('crc', '<u2'),
-            ('tail', 'u1')
-        ])
+        return np.dtype(
+            [
+                ("head", "u1"),
+                ("index", "u1"),
+                ("timestamp", "<u8"),
+                ("data", self.__daq_config.dtype_sample, self.__daq_config.data_shape),
+                ("crc", "<u2"),
+                ("tail", "u1"),
+            ]
+        )
 
     def _thread_read_frame(self) -> tuple[list, float]:
         try:
@@ -305,13 +313,16 @@ class DeviceAPI:
             if not buffer:
                 raise Exception
             frames = np.frombuffer(buffer, dtype=self._package_daq_sample)[0]
-            mask = (frames['head'], frames['tail']) == (self.__daq_config.head_cmd, self.__daq_config.tail_cmd)
+            mask = (frames["head"], frames["tail"]) == (
+                self.__daq_config.head_cmd,
+                self.__daq_config.tail_cmd,
+            )
             if mask:
-                self._check_package_loss(int(frames['index']))
+                self._check_package_loss(int(frames["index"]))
                 if self.__daq_config.has_crc:
-                    self._check_crc(buffer, int(frames['crc']))
-                timestamps = 1e-6 * float(frames['timestamp'])
-                data = frames['data'].tolist()
+                    self._check_crc(buffer, int(frames["crc"]))
+                timestamps = 1e-6 * float(frames["timestamp"])
+                data = frames["data"].tolist()
                 return data, timestamps
             else:
                 raise Exception
@@ -320,14 +331,16 @@ class DeviceAPI:
 
     @property
     def _package_daq_batch(self) -> np.dtype:
-        return np.dtype([
-            ('head', 'u1'),
-            ('index', 'u1'),
-            ('timestamp', '<u8', (2,)),
-            ('data', self.__daq_config.dtype_sample, self.__daq_config.data_shape),
-            ('crc', '<u2'),
-            ('tail', 'u1')
-        ])
+        return np.dtype(
+            [
+                ("head", "u1"),
+                ("index", "u1"),
+                ("timestamp", "<u8", (2,)),
+                ("data", self.__daq_config.dtype_sample, self.__daq_config.data_shape),
+                ("crc", "<u2"),
+                ("tail", "u1"),
+            ]
+        )
 
     def _thread_read_batch(self) -> tuple[list[list], list[float]]:
         try:
@@ -336,22 +349,38 @@ class DeviceAPI:
             if not buffer:
                 raise Exception
             frames = np.frombuffer(buffer, dtype=self._package_daq_batch)[0]
-            mask = (frames['head'], frames['tail']) == (self.__daq_config.head_cmd, self.__daq_config.tail_cmd)
+            mask = (frames["head"], frames["tail"]) == (
+                self.__daq_config.head_cmd,
+                self.__daq_config.tail_cmd,
+            )
             if mask:
-                self._check_package_loss(int(frames['index']))
+                self._check_package_loss(int(frames["index"]))
                 if self.__daq_config.has_crc:
-                    self._check_crc(buffer, int(frames['crc']))
-                print(frames['timestamp'])
-                dt = (frames['timestamp'][1] - frames['timestamp'][0]) / (self.__daq_config.num_samples-1)
-                timestamps = [float(1e-6 * (frames['timestamp'][0] + dt*idx)) for idx in range(self.__daq_config.num_samples)]
-                data = frames['data'].tolist()
+                    self._check_crc(buffer, int(frames["crc"]))
+                print(frames["timestamp"])
+                dt = (frames["timestamp"][1] - frames["timestamp"][0]) / (
+                    self.__daq_config.num_samples - 1
+                )
+                timestamps = [
+                    float(1e-6 * (frames["timestamp"][0] + dt * idx))
+                    for idx in range(self.__daq_config.num_samples)
+                ]
+                data = frames["data"].tolist()
                 return data, timestamps
             else:
                 raise Exception
         except Exception:
             return [], None
 
-    def start_daq(self, sampling_rate: float, window_sec: float=30., do_plot: bool=False, do_record: bool=True, do_process: bool=True, folder_name: str="data") -> None:
+    def start_daq(
+        self,
+        sampling_rate: float,
+        window_sec: float = 30.0,
+        do_plot: bool = False,
+        do_record: bool = True,
+        do_process: bool = True,
+        folder_name: str = "data",
+    ) -> None:
         """Changing the state of the DAQ with starting it
         :param sampling_rate:   Float with sampling rate [Hz]
         :param do_plot:         True to plot the data in real-time
@@ -368,14 +397,16 @@ class DeviceAPI:
             self.__layout_labels = [f"CH{idx}" for idx in range(self.__daq_config.num_channels)]
             self.__layout_channels = [idx for idx in range(self.__daq_config.num_channels)]
         if not len(self.__layout_labels) == len(self.__layout_channels) == self.__daq_config.num_channels:
-            raise ValueError(f"Number of channels in layout ({self.__daq_config.num_channels}) does not match number of channels in DAQ ({len(self.__layout_labels)})")
+            raise ValueError(
+                f"Number of channels in layout ({self.__daq_config.num_channels}) does not match number of channels in DAQ ({len(self.__layout_labels)})"
+            )
 
         stream_idx = 0
-        source_stream = 'data'
+        source_stream = "data"
         output_stream = source_stream
 
         if do_record:
-            self.__threads.register(func=self.__threads.lsl_stream_util, args=(stream_idx, 'util'))
+            self.__threads.register(func=self.__threads.lsl_stream_util, args=(stream_idx, "util"))
             stream_idx += 1
 
         require_system_consumers = do_process or do_record or do_plot
@@ -388,14 +419,14 @@ class DeviceAPI:
                 self.__daq_config.sampling_rate,
                 self.__layout_labels,
                 self.__layout_channels,
-                "V"
+                "V",
             ),
-            kwargs={"require_consumers": require_system_consumers}
+            kwargs={"require_consumers": require_system_consumers},
         )
         stream_idx += 1
 
         if do_process:
-            output_stream = 'filt'
+            output_stream = "filt"
             require_process_consumers = do_record or do_plot
             self.__threads.register(
                 func=self.__threads.lsl_process_stream,
@@ -405,19 +436,24 @@ class DeviceAPI:
                     output_stream,
                     self.__daq_config.num_samples,
                     self.__process_stream_init,
-                    self.__process_stream_func
+                    self.__process_stream_func,
                 ),
-                kwargs={"require_consumers": require_process_consumers}
+                kwargs={"require_consumers": require_process_consumers},
             )
             stream_idx += 1
 
         if do_record:
             path2data = get_path_to_project(new_folder=folder_name)
-            self.__threads.register(func=self.__threads.lsl_record_stream, args=(stream_idx, [output_stream, 'util'], path2data))
+            self.__threads.register(
+                func=self.__threads.lsl_record_stream,
+                args=(stream_idx, [output_stream, "util"], path2data),
+            )
             stream_idx += 1
 
         if do_plot:
-            self.__threads.register(func=self.__threads.lsl_plot_stream, args=(stream_idx, output_stream, window_sec))
+            self.__threads.register(
+                func=self.__threads.lsl_plot_stream, args=(stream_idx, output_stream, window_sec)
+            )
 
         self.__device.timeout = 2 / self.__daq_config.sampling_rate
         self.__threads.start()
@@ -436,7 +472,7 @@ class DeviceAPI:
         self.__device.empty_buffer()
         if self.__num_package_loss > 0:
             self.__logger.info(f"Number of package losses: {self.__num_package_loss}")
-        sleep(1.)
+        sleep(1.0)
 
     def wait_daq(self, time_sec: float) -> None:
         """Waiting routine incl. returning possible thread errors
@@ -451,6 +487,6 @@ class DeviceAPI:
     def __process_stream_func(self, data_in: list) -> list:
         data_out = list()
         for data in data_in:
-            dat = [data[0]-32768, data[1]]
+            dat = [data[0] - 32768, data[1]]
             data_out.append(dat)
         return data_out

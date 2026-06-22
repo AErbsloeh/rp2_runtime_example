@@ -30,6 +30,7 @@ def period():
     yield period
 
 
+@pytest.mark.hardware
 def test_record_samples(path: Path, dut: DeviceAPI, period: float):
     dut.define_channel_layout(
         channel_layout=[],
@@ -75,6 +76,7 @@ def test_record_samples(path: Path, dut: DeviceAPI, period: float):
     assert util.get_period_std < 0.2
 
 
+@pytest.mark.hardware
 def test_record_batch(path: Path, dut: DeviceAPI, period: float):
     dut.define_channel_layout(
         channel_layout=[],
@@ -120,6 +122,7 @@ def test_record_batch(path: Path, dut: DeviceAPI, period: float):
     assert util.get_period_std < 0.2
 
 
+@pytest.mark.hardware
 def test_record_batch_with_layout(path: Path, dut: DeviceAPI, period: float):
     dut.define_channel_layout(
         channel_layout=[0, 1],
@@ -143,5 +146,4 @@ def test_record_batch_with_layout(path: Path, dut: DeviceAPI, period: float):
 
 
 if __name__ == "__main__":
-    #basicConfig(level=DEBUG)
     pytest.main([__file__])

@@ -1,17 +1,13 @@
 from enum import IntEnum
-from logging import getLogger, Logger
+from logging import Logger, getLogger
 from time import sleep
+
 import numpy as np
 from tqdm import tqdm
 
-from api.src._helper import (
-    FlashInfos
-)
-
-from api.mcu_api import (
-    DeviceAPI,
-    Commands as CmdsBasic
-)
+from api.mcu_api import Commands as CmdsBasic
+from api.mcu_api import DeviceAPI
+from api.src._helper import FlashInfos
 
 
 class Commands(IntEnum):
@@ -37,7 +33,7 @@ class Commands(IntEnum):
 class FlashFPGA(DeviceAPI):
     __logger: Logger
 
-    def __init__(self, com_name: str = "AUTOCOM", timeout: float = 1.) -> None:
+    def __init__(self, com_name: str = "AUTOCOM", timeout: float = 1.0) -> None:
         """Interface class for flashing the FPGA on a custom DAQ device
         :param com_name:    String with the serial port name of the used device
         :param timeout:     Floating value with timeout for the communication [Default, not during DAQ]
@@ -72,14 +68,16 @@ class FlashFPGA(DeviceAPI):
 
     @property
     def _package_flash_info(self) -> np.dtype:
-        return np.dtype([
-            ('manu', 'u1'),
-            ('device', '<u2'),
-            ('jedec', '<u2'),
-            ('status', '<u2'),
-            ('pages', '<u2'),
-            ('blocks', '<u2'),
-        ])
+        return np.dtype(
+            [
+                ("manu", "u1"),
+                ("device", "<u2"),
+                ("jedec", "<u2"),
+                ("status", "<u2"),
+                ("pages", "<u2"),
+                ("blocks", "<u2"),
+            ]
+        )
 
     def get_flash_infos(self) -> FlashInfos:
         """Getting the flash information from device
@@ -87,15 +85,15 @@ class FlashFPGA(DeviceAPI):
         """
         ret = self._write_with_feedback(Commands.FLASH_GET_INFOS, size=12)
         frame = np.frombuffer(ret, dtype=self._package_flash_info)[0]
-        manu_id = int(frame['manu']) if frame['manu'] == (frame['device'] & 0x00FF) else 0
+        manu_id = int(frame["manu"]) if frame["manu"] == (frame["device"] & 0x00FF) else 0
         return FlashInfos(
             manu_id=manu_id,
-            dev_id=int(frame['device'] >> 8),
-            mem_type=int(frame['jedec'] & 0x00FF),
-            capacity=2 ** (int(frame['jedec'] >> 8)),
-            status=int(frame['status']),
-            pagesize=int(frame['pages']),
-            blocksize=int(frame['blocks']),
+            dev_id=int(frame["device"] >> 8),
+            mem_type=int(frame["jedec"] & 0x00FF),
+            capacity=2 ** (int(frame["jedec"] >> 8)),
+            status=int(frame["status"]),
+            pagesize=int(frame["pages"]),
+            blocksize=int(frame["blocks"]),
         )
 
     def erase_flash_all(self) -> None:
@@ -141,7 +139,7 @@ class FlashFPGA(DeviceAPI):
         :param addr:    Integer with the starting address of the flash (bytes)
         :return:        None
         """
-        if not 0 <= addr < 2 ** 32:
+        if not 0 <= addr < 2**32:
             raise ValueError("Address is out of range! [0, 2^32)")
 
         self._write_without_feedback(Commands.FLASH_SET_ADDR_UPPER, (addr >> 16) & 0xFFFF)
@@ -160,7 +158,9 @@ class FlashFPGA(DeviceAPI):
             raise ValueError(f"Size of the readed data is not equal to byte_page ({bytes_page})")
         return list(data)
 
-    def _write_page_into_flash(self, page: int, data: bytes, bytes_page: int, do_check: bool=False) -> None:
+    def _write_page_into_flash(
+        self, page: int, data: bytes, bytes_page: int, do_check: bool = False
+    ) -> None:
         """Writing the page content into the flash
         :param page:        Integer with the number of the page to write
         :param data:        Bytes with the content of the page
@@ -179,11 +179,7 @@ class FlashFPGA(DeviceAPI):
         out.append(Commands.FLASH_SET_ADDR_LOWER)
         out.extend(lower.to_bytes(2, "little"))
         out.append(Commands.FLASH_SET_ADDR_LOWER)
-        out.extend(
-            x
-            for a, b in zip(data[::2], data[1::2])
-            for x in (b, a, Commands.FLASH_WRITE_BUFFER)
-        )
+        out.extend(x for a, b in zip(data[::2], data[1::2]) for x in (b, a, Commands.FLASH_WRITE_BUFFER))
         out.extend((0, 0, Commands.FLASH_WRITE_DATA))
 
         ret = self._write_bytes(bytes(out), size=3)
@@ -196,7 +192,7 @@ class FlashFPGA(DeviceAPI):
 
     @staticmethod
     def _split_stream_into_pages(bitstream: bytes, pagesize: int) -> list[bytes]:
-        pages = [bitstream[idx:idx + pagesize] for idx in range(0, len(bitstream), pagesize)]
+        pages = [bitstream[idx : idx + pagesize] for idx in range(0, len(bitstream), pagesize)]
         if not len(pages[-1]) == pagesize:
             last_page = pages[-1]
             last_page += bytes([0xFF for _ in range(pagesize - len(last_page))])
@@ -204,13 +200,17 @@ class FlashFPGA(DeviceAPI):
         return pages
 
     @staticmethod
-    def _add_filling_bytes_into_pages(bitstream_pages: list[bytes], pagesize: int, num_ends: int) -> list[bytes]:
+    def _add_filling_bytes_into_pages(
+        bitstream_pages: list[bytes], pagesize: int, num_ends: int
+    ) -> list[bytes]:
         pages = bitstream_pages.copy()
         for _ in range(num_ends):
             pages.append(bytes([255 for _ in range(pagesize)]))
         return pages
 
-    def write_bitstream_into_flash(self, bitstream: bytes, start_page: int=0, do_check: bool=False) -> None:
+    def write_bitstream_into_flash(
+        self, bitstream: bytes, start_page: int = 0, do_check: bool = False
+    ) -> None:
         """Writing a bitstream into the FPGA flash
         :param bitstream:   Bytes with the bitstream to write
         :param start_page:  Integer with the number of the first page to write
@@ -229,14 +229,16 @@ class FlashFPGA(DeviceAPI):
         if "PROGB" in self.get_state().pins:
             raise ValueError("FPGA is not in init mode!")
 
-        for page, data in enumerate(tqdm(bitstream_chunks, desc="Flashing the bitstream into FPGA flash: ")):
+        for page, data in enumerate(
+            tqdm(bitstream_chunks, desc="Flashing the bitstream into FPGA flash: ")
+        ):
             sel_page = page + start_page
             if sel_page % sets.blocksize == 0:
                 self.erase_flash_sector(sel_page, sets.pagesize)
             self._write_page_into_flash(sel_page, data, sets.pagesize, do_check)
         self.fpga_set_program_state(False)
 
-    def check_bitstream_from_flash(self, bitstream: bytes, start_page: int=0) -> bool:
+    def check_bitstream_from_flash(self, bitstream: bytes, start_page: int = 0) -> bool:
         """Checking if bitstream is equal to the content of the FPGA flash
         :param bitstream:   Bytes with the bitstream to check
         :param start_page:  Integer with the number of the first page to check
@@ -244,7 +246,11 @@ class FlashFPGA(DeviceAPI):
         """
         sets = self.get_flash_infos()
         data_rd = bytes()
-        for page, data in enumerate(tqdm(range(int(len(bitstream) / sets.pagesize)), desc="Checking the bitstream in FPGA flash: ")):
+        for page, data in enumerate(
+            tqdm(
+                range(int(len(bitstream) / sets.pagesize)), desc="Checking the bitstream in FPGA flash: "
+            )
+        ):
             data_rd += bytes(self._read_page_from_flash(page + start_page, sets.pagesize))
 
         for i, (a, b) in enumerate(zip(bitstream, data_rd)):
@@ -267,7 +273,7 @@ class FlashFPGA(DeviceAPI):
         self._write_without_feedback(Commands.FPGA_PROGRAM_CYCLE, 0)
         sleep(2)
 
-    def fpga_do_logic_reset(self, num_iterations: int=1) -> None:
+    def fpga_do_logic_reset(self, num_iterations: int = 1) -> None:
         """Do logic reset of the FPGA content
         :param num_iterations:      Integer with the number of iterations of the reset
         :return:                    None

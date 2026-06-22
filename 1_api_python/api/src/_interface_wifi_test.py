@@ -35,14 +35,14 @@ def test_convert_matches_rpc_command_layout():
 
 def test_write_wfb_reads_exact_response_size_from_tcp_stream():
     port, received, thread = _start_tcp_server(b"\x02\x03\x04\x05\x06")
-    dut = InterfaceWifi(host="127.0.0.1", port=port, timeout=1.)
+    dut = InterfaceWifi(host="127.0.0.1", port=port, timeout=1.0)
 
     dut.open()
     try:
         response = dut.write_wfb(bytes([0x00, 0x00, 0x02]), size=5)
     finally:
         dut.close()
-        thread.join(timeout=1.)
+        thread.join(timeout=1.0)
 
     assert response == bytes([0x02, 0x03, 0x04, 0x05, 0x06])
     assert received == [bytes([0x00, 0x00, 0x02])]

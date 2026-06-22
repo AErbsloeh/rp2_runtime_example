@@ -1,3 +1,5 @@
+import pytest
+
 from api.mcu_api import (
     Commands,
     DeviceAPI,
@@ -9,7 +11,7 @@ class FakeDevice:
     timeout: float
 
     def __init__(self) -> None:
-        self.timeout = 0.
+        self.timeout = 0.0
 
 
 class FakeThreads:
@@ -42,7 +44,7 @@ class FakeThreads:
 def _make_daq_config() -> DataAcquisitionConfig:
     return DataAcquisitionConfig(
         send_batch=True,
-        sampling_rate=500.,
+        sampling_rate=500.0,
         num_channels=2,
         num_samples=16,
         head_cmd=0xA0,
@@ -73,12 +75,12 @@ def _make_device_api():
     return dut, threads, device, calls
 
 
+@pytest.mark.hardware
 def test_start_daq_can_publish_processed_lsl_without_internal_recording():
     dut, threads, device, calls = _make_device_api()
 
     dut.start_daq(
-        sampling_rate=500.,
-        do_batch=True,
+        sampling_rate=500.0,
         do_record=False,
         do_process=True,
     )
@@ -89,16 +91,16 @@ def test_start_daq_can_publish_processed_lsl_without_internal_recording():
     assert threads.registered[1][1][0:3] == (1, "data", "filt")
     assert threads.registered[1][2]["require_consumers"] is False
     assert threads.started is True
-    assert device.timeout == 2 / 500.
+    assert device.timeout == 2 / 500.0
     assert calls[-1] == ("write", Commands.START_DAQ, 0)
 
 
+@pytest.mark.hardware
 def test_start_daq_can_publish_raw_lsl_without_internal_recording_or_processing():
     dut, threads, _, _ = _make_device_api()
 
     dut.start_daq(
-        sampling_rate=500.,
-        do_batch=True,
+        sampling_rate=500.0,
         do_record=False,
         do_process=False,
     )

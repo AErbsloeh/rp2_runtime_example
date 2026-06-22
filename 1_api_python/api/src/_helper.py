@@ -2,13 +2,14 @@ import binascii
 from dataclasses import dataclass
 
 
-def get_path_to_project(new_folder: str='', max_levels: int=5) -> str:
+def get_path_to_project(new_folder: str = "", max_levels: int = 5) -> str:
     """Function for getting the path to find the project folder structure in application.
     :param new_folder:  New folder path
     :param max_levels:  Max number of levels to get-out for finding pyproject.toml
     :return:            String with an absolute path to start the project structure
     """
     from pathlib import Path
+
     cwd = Path(".").absolute()
     current = cwd
 
@@ -39,6 +40,7 @@ class DataAcquisitionConfig:
         bytes_sample:     Integer with number of bytes for each sample
         is_signed:        Boolean if data sample is signed or unsigned
     """
+
     send_batch: bool
     sampling_rate: float
     num_channels: int
@@ -55,14 +57,14 @@ class DataAcquisitionConfig:
         if self.send_batch:
             return self.num_channels, self.num_samples
         else:
-            return self.num_channels,
+            return (self.num_channels,)
 
     @property
     def dtype_sample(self) -> str:
         """Returning string with numpy data type definition for each data sample during data acquisition"""
-        datatype = 'i' if self.is_signed else 'u'
-        return f'<{datatype}{self.bytes_sample}'
-    
+        datatype = "i" if self.is_signed else "u"
+        return f"<{datatype}{self.bytes_sample}"
+
     @property
     def expected_bytes_without_crc(self) -> int:
         """Return expected number of bytes for a DAQ packet without CRC bytes.
@@ -96,6 +98,7 @@ class SystemState:
         firmware:   String with a firmware version on board
         temp:       Float with temperature [°C] of the board
     """
+
     pins: str
     system: str
     runtime: float
@@ -116,6 +119,7 @@ class FlashInfos:
         pagesize:   Number of bytes in each page
         blocksize:  Number of bytes in each block
     """
+
     manu_id: int
     dev_id: int
     mem_type: int
@@ -138,7 +142,6 @@ class FlashInfos:
     def num_pages_per_block(self) -> int:
         """Returning the number of pages in each block"""
         return self.blocksize // self.pagesize
-    
 
 
 def convert_pin_state(state: int, pin_list: list[str]) -> str:
@@ -148,13 +151,13 @@ def convert_pin_state(state: int, pin_list: list[str]) -> str:
     :return:            String with pin state
     """
     if state == 0:
-        return 'NONE'
+        return "NONE"
     else:
-        ret_text = ''
+        ret_text = ""
         for idx, led in enumerate(pin_list):
             if state & (1 << idx):
-                ret_text += f'{led}' if len(ret_text) == 0 else f'+{led}'
-        if ret_text == '':
+                ret_text += f"{led}" if len(ret_text) == 0 else f"+{led}"
+        if ret_text == "":
             raise ValueError("Translated pin state is undefined")
         return ret_text
 
@@ -166,7 +169,7 @@ def convert_system_state(state: int, state_list: list[str]) -> str:
     :return:                String with pin state
     """
     if not 0 <= state < len(state_list):
-        raise ValueError(f'Invalid system state: {state}')
+        raise ValueError(f"Invalid system state: {state}")
     return state_list[state]
 
 
@@ -186,12 +189,16 @@ def convert_rp2_temp_value(raw: int) -> float:
     volt = convert_rp2_adc_value(raw)
     return 27 - (volt - 0.706) / 0.001721
 
+
 def build_checksum(data: bytes) -> int:
     """Function for calculating the CRC-16-CCITT checksum for the given data bytes"""
     return sum(data) % 2**16
+
+
 def build_crc16_ccitt(data: bytes) -> int:
     """Function for calculating the CRC-16-CCITT checksum for the given data bytes"""
-    return binascii.crc_hqx(data, 0xffff)
+    return binascii.crc_hqx(data, 0xFFFF)
+
 
 def build_crc_excluding_endframe(packet: bytes, crc_len: int = 2, exclude_endframe: bool = True) -> int:
     """Compute CRC over packet excluding the CRC field and optionally excluding the end-frame byte.
@@ -210,7 +217,6 @@ def build_crc_excluding_endframe(packet: bytes, crc_len: int = 2, exclude_endfra
     min_len = crc_len + (1 if exclude_endframe else 0)
     if len(packet) < min_len:
         raise ValueError("Packet too short to contain CRC and optional end-frame")
-    end = -1 if exclude_endframe else None
     crc_start = -min_len
     # payload is everything up to the CRC field
     payload = packet[:crc_start]

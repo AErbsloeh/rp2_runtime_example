@@ -1,22 +1,20 @@
-import numpy as np
-from logging import getLogger, Logger
-from h5py import File, string_dtype
 from datetime import datetime
+from logging import Logger, getLogger
 from pathlib import Path
+from queue import Empty, Queue
+from threading import Event, Lock, Thread
 from time import sleep
-from tqdm import tqdm
-from threading import Event, Thread, Lock
-from psutil import cpu_percent, virtual_memory
+from typing import cast
+
+import numpy as np
 import pylsl
-from pylsl import (
-    StreamInfo,
-    StreamInlet,
-    StreamOutlet,
-    resolve_bypred,
-    proc_threadsafe
-)
-from queue import Queue, Empty
+from h5py import File
+from psutil import cpu_percent, virtual_memory
+from pylsl import StreamInfo, StreamInlet, StreamOutlet, proc_threadsafe, resolve_bypred
+from tqdm import tqdm
 from vispy import app, scene
+from vispy.scene import ViewBox
+
 from api.data_api import DataAPI, StreamRecording
 
 
@@ -49,8 +47,8 @@ class RingBuffer:
             self._data0[-1, 0] = tb
             self._data0[-1, 1] = value
         else:
-            self._data0[self._index:, 0] = tb
-            self._data0[self._index:, 1] = value
+            self._data0[self._index :, 0] = tb
+            self._data0[self._index :, 1] = value
         self._update_index()
 
     def get_data(self) -> np.ndarray:
@@ -65,7 +63,7 @@ class ThreadLSL:
     _exception: Queue
     _thread_active: list[int]
     _is_active: bool
-    _num_missed: int=0
+    _num_missed: int = 0
 
     def __init__(self) -> None:
         """Class for managing all threads for the LSL data processing
@@ -109,9 +107,9 @@ class ThreadLSL:
             case pylsl.cf_int64:
                 return "int64"
             case _:
-                raise ValueError(f"Unknown LSL datatype format")
+                raise ValueError("Unknown LSL datatype format")
 
-    def register(self, func, args, kwargs: dict | None=None) -> None:
+    def register(self, func, args, kwargs: dict | None = None) -> None:
         """Registering a thread with a custom instruction
         :param func:    Function object for further processing in own thread
         :param args:    Arguments of the object for starting it
@@ -148,13 +146,13 @@ class ThreadLSL:
         """
         self._event.clear()
         for p in self._thread:
-            p.join(timeout=30.)
+            p.join(timeout=30.0)
         self._release_threads()
         self._logger.debug("Disabling all LSL threads")
 
     @staticmethod
     def _get_number_stream_samples(sampling_rate: float) -> int:
-        return  int(sampling_rate / 50) if sampling_rate > 500. else 10
+        return int(sampling_rate / 50) if sampling_rate > 500.0 else 10
 
     def _check_exception(self) -> None:
         """Function for checking if any exception information is available from any thread and return it
@@ -172,26 +170,40 @@ class ThreadLSL:
         :param wait_time_sec:   Time to wait for a second
         :return:                None
         """
-        sleep(1.)
+        sleep(1.0)
         for _ in tqdm(range(int(wait_time_sec))):
             if self._is_active:
                 self._check_exception()
-                sleep(1.)
+                sleep(1.0)
             else:
                 raise RuntimeError(f"One thread is shutdown [{self._is_active}] - {self._thread_active}")
 
-    def _establish_lsl_outlet(self, idx: int, lsl_name: str, lsl_type: str,  sampling_rate: float, units: str | list[str], channel_num: int, channel_labels: list[str], channel_layout: list[int], channel_type: int=pylsl.cf_int16, check_for_consumers: bool=True) -> StreamOutlet:
+    def _establish_lsl_outlet(
+        self,
+        idx: int,
+        lsl_name: str,
+        lsl_type: str,
+        sampling_rate: float,
+        units: str | list[str],
+        channel_num: int,
+        channel_labels: list[str],
+        channel_layout: list[int],
+        channel_type: int = pylsl.cf_int16,
+        check_for_consumers: bool = False,
+    ) -> StreamOutlet:
         info = StreamInfo(
             name=lsl_name,
             type=lsl_type,
             channel_count=channel_num,
             nominal_srate=sampling_rate,
             channel_format=channel_type,
-            source_id=f"{lsl_name}_uid"
+            source_id=f"{lsl_name}_uid",
         )
-        info.set_channel_units(units)
+        units_casted = cast(list[str | int], units)
+        info.set_channel_units(units_casted)
         info.set_channel_labels(channel_labels)
-        info.set_channel_types(channel_layout)
+        chan = [str(val) for val in channel_layout]
+        info.set_channel_types(chan)
 
         outlet = StreamOutlet(info)
         self._logger.debug(f"LSL outlet ({lsl_name}, {idx}): {outlet.get_info()}")
@@ -201,20 +213,12 @@ class ThreadLSL:
         self._logger.debug(f"LSL outlet ({lsl_name}, {idx}): running")
         return outlet
 
-    def _establish_lsl_inlet(self, name: str) -> StreamInlet:
-        info = resolve_bypred(
-            predicate=f"name='{name}'",
-            minimum=1,
-            timeout=2.
-        )
+    def _establish_lsl_inlet(self, name: str, timeout: float = 1.0) -> StreamInlet:
+        info = resolve_bypred(predicate=f"name='{name}'", minimum=1, timeout=timeout)
         if not info:
             raise ValueError(f"LSL stream with {name} not found")
         inlet = StreamInlet(
-            info=info[0],
-            max_buflen=60,
-            max_chunklen=1024,
-            recover=True,
-            processing_flags=proc_threadsafe
+            info=info[0], max_buflen=60, max_chunklen=1024, recover=True, processing_flags=proc_threadsafe
         )
         self._logger.debug(f"LSL inlet ({name}): {info}")
         return inlet
@@ -244,7 +248,7 @@ class ThreadLSL:
             except Exception as e:
                 with self._lock:
                     self._exception.put(e)
-            sleep(2.)
+            sleep(2.0)
 
     def _thread_dummy(self, stim_idx: int) -> None:
         while self._event.is_set() and self._is_active:
@@ -258,33 +262,49 @@ class ThreadLSL:
         with self._lock:
             self._thread_active[stim_idx] = False
 
-    def lsl_stream_mock(self, stim_idx: int, name: str, channel_num: int=2, sampling_rate: float=200.) -> None:
+    def lsl_stream_mock(
+        self,
+        stim_idx: int,
+        name: str,
+        channel_num: int = 2,
+        sampling_rate: float = 200.0,
+        format: int = pylsl.cf_int8,
+    ) -> None:
         """Process for starting a Lab Streaming Layer (LSL) to mock the DAQ hardware with random data
         :param stim_idx:        Integer with array index to write into heartbeat feedback array
         :param name:            String with the name of the LSL stream (must match with a recording process)
         :param channel_num:     Channel number to start stream from
         :param sampling_rate:   Floating value with sampling rate in Hz
+        :param format:          Defined datatype for saving data in the stream
         :return:                None
         """
         outlet = self._establish_lsl_outlet(
             idx=stim_idx,
             lsl_name=name,
-            lsl_type='mock_daq',
+            lsl_type="mock_daq",
             sampling_rate=sampling_rate,
-            units="V",
+            units="",
             channel_labels=[f"CH{idx}" for idx in range(channel_num)],
             channel_layout=[idx for idx in range(channel_num)],
             channel_num=channel_num,
-            channel_type=pylsl.cf_int16
+            channel_type=pylsl.cf_int16,
+            check_for_consumers=False,
         )
+
+        is_int = format in [pylsl.cf_int8, pylsl.cf_int16, pylsl.cf_int32, pylsl.cf_int64]
 
         while self._event.is_set() and self._is_active:
             try:
                 # Process data
+                val = (
+                    np.random.random(size=channel_num)
+                    if not is_int
+                    else np.random.randint(low=-(2**15), high=2**15, size=channel_num)
+                )
                 outlet.push_sample(
-                    x=np.random.randint(low=-2**15, high=2**15, size=channel_num).tolist(),
+                    x=val.tolist(),
                     timestamp=0.0,
-                    pushthrough=True
+                    pushthrough=True,
                 )
                 # Heartbeat
                 with self._lock:
@@ -296,7 +316,15 @@ class ThreadLSL:
         with self._lock:
             self._thread_active[stim_idx] = False
 
-    def lsl_stream_file(self, stim_idx: int, name: str, path2data: str, name_type: str, file_index: int=-1, format: int=pylsl.cf_int16) -> None:
+    def lsl_stream_file(
+        self,
+        stim_idx: int,
+        name: str,
+        path2data: str,
+        name_type: str,
+        file_index: int = -1,
+        format: int = pylsl.cf_int16,
+    ) -> None:
         """Process for starting a Lab Streaming Layer (LSL) to stream the file content into the DAQ system by mocking the DAQ hardware
         :param stim_idx:        Integer with array index to write into heartbeat feedback array
         :param name:            String with name of the LSL stream (must match with a recording process)
@@ -316,13 +344,14 @@ class ThreadLSL:
         outlet = self._establish_lsl_outlet(
             idx=stim_idx,
             lsl_name=name,
-            lsl_type='mock_daq',
+            lsl_type="mock_daq",
             units=data.units,
             sampling_rate=float(data.sampling_rate),
             channel_labels=data.label,
             channel_layout=data.layout,
             channel_num=int(data.num_channels),
-            channel_type=format
+            channel_type=format,
+            check_for_consumers=False,
         )
 
         while self._event.is_set() and self._is_active:
@@ -334,11 +363,7 @@ class ThreadLSL:
                     with self._lock:
                         self._thread_active[stim_idx] = outlet.have_consumers()
                     # Process data
-                    outlet.push_sample(
-                        x=sdata.tolist(),
-                        timestamp=stime,
-                        pushthrough=True
-                    )
+                    outlet.push_sample(x=sdata.tolist(), timestamp=stime, pushthrough=True)
                     sleep(1 / data.sampling_rate)
             except Exception as e:
                 with self._lock:
@@ -346,7 +371,18 @@ class ThreadLSL:
         with self._lock:
             self._thread_active[stim_idx] = False
 
-    def lsl_stream_system(self, stim_idx: int, name: str, daq_func, sampling_rate: float, channel_labels: list[str], channel_layout: list[int], channel_units: str, format: int=pylsl.cf_int32, require_consumers: bool=True) -> None:
+    def lsl_stream_system(
+        self,
+        stim_idx: int,
+        name: str,
+        daq_func,
+        sampling_rate: float,
+        channel_labels: list[str],
+        channel_layout: list[int],
+        channel_units: str,
+        format: int = pylsl.cf_int32,
+        require_consumers: bool = True,
+    ) -> None:
         """Process for starting a Lab Streaming Layer (LSL) to process the data stream from DAQ system
         :param stim_idx:        Integer with array index to write into heartbeat feedback array
         :param name:            String with name of the LSL stream (must match with a recording process)
@@ -362,17 +398,17 @@ class ThreadLSL:
         outlet = self._establish_lsl_outlet(
             idx=stim_idx,
             lsl_name=name,
-            lsl_type='stream_daq',
+            lsl_type="stream_daq",
             units=channel_units,
             sampling_rate=sampling_rate,
             channel_num=len(channel_labels),
             channel_labels=channel_labels,
             channel_layout=channel_layout,
             channel_type=format,
-            check_for_consumers=require_consumers
+            check_for_consumers=require_consumers,
         )
 
-        use_batch_mode = 'batch' in daq_func.__name__
+        use_batch_mode = "batch" in daq_func.__name__
         if use_batch_mode:
             while self._event.is_set() and self._is_active:
                 try:
@@ -382,11 +418,7 @@ class ThreadLSL:
                         continue
                     if len(tb) != len(data[0]):
                         continue
-                    outlet.push_chunk(
-                        x=data,
-                        timestamp=tb,
-                        pushthrough=True
-                    )
+                    outlet.push_chunk(x=data, timestamp=tb, pushthrough=True)
                     # Heartbeat
                     with self._lock:
                         self._thread_active[stim_idx] = (not require_consumers) or outlet.have_consumers()
@@ -402,11 +434,7 @@ class ThreadLSL:
                     data, tb = daq_func()
                     if not data or tb is None:
                         continue
-                    outlet.push_sample(
-                        x=data,
-                        timestamp=tb,
-                        pushthrough=True
-                    )
+                    outlet.push_sample(x=data, timestamp=tb, pushthrough=True)
                     # Heartbeat
                     with self._lock:
                         self._thread_active[stim_idx] = (not require_consumers) or outlet.have_consumers()
@@ -416,35 +444,34 @@ class ThreadLSL:
             with self._lock:
                 self._thread_active[stim_idx] = False
 
-    def lsl_stream_util(self, stim_idx: int, name: str, sampling_rate: float=2.) -> None:
+    def lsl_stream_util(self, stim_idx: int, name: str, sampling_rate: float = 2.0) -> None:
         """Process for starting a Lab Streaming Layer (LSL) to process the utilization of the host computer
         :param stim_idx:        Integer with array index to write into heartbeat feedback array
         :param name:            String with name of the LSL stream (must match with a recording process)
         :param sampling_rate:   Float with sampling rate for determining the sampling rate
         :return:                None
         """
-        if sampling_rate > 2.:
+        if sampling_rate > 2.0:
             raise ValueError("Please reduce sampling rate lower than 2.0 Hz")
 
         outlet = self._establish_lsl_outlet(
             idx=stim_idx,
             lsl_name=name,
-            lsl_type='utilization',
+            lsl_type="utilization",
             units="%",
             sampling_rate=sampling_rate,
             channel_num=2,
             channel_labels=["CPU", "RAM"],
             channel_layout=[0, 1],
-            channel_type=pylsl.cf_float32
+            channel_type=pylsl.cf_float32,
+            check_for_consumers=False,
         )
 
         while self._event.is_set() and self._is_active:
             try:
-                outlet.push_sample(
-                    x=[cpu_percent(), virtual_memory().percent],
-                    timestamp=0.0,
-                    pushthrough=True
-                )
+                cpu = cpu_percent()
+                mem = virtual_memory().percent
+                outlet.push_sample(x=[cpu, mem], timestamp=0.0, pushthrough=True)
                 with self._lock:
                     self._thread_active[stim_idx] = outlet.have_consumers()
                 sleep(1 / sampling_rate)
@@ -466,18 +493,20 @@ class ThreadLSL:
         self._logger.debug(name_out)
         for name in name_out:
             self._logger.debug(f"Include LSL stream splitter: {name_in} -> {name}")
-            outlets.append(self._establish_lsl_outlet(
-                idx=stim_idx,
-                lsl_name=name,
-                lsl_type=inlet.info().type(),
-                units=inlet.info().get_channel_units(),
-                sampling_rate=inlet.info().nominal_srate(),
-                channel_num=inlet.info().channel_count(),
-                channel_type=inlet.info().channel_format(),
-                channel_labels=inlet.info().get_channel_labels(),
-                channel_layout=inlet.info().get_channel_types(),
-                check_for_consumers=False
-            ))
+            outlets.append(
+                self._establish_lsl_outlet(
+                    idx=stim_idx,
+                    lsl_name=name,
+                    lsl_type=inlet.info().type(),
+                    units=inlet.info().get_channel_units(),
+                    sampling_rate=inlet.info().nominal_srate(),
+                    channel_num=inlet.info().channel_count(),
+                    channel_type=inlet.info().channel_format(),
+                    channel_labels=inlet.info().get_channel_labels(),
+                    channel_layout=inlet.info().get_channel_types(),
+                    check_for_consumers=False,
+                )
+            )
         self._logger.debug(f"Running {len(outlets)} LSL split units")
 
         while self._event.is_set() and self._is_active:
@@ -486,11 +515,7 @@ class ThreadLSL:
                 if not data and not time:
                     continue
                 for outlet in outlets:
-                    outlet.push_sample(
-                        x=data,
-                        timestamp=time,
-                        pushthrough=True
-                    )
+                    outlet.push_sample(x=data, timestamp=time, pushthrough=True)
                 with self._lock:
                     self._thread_active[stim_idx] = all([outlet.have_consumers() for outlet in outlets])
             except Exception as e:
@@ -499,7 +524,17 @@ class ThreadLSL:
         with self._lock:
             self._thread_active[stim_idx] = False
 
-    def lsl_process_stream(self, stim_idx: int, name_in: str, name_out: str, num_samples: int, func_init_daq, func_process_daq, lsl_format: int=0, require_consumers: bool=True) -> None:
+    def lsl_process_stream(
+        self,
+        stim_idx: int,
+        name_in: str,
+        name_out: str,
+        num_samples: int,
+        func_init_daq,
+        func_process_daq,
+        lsl_format: int = 0,
+        require_consumers: bool = True,
+    ) -> None:
         """Function for processing the incoming data from LSL stream
         :param stim_idx:        Integer with array index to write into heartbeat feedback array
         :param name_in:         String with name of the LSL stream to catch it
@@ -517,32 +552,25 @@ class ThreadLSL:
         outlet = self._establish_lsl_outlet(
             idx=stim_idx,
             lsl_name=name_out,
-            lsl_type=inlet.info().type() if lsl_format == 0 else lsl_format,
+            lsl_type=inlet.info().type(),
             units=inlet.info().get_channel_units(),
             sampling_rate=sampling_rate,
             channel_num=inlet.info().channel_count(),
             channel_labels=inlet.info().get_channel_labels(),
             channel_layout=inlet.info().get_channel_types(),
-            channel_type=inlet.info().channel_format(),
-            check_for_consumers=False
+            channel_type=inlet.info().channel_format() if lsl_format == 0 else lsl_format,
+            check_for_consumers=False,
         )
         func_init_daq(sampling_rate)
 
         while self._event.is_set():
             try:
-                data_buf, ts_buf = inlet.pull_chunk(
-                    max_samples=num_samples,
-                    timeout=0.1
-                )
+                data_buf, ts_buf = inlet.pull_chunk(max_samples=num_samples, timeout=0.1)
                 if not data_buf or ts_buf is None:
                     continue
 
                 data_out = func_process_daq(data_buf)
-                outlet.push_chunk(
-                    x=data_out,
-                    timestamp=ts_buf,
-                    pushthrough=True
-                )
+                outlet.push_chunk(x=data_out, timestamp=ts_buf, pushthrough=True)
                 with self._lock:
                     self._thread_active[stim_idx] = (not require_consumers) or outlet.have_consumers()
             except Exception as e:
@@ -551,7 +579,7 @@ class ThreadLSL:
         with self._lock:
             self._thread_active[stim_idx] = False
 
-    def lsl_stream_check_equality(self, stim_idx: int, names: list[str], num_samples: int=16) -> None:
+    def lsl_stream_check_equality(self, stim_idx: int, names: list[str], num_samples: int = 16) -> None:
         """LSL Layer for checking content of different LSL StreamInlets
         :param stim_idx:    Integer with array index to write into heartbeat feedback array
         :param names:       List with LSL stream names to check the data
@@ -566,10 +594,7 @@ class ThreadLSL:
             data = list()
             time = list()
             for inlet in inlets:
-                data_new, time_new = inlet.pull_chunk(
-                    max_samples=num_samples,
-                    timeout=0.1
-                )
+                data_new, time_new = inlet.pull_chunk(max_samples=num_samples, timeout=0.1)
                 if not data_new or not time_new:
                     break
 
@@ -594,22 +619,22 @@ class ThreadLSL:
         :return: None
         """
         if type(names) is not list:
-            raise TypeError('names must be a list')
+            raise TypeError("names must be a list")
 
-        path = Path(path2save) if type(path2save) == str else path2save
         inlets: list[StreamInlet] = list()
         for name in names:
             inlets.append(self._establish_lsl_inlet(name))
         # Extract meta
         data_format = inlets[0].info().channel_format()
-        time = datetime.today().strftime('%Y%m%d_%H%M%S')
+        time = datetime.today().strftime("%Y%m%d_%H%M%S")
 
         stream_time = list()
         stream_data = list()
-        if not path.is_dir():
-            path.mkdir(parents=True, exist_ok=True)
-        with File(path.absolute() / f"{time}_{names[0]}.h5", "w") as f:
-            f.attrs["creation_date"] = datetime.today().strftime('%Y-%m-%d')
+
+        path2file = Path(path2save) / f"{time}_{names[0]}.h5"
+        path2file.parent.mkdir(parents=True, exist_ok=True)
+        with File(path2file.as_posix(), "w") as f:
+            f.attrs["creation_date"] = datetime.today().strftime("%Y-%m-%d")
             f.attrs["data_format"] = data_format
 
             for idx, (name, inlet) in enumerate(zip(names, inlets)):
@@ -618,7 +643,9 @@ class ThreadLSL:
 
                 channel = inlet.info().channel_count()
                 format = self._get_h5_format(inlet.info().channel_format())
-                stream_data.append(f.create_dataset(f"{name}_data", (0, channel), maxshape=(None, channel), dtype=format))
+                stream_data.append(
+                    f.create_dataset(f"{name}_data", (0, channel), maxshape=(None, channel), dtype=format)
+                )
                 stream_data[idx].attrs["unit"] = inlet.info().get_channel_units()
                 stream_data[idx].attrs["label"] = inlet.info().get_channel_labels()
                 stream_data[idx].attrs["layout"] = inlet.info().get_channel_types()
@@ -632,7 +659,7 @@ class ThreadLSL:
                     for inlet, time, data in zip(inlets, stream_time, stream_data):
                         data_new, time_new = inlet.pull_chunk(
                             max_samples=self._get_number_stream_samples(inlet.info().nominal_srate()),
-                            timeout=0.01
+                            timeout=0.01,
                         )
                         if not data_new and not time_new:
                             continue
@@ -642,9 +669,9 @@ class ThreadLSL:
                             idx = len(time)
                             new = len(time_new)
                             time.resize((idx + new,))
-                            time[idx:idx + new] = time_new
+                            time[idx : idx + new] = time_new
                             data.resize((idx + new, inlet.info().channel_count()))
-                            data[idx:idx + new, :] = np.asarray(data_new)[:, :]
+                            data[idx : idx + new, :] = np.asarray(data_new)[:, :]
                             f.flush()
                 except Exception as e:
                     self._exception.put(e)
@@ -653,7 +680,7 @@ class ThreadLSL:
                 self._thread_active[stim_idx] = False
 
     def lsl_plot_stream(
-            self, stim_idx: int, name: str, window_length: float = 10., update_rate: float = 12.
+        self, stim_idx: int, name: str, window_length: float = 10.0, update_rate: float = 12.0
     ) -> None:
         """Function for LSL to enable live plotting of the incoming results using VisPy
         :param stim_idx:        Integer with array index to write into heartbeat feedback array
@@ -662,8 +689,8 @@ class ThreadLSL:
         :param update_rate:     Floating value with update rate of the LSL datastream
         :return:                None
         """
-        line_color = ['red', 'green', 'blue', 'lime']
-        mode_util = 'util' in name
+        line_color = ["red", "green", "blue", "lime"]
+        mode_util = "util" in name
         inlet = self._establish_lsl_inlet(name)
         # --- Extract meta
         channels = inlet.info().channel_count()
@@ -676,65 +703,64 @@ class ThreadLSL:
 
         # --- Build app
         canvas = scene.SceneCanvas(
-            size=(800, 150 + channels*120),
+            size=(800, 150 + channels * 120),
             title=f"Live Plot @{sampling_rate} Hz ({name})",
             keys=None,
             app="glfw",
             show=True,
         )
         grid = canvas.central_widget.add_grid(spacing=1)
-        x_range = (0, number_samples_window-1)
+        x_range = (0, number_samples_window - 1)
         y_range = (0, 65535) if not mode_util else (0, 100)
 
-        views = []
-        lines = []
+        views: list[ViewBox] = []
+        lines: list = []
 
         for ch in range(channels):
-            view = grid.add_view(row=ch, col=1, camera='panzoom')
+            view = grid.add_view(row=ch, col=1, camera="panzoom")
             view.camera.set_range(x=x_range, y=y_range)
             views.append(view)
 
-            y_axis = scene.AxisWidget(orientation='left')
-            x_axis = scene.AxisWidget(orientation='bottom')
+            y_axis = scene.AxisWidget(orientation="left")
+            x_axis = scene.AxisWidget(orientation="bottom")
 
             grid.add_widget(y_axis, row=ch, col=0)
             grid.add_widget(x_axis, row=ch, col=1)
 
             y_axis.link_view(view)
-            #xaxis.link_view(view)
+            # xaxis.link_view(view)
 
             data = buffer_gpu[ch].get_data()
             line = scene.visuals.Line(
                 pos=data,
                 color=line_color[ch % len(line_color)],
-                width=2,
-                parent=view.scene
+                width=2,  # parent=view.scene
             )
             lines.append(line)
 
             scene.visuals.Text(
-                text=f"C{ch+1}",
-                parent=view.scene,
+                text=f"C{ch + 1}",
+                # parent=view.scene,
                 pos=(30, 0),
-                anchor_x='right',
-                anchor_y='center',
-                color='white',
+                anchor_x="right",
+                anchor_y="center",
+                color="white",
                 font_size=10,
             )
 
         status_text = scene.visuals.Text(
-           text="LSL: OK",
-           parent=views[-1].scene,
-           color='green',
-           pos=(0.95 * number_samples_window, 30),
-           font_size=8
+            text="LSL: OK",
+            # parent=views[-1].scene,
+            color="green",
+            pos=(0.95 * number_samples_window, 30),
+            font_size=8,
         )
         fps_text = scene.visuals.Text(
-           text="FPS: 0",
-           color='green',
-           parent=views[-1].scene,
-           pos=(0.75 * number_samples_window, 100),
-           font_size=8
+            text="FPS: 0",
+            color="green",
+            # parent=views[-1].scene,
+            pos=(0.75 * number_samples_window, 100),
+            font_size=8,
         )
 
         def update_plot_data():
@@ -742,14 +768,13 @@ class ThreadLSL:
             while self._event.is_set() and self._is_active:
                 try:
                     samples, _ = inlet.pull_chunk(
-                        max_samples=self._get_number_stream_samples(sampling_rate),
-                        timeout=10e-3
+                        max_samples=self._get_number_stream_samples(sampling_rate), timeout=10e-3
                     )
                     if not samples:
                         continue
                     else:
                         with self._lock:
-                            self._thread_active[stim_idx+1] = True
+                            self._thread_active[stim_idx + 1] = True
                         for sample in samples:
                             for ch0, value in enumerate(sample):
                                 buffer_lsl[ch0].append(value)
@@ -770,20 +795,20 @@ class ThreadLSL:
                 lines[ch0].set_data(data0)
 
                 # Updating the scaling factor
-                if iteration_update > int(16/update_rate):
+                if iteration_update > int(16 / update_rate):
                     iteration_update = 0
                     y = data0[:, 1]
                     y_min = y.min()
                     y_max = y.max()
                     views[ch0].camera.set_range(
-                       x=(0, number_samples_window-1),
-                       y=(y_min - 1, y_max + 1))
+                        x=(0, number_samples_window - 1), y=(y_min - 1, y_max + 1)
+                    )
                 else:
                     iteration_update += 1
 
             if not self._is_active:
                 status_text.text = "LSL: DEAD"
-                status_text.color = 'red'
+                status_text.color = "red"
 
         def update_on_fps(fps):
             with self._lock:
@@ -795,9 +820,5 @@ class ThreadLSL:
         self._thread_active.extend([0])
         self._thread[-1].start()
         canvas.measure_fps(callback=update_on_fps)
-        app.Timer(
-            interval=1/update_rate,
-            connect=update_plot_canvas,
-            start=True
-        )
+        app.Timer(interval=1 / update_rate, connect=update_plot_canvas, start=True)
         app.run()

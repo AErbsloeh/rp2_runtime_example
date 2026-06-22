@@ -1,47 +1,172 @@
-[build-system]
-requires = ["hatchling", "wheel"]
-build-backend = "hatchling.build"
-
-
-[tool.hatch.build.targets.sdist]
-where = ["."]
-include = ["api"]
-exclude = ['scripts', 'test_data', 'data', 'docs', '**/*_test.py']
-namespaces = false
-
-
-[tool.hatch.build.targets.wheel]
-packages = ["api"]
-exclude = ['scripts', 'test_data', 'data', 'docs', '**/*_test.py']
-only-packages = true
-
-[tool.uv.sources]
-elasticai-hw-measurements = { git = "ssh://git@github.com/es-ude/elastic-ai.hw-measurements.git" }
-
-
 [project]
 name = "rp2_runtime_example"
 version = "0.0.1"
 description = "A Python API for handling an embedded system using RPi RP2xxx"
 requires-python = ">=3.13,<3.14"
 dependencies = [
-    "pyserial>=3.5",
-    "numpy>=2.3.4",
-    "h5py>=3.15.1",
-    "pylsl>=1.17.6",
-    "psutil>=7.1.3",
-    "vispy>=0.16.0",
-    "glfw>=2.10.0",
-    "tqdm>=4.67.1",
+  "glfw>=2.10.0",
+  "h5py>=3.15.1",
+  "numpy>=2.3.4",
+  "psutil>=7.1.3",
+  "pylsl>=1.17.6",
+  "pyserial>=3.5",
+  "tqdm>=4.67.1",
+  "vispy>=0.16.0",
 ]
+# dynamic = ["version"]
 
 [dependency-groups]
 dev = [
-    "build",
-    "hatch",
-    "pytest>=8.4.2",
-    "matplotlib>=3.10.7",
-    "snakeviz>=2.2.2",
-    "elasticai-hw-measurements",
-    "elasticai-creator>=0.68.0",
+  "build",
+  "coverage>=7.11.3",
+  "elasticai-creator>=0.68.0",
+  "elasticai-hw-measurements",
+  "hatch",
+  "hatch-vcs",
+  "matplotlib>=3.10.7",
+  "pip-audit>=2.10.1",
+  "ruff>=0.15.14",
+  "snakeviz>=2.2.2",
+  "tach>=0.23.0",
+  "tombi>=1.1.1",
+  "ty>=0.0.38",
 ]
+lint = [
+  "ruff>=0.15.14",
+  "tach>=0.23.0",
+  "tombi>=1.1.1",
+  "ty>=0.0.38",
+]
+test = [
+  "pytest>=9.0.3",
+  "pytest-rerunfailures>=16.3",
+  "pytest-testmon>=2.2.0",
+]
+
+[build-system]
+requires = ["hatchling", "wheel"]
+build-backend = "hatchling.build"
+
+[tool.coverage.run]
+source = ["api"]
+relative_files = true
+omit = ["**/*_test.py"]
+
+[tool.coverage.report]
+exclude_lines = [
+  "def plot_",
+  "raise",
+  "case _:",
+  "pragma",
+  "continue",
+]
+
+[tool.hatch.build.targets.sdist]
+where = ["."]
+include = ["api"]
+exclude = ["scripts", "test_data", "data", "docs", "**/*_test.py"]
+namespaces = false
+
+[tool.hatch.build.targets.wheel]
+packages = ["api"]
+exclude = ["scripts", "test_data", "data", "docs", "**/*_test.py"]
+only-packages = true
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.pytest]
+addopts = ["--import-mode=importlib"]
+markers = [
+  "hardware: a test needs hardware with mcu and firmware",
+  "unstable: a test which takes time and may fail",
+]
+minversion = "9.0"
+python_files = ["*_test.py"]
+pythonpath = ["."]
+testpaths = [
+  "api",
+]
+
+[tool.ruff]
+include = [
+  "pyproject.toml",
+  "api/**/*.py",
+]
+
+# Exclude a variety of commonly ignored directories.
+exclude = [
+  ".bzr",
+  ".direnv",
+  ".eggs",
+  ".git",
+  ".git-rewrite",
+  ".hg",
+  ".ipynb_checkpoints",
+  ".mypy_cache",
+  ".nox",
+  ".pants.d",
+  ".pyenv",
+  ".pytest_cache",
+  ".pytype",
+  ".ruff_cache",
+  ".svn",
+  ".tox",
+  ".venv",
+  ".vscode",
+  "__pypackages__",
+  "_build",
+  "buck-out",
+  "build",
+  "dist",
+  "node_modules",
+  "site-packages",
+  "venv",
+  ".devenv",
+]
+
+# Same as Black.
+line-length = 106
+indent-width = 4
+target-version = "py312"
+
+[tool.ruff.lint]
+# Enable Pyflakes (`F`) and a subset of the pycodestyle (`E`)  codes by default.
+select = ["E4", "E7", "E9", "F", "I"]
+ignore = ["D101", "D102", "E741", "E721", "E722"]
+
+# Allow fix for all enabled rules (when `--fix`) is provided.
+fixable = ["ALL"]
+unfixable = []
+
+# Allow unused variables when underscore-prefixed.
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[tool.ruff.format]
+# Like Black, use double quotes for strings.
+quote-style = "double"
+
+# Like Black, indent with spaces, rather than tabs.
+indent-style = "space"
+
+# Like Black, respect magic trailing commas.
+skip-magic-trailing-comma = false
+
+# Like Black, automatically detect the appropriate line ending.
+line-ending = "auto"
+
+[tool.ty.src]
+include = ["api"]
+exclude = [
+  "api/**/*_test.py",
+  # "**/_lsl.py",
+  "**/_live_visualizer.py",
+  "**/mcu_api.py",
+  "**/fpga_api.py",
+]
+
+[tool.uv]
+default-groups = ["dev", "lint", "test"]
+
+[tool.uv.sources]
+elasticai-hw-measurements = { git = "ssh://git@github.com/es-ude/elastic-ai.hw-measurements.git" }

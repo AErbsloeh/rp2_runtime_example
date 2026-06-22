@@ -1,8 +1,9 @@
-import pytest
+from logging import DEBUG, basicConfig
 from random import randint
 from shutil import rmtree
-from time import sleep
-from logging import basicConfig, DEBUG
+
+import pytest
+
 from api import get_path_to_project
 from api.fpga_api import FlashFPGA
 
@@ -10,9 +11,7 @@ from api.fpga_api import FlashFPGA
 @pytest.fixture(scope="session", autouse=True)
 def dut():
     FlashFPGA().do_reset()
-    mcu_api = FlashFPGA(
-        com_name="AUTOCOM"
-    )
+    mcu_api = FlashFPGA(com_name="AUTOCOM")
     mcu_api.open()
     yield mcu_api
     mcu_api.do_reset()
@@ -20,10 +19,12 @@ def dut():
     rmtree(path, ignore_errors=True)
 
 
+@pytest.mark.hardware
 def test_num_bytes(dut: FlashFPGA):
     assert dut.total_num_bytes == 3
 
 
+@pytest.mark.hardware
 def test_check_echo(dut: FlashFPGA):
     test_pattern = "TESTS"
     ret = dut.echo(test_pattern)
@@ -31,6 +32,7 @@ def test_check_echo(dut: FlashFPGA):
     assert len(ret) == len(test_pattern)
 
 
+@pytest.mark.hardware
 def test_check_power_state(dut: FlashFPGA):
     dut.set_power_state(False)
     assert "FPGA_PWR_EN" not in dut.get_state().pins
@@ -42,6 +44,7 @@ def test_check_power_state(dut: FlashFPGA):
     assert "FPGA_PWR_EN" not in dut.get_state().pins
 
 
+@pytest.mark.hardware
 def test_check_flash_infos(dut: FlashFPGA):
     result = dut.get_flash_infos()
     assert result.manu_id == 1
@@ -54,16 +57,18 @@ def test_check_flash_infos(dut: FlashFPGA):
     assert result.num_blocks == 1024
 
 
+@pytest.mark.hardware
 def test_check_starting_address_in_range(dut: FlashFPGA):
     for _ in range(100):
-        a = randint(a=0, b=2**32-1)
+        a = randint(a=0, b=2**32 - 1)
         dut._set_flash_starting_address(a)
         assert dut._get_flash_starting_address() == a
 
 
+@pytest.mark.hardware
 def test_check_starting_address_out_of_range(dut: FlashFPGA):
     stimuli = [randint(a=-100, b=0) for _ in range(10)]
-    stimuli.extend([randint(a=2**32, b=2**32+100) for _ in range(10)])
+    stimuli.extend([randint(a=2**32, b=2**32 + 100) for _ in range(10)])
     for val in stimuli:
         try:
             dut._set_flash_starting_address(val)
@@ -73,6 +78,7 @@ def test_check_starting_address_out_of_range(dut: FlashFPGA):
             assert False
 
 
+@pytest.mark.hardware
 def test_read_page_from_flash(dut: FlashFPGA):
     page = 0
     page_size = dut.get_flash_infos().pagesize
