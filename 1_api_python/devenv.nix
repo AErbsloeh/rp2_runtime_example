@@ -128,6 +128,20 @@ in {
       '';
       package = pkgs.bash;
     };
+    source_oss_cad = {
+        exec = ''
+            if [[ -e $DEVENV_ROOT/oss-cad-suite/environment ]]; then
+              echo "Source oss-cad-suite from local project"
+              cd $DEVENV_ROOT && source /oss-cad-suite/environment
+            elif [[ -e $HOME/oss-cad-suite/environment ]]; then
+              echo "Source oss-cad-suite from home directory"
+              cd $HOME && source oss-cad-suite/environment
+            else
+              echo "oss-cad-suite not found"
+            fi
+            cd $DEVENV_ROOT
+        '';
+    };
   };
 
   tasks = let
@@ -234,16 +248,9 @@ in {
   };
 
   enterShell = ''
-    #check_oss_cad_available
-    #if [[ -e $DEVENV_ROOT/oss-cad-suite/environment ]]; then
-    #  echo "Source oss-cad-suite from local project"
-    #  cd $DEVENV_ROOT && source /oss-cad-suite/environment
-    #elif [[ -e $HOME/oss-cad-suite/environment ]]; then
-    #  echo "Source oss-cad-suite from home directory"
-    #  cd $HOME && source oss-cad-suite/environment
-    #else
-    #  echo "oss-cad-suite not found"
-    #fi
-    #cd $DEVENV_ROOT
+    echo ""
+    check_oss_cad_available
+    source_oss_cad
+    echo ""
   '';
 }
