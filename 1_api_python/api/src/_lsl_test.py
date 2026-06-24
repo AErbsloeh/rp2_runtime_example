@@ -11,7 +11,7 @@ from api.src._lsl import (
     RingBuffer,
     ThreadLSL
 )
-
+from ._live_visualizer import LivePlotter, LivePlotterChannelConfig 
 @pytest.fixture(scope='session', autouse=True)
 def path():
     path = Path(get_path_to_project("temp_data"))
@@ -225,3 +225,38 @@ def test_thread_process_stream():
 if __name__ == "__main__":
     basicConfig(level=DEBUG)
     pytest.main([__file__])
+
+
+# Fake classes for testing the plotting function without needing a real LSL stream or inlet
+class FakeInfo:
+    def channel_count(self):
+        return 4
+class FakeInlet:
+    def info(self):# fake inlet need to have info function defined
+        return FakeInfo()
+class FakeLivePlotter:
+    received_config = None # class variable to store the received configuration for plotting
+    started = False # class variable to indicate whether the plotter has been started
+    def __init__(self, config):# fake constructor to simulate the initialization of the plotter with a configuration
+        FakeLivePlotter.received_config = config
+    def start(self): # fake start method to simulate starting the plotter
+        FakeLivePlotter.started = True
+
+def test_plot_stream(monkeypatch):
+    dut = ThreadLSL()
+    dut._establish_lsl_inlet = lambda name: FakeInlet() #mock the _establish_lsl_inlet function to return a fake inlet with the necessary info for plotting
+    monkeypatch.setattr('api.src._live_visualizer.LivePlotter', FakeLivePlotter) #mock the LivePlotter class to use the FakeLivePlotter instead of the real one
+    dut.lsl_plot_stream(name='Playerdata', stim_idx=0)
+
+    assert FakeLivePlotter.received_config is not None
+    assert FakeLivePlotter.started == True
+    assert len(FakeLivePlotter.received_config) == 4
+    assert FakeLivePlotter.received_config[0].name == "C1"
+    assert FakeLivePlotter.received_config[0].visualized_channel == 0
+    assert FakeLivePlotter.received_config[2].lsl_layer_name == "Playerdata"
+
+    
+    
+
+
+

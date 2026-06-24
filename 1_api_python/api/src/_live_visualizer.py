@@ -6,7 +6,7 @@ from pylsl import StreamInlet, resolve_bypred, proc_threadsafe, local_clock
 from collections import deque
 
 @dataclass
-class LivePlotterChannelConfig:
+class LivePlotterChannelConfig: # Describes what should be plotted for each channel in the live plotter, stores information about the channel and how to visualize it
     """Cofiguration dataclass for each channel to be visualized in the live plotter
     Attributes:
         name (str): Name of the channel that will be displayed in the plot legend
@@ -23,7 +23,7 @@ class LivePlotterChannelConfig:
     value_translation_func: callable =None
 
 
-class LivePlotter:
+class LivePlotter: # actually connects data from LSL stream to the plot and updates it in real time
     def __init__(self, config: LivePlotterChannelConfig):
         self._translation_func = [i.value_translation_func for i in config]
         self._inlet = self._search_lsl_stream_and_connect([i.lsl_layer_name for i in config])
@@ -34,14 +34,14 @@ class LivePlotter:
 
         self.data_buffers = [np.zeros(self.max_samples) for _ in config]
         self.time_buffers = [np.zeros(self.max_samples) for _ in config]
-        self.write_pointers = [0 for _ in self._inlet]
-        self.caluclate_counter = 0
+        self.write_pointers = [0 for _ in self._inlet] #Pointer to keep track of where to write new data in the circular buffer for each stream
+        self.caluclate_counter = 0 #Counter to control how often the frequency calculation is performed (to reduce computational load)
 
         self._app, self._win, self._plot_item, self._curves, self._freq_labels =self._init_plot([i.curve_color for i in config], [i.name for i in config])
         self._timer = self._init_timer()
 
 
-    def _search_lsl_stream_and_connect(self, lsl_layer_name: list) -> list[StreamInlet]:
+    def _search_lsl_stream_and_connect(self, lsl_layer_name: list) -> list[StreamInlet]: #Search for the specified LSL stream ,connect to it and create an inlet for data retrieval
         """Search for an LSL streams by name and connecting to them
         
         Args:    
@@ -55,11 +55,11 @@ class LivePlotter:
         """        
         inlets = []
         print("Search for LSL Stream..")
-        for layer_name in lsl_layer_name:
-            streams = resolve_bypred(predicate=f"name='{layer_name}'")
-            if streams:
+        for layer_name in lsl_layer_name: #loops thriugh every stream name specified in the config and tries to connect to it
+            streams = resolve_bypred(predicate=f"name='{layer_name}'") #Searches for an LsL stream whosenames matches the specified layer name
+            if streams: #If a stream is found, it creates an inlet to connect to the stream and retrieve data from it
                 print(f"LSL Stream '{layer_name}' found, connecting...")
-                inlet = StreamInlet(streams[0],
+                inlet = StreamInlet(streams[0], 
                                    max_buflen= 60,
                                    max_chunklen= 1024,
                                    recover=True,
@@ -77,8 +77,8 @@ class LivePlotter:
             int: Highest nominal sampling rate of the streams
         """
         fs =[]
-        for inlet in self._inlet:
-            fs.append(inlet.info().nominal_srate())
+        for inlet in self._inlet:#self.inlet contains all stream connections
+            fs.append(inlet.info().nominal_srate())#inlet.info() gives access to the stream info, nominal_srate() returns the sampling rate of the stream,fs.append() adds the sampling rate to the list of sampling rates for all streams
         return int(max(fs))
     
 
@@ -88,16 +88,16 @@ class LivePlotter:
         Returns:
             tuple: A tuple containing the QApplication, GraphicsLayoutWidget, PlotItem, and PlotDataItem
         """
-        app = QtWidgets.QApplication([])
-        win = pg.GraphicsLayoutWidget(show=True, title="LSL Live Plot")
-        plot_item = win.addPlot(title="Live EEG Data")
+        app = QtWidgets.QApplication([]) #starting a new QApplication, which is necessary for any PyQt application. It manages the GUI application's control flow and main settings.
+        win = pg.GraphicsLayoutWidget(show=True, title="LSL Live Plot")#creates the actual window for the plot, with a title "LSL Live Plot"
+        plot_item = win.addPlot(title="Live EEG Data")#creates the graph area inside the window where the data will be plotted, with a title "Live EEG Data"
         plot_item.setLabel("left", "Amplitude", units="Data Points")
         plot_item.setLabel("bottom", "Time", units="s")
-        plot_item.showGrid(x=True, y=True)
+        plot_item.showGrid(x=True, y=True)#adds a grid to the plot for better visibility of the data points
         plot_item.addLegend()
 
-        curves = []
-        for idx,selected_data_buffer in enumerate(self.data_buffers):
+        curves = [] #curve is equal to one plotted line , this creates an empty list to store the curves for each channel that will be plotted, so that they can be updated later with new data from the LSL stream
+        for idx,selected_data_buffer in enumerate(self.data_buffers):# go through every data buffer
             curves.append(plot_item.plot(pen= "y" if curves_color is None else curves_color[idx], name=curves_name[idx]))
         
         # Create frequency overlay using a ViewBox with TextItems

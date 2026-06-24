@@ -18,6 +18,7 @@ from pylsl import (
 from queue import Queue, Empty
 from vispy import app, scene
 from api.data_api import DataAPI, StreamRecording
+from ._live_visualizer import LivePlotter, LivePlotterChannelConfig  
 
 
 class RingBuffer:
@@ -662,19 +663,35 @@ class ThreadLSL:
         :param update_rate:     Floating value with update rate of the LSL datastream
         :return:                None
         """
-        line_color = ['red', 'green', 'blue', 'lime']
-        mode_util = 'util' in name
-        inlet = self._establish_lsl_inlet(name)
-        # --- Extract meta
-        channels = inlet.info().channel_count()
-        sampling_rate = inlet.info().nominal_srate()
-        # --- Build ring buffer and update func
-        number_samples_window = int(window_length * sampling_rate)
-        buffer_lsl = [RingBuffer(number_samples_window) for _ in range(channels)]
-        buffer_gpu = buffer_lsl.copy()
-        iteration_update = 0
+        line_color = ['red', 'green', 'blue', 'lime'] #becomes curve color later 
+        # mode_util = 'util' in name
+        inlet = self._establish_lsl_inlet(name) #connect to LSL stream
+        # --- Extract meta(stream info) for plotting
+        channels = inlet.info().channel_count() #number of channels in the stream to know how many channel configs to create
+        # sampling_rate = inlet.info().nominal_srate()
+        # --- Build ring buffer and update func(creating a buffer for each channel)
+        # number_samples_window = int(window_length * sampling_rate)
+        # buffer_lsl = [RingBuffer(number_samples_window) for _ in range(channels)] #Recording buffer for incoming LSL data
+        # buffer_gpu = buffer_lsl.copy() #Buffer for GPU plotting (copy of the LSL buffer for thread safety)
+        # iteration_update = 0
 
-        # --- Build app
+
+
+        #Creating congfigs for the live plotter (one for each channel)
+        configs= [] #empty List where we will store plotting instructions (configs is a list of instructions for Live plotter to know how to plot each channel)
+        for ch in range(channels):#repeat for each channel in the stream
+            configs.append(LivePlotterChannelConfig(
+                name=f"C{ch+1}",
+                visualized_channel=ch,
+                lsl_layer_name=name,
+                window_width_sec=window_length,
+                curve_color=line_color[ch % len(line_color)],# the % is for looping through the line colors if there are more channels than colors in the list (e.g. 5 channels and only 4 colors, the 5th channel will get the same color as the first channel
+            
+            ))
+
+            plotter = LivePlotter(config=configs)
+            plotter.start() #start the live plotter with the configs we created for each channel
+        """ # --- Build app
         canvas = scene.SceneCanvas(
             size=(800, 150 + channels*120),
             title=f"Live Plot @{sampling_rate} Hz ({name})",
@@ -686,15 +703,15 @@ class ThreadLSL:
         x_range = (0, number_samples_window-1)
         y_range = (0, 65535) if not mode_util else (0, 100)
 
-        views = []
-        lines = []
+        views = [] #area inside canvas were data is displayed (one for each channel)
+        lines = [] #actual plotted signal for each channel
 
         for ch in range(channels):
             view = grid.add_view(row=ch, col=1, camera='panzoom')
             view.camera.set_range(x=x_range, y=y_range)
             views.append(view)
 
-            y_axis = scene.AxisWidget(orientation='left')
+            y_axis = scene.AxisWidget(orientation='left') 
             x_axis = scene.AxisWidget(orientation='bottom')
 
             grid.add_widget(y_axis, row=ch, col=0)
@@ -757,7 +774,7 @@ class ThreadLSL:
                     with self._lock:
                         self._exception.put(e)
 
-        def update_plot_canvas(events):
+        def update_plot_canvas(events): #updating the plot with the new data in the buffer
             nonlocal buffer_gpu
             nonlocal iteration_update
             if not self._event.is_set() and self._is_active:
@@ -785,7 +802,7 @@ class ThreadLSL:
                 status_text.text = "LSL: DEAD"
                 status_text.color = 'red'
 
-        def update_on_fps(fps):
+        def update_on_fps(fps): # monitoring whether the grph is actually updating and how fast (for debugging purposes)
             with self._lock:
                 self._thread_active[stim_idx] = fps > 0
             fps_text.text = f"FPS: {fps:.1f}"
@@ -800,4 +817,4 @@ class ThreadLSL:
             connect=update_plot_canvas,
             start=True
         )
-        app.run()
+        app.run() """
