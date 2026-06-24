@@ -78,7 +78,6 @@ def test_start_daq_can_publish_processed_lsl_without_internal_recording():
 
     dut.start_daq(
         sampling_rate=500.,
-        do_batch=True,
         do_record=False,
         do_process=True,
     )
@@ -98,7 +97,6 @@ def test_start_daq_can_publish_raw_lsl_without_internal_recording_or_processing(
 
     dut.start_daq(
         sampling_rate=500.,
-        do_batch=True,
         do_record=False,
         do_process=False,
     )

@@ -325,23 +325,22 @@ class DeviceAPI:
             ('index', 'u1'),
             ('timestamp', '<u8', (2,)),
             ('data', self.__daq_config.dtype_sample, self.__daq_config.data_shape),
-            ('crc', '<u2'),
+            #('crc', '<u2'),
             ('tail', 'u1')
         ])
 
     def _thread_read_batch(self) -> tuple[list[list], list[float]]:
         try:
             buffer = self.__device.read(self.__daq_config.num_bytes_total)
-            print(buffer)
+            print(f"Buffer length: {len(buffer)}")
             if not buffer:
                 raise Exception
             frames = np.frombuffer(buffer, dtype=self._package_daq_batch)[0]
             mask = (frames['head'], frames['tail']) == (self.__daq_config.head_cmd, self.__daq_config.tail_cmd)
             if mask:
                 self._check_package_loss(int(frames['index']))
-                if self.__daq_config.has_crc:
+                if self.__daq_config.has_crc and False:
                     self._check_crc(buffer, int(frames['crc']))
-                print(frames['timestamp'])
                 dt = (frames['timestamp'][1] - frames['timestamp'][0]) / (self.__daq_config.num_samples-1)
                 timestamps = [float(1e-6 * (frames['timestamp'][0] + dt*idx)) for idx in range(self.__daq_config.num_samples)]
                 data = frames['data'].tolist()
@@ -363,13 +362,16 @@ class DeviceAPI:
         """
         self.__num_package_loss = 0
         self._update_daq_sampling_rate(sampling_rate)
+    
+        #if user has not defined the channel layout, use the default layout from the DAQ characteristics
         self.__daq_config = self.get_daq_characteristics()
         if not self.__layout_labels:
             self.__layout_labels = [f"CH{idx}" for idx in range(self.__daq_config.num_channels)]
             self.__layout_channels = [idx for idx in range(self.__daq_config.num_channels)]
+        #number of channels,labels in layout must match number of channels in DAQ characteristics
         if not len(self.__layout_labels) == len(self.__layout_channels) == self.__daq_config.num_channels:
             raise ValueError(f"Number of channels in layout ({self.__daq_config.num_channels}) does not match number of channels in DAQ ({len(self.__layout_labels)})")
-
+        #source stream is always the raw data from the DAQ, output stream is either the raw data or the processed data
         stream_idx = 0
         source_stream = 'data'
         output_stream = source_stream
@@ -415,14 +417,25 @@ class DeviceAPI:
             path2data = get_path_to_project(new_folder=folder_name)
             self.__threads.register(func=self.__threads.lsl_record_stream, args=(stream_idx, [output_stream, 'util'], path2data))
             stream_idx += 1
-
+            
+        plot_args=None
         if do_plot:
-            self.__threads.register(func=self.__threads.lsl_plot_stream, args=(stream_idx, output_stream, window_sec))
-
+            plot_args=(stream_idx, output_stream, window_sec)
+        #starts the threads and the DAQ, if plotting is enabled, the plot thread will be started as well
         self.__device.timeout = 2 / self.__daq_config.sampling_rate
         self.__threads.start()
         self._write_without_feedback(Commands.START_DAQ)
+        if do_plot and plot_args is not None:
+            #start the plotting thread after the DAQ in the main thread to avoid blocking the LSL threads
+            self.__threads.lsl_plot_stream(*plot_args)
 
+
+            #self.__threads.start()
+            #self.__write_without_feedback(Commands.START_DAQ)
+
+            #self.__threads.register(func=self.__threads.lsl_plot_stream, args=(stream_idx, output_stream, window_sec))
+
+       
     def stop_daq(self) -> None:
         """Changing the state of the DAQ with stopping it
         :return:            None

@@ -11,10 +11,17 @@ if __name__ == "__main__":
         channel_layout=[0, 1],
         channel_names=["CH0", "CH1"],
     )
+    print("layout:", dut._DeviceAPI__layout_channels)
+    print("labels:", dut._DeviceAPI__layout_labels)
+
     dut.start_daq(
         sampling_rate=500.0,
-        do_plot=False,
+        do_plot=True,
+        do_process=False,
+        do_record=False,
         window_sec=4.0,
     )
-    dut.wait_daq(30)
-    dut.stop_daq()
+   # dut.wait_daq(30)
+   # dut.stop_daq()
+
+
