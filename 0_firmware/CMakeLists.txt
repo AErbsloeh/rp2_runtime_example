@@ -45,7 +45,6 @@ add_executable(main
     callbacks/rpc_callbacks.c
     #callbacks/fpga_callbacks.c
     src/init_system.c
-    src/testbench.c
     hardware_io.c
 )
 

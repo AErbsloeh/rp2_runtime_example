@@ -12,7 +12,6 @@
 #include "hal/transport/transport.h"
 
 #include "src/init_system.h"
-#include "src/testbench.h"
 
 extern system_state_t system_state;
 // ==================== PIN DEFINITION =====================
