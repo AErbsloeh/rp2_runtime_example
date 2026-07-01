@@ -104,7 +104,7 @@ void update_period_daq(char* buffer){
 }
 
 void set_batch_daq(char* buffer){
-    daq_config_raw.send_mode = (buffer[2] == 0x02);
+    daq_config_raw.send_mode = (buffer[2] & 0x03);
     daq_init_sampling(&tmr_daq0_hndl, &daq_config_raw);
 }
 
