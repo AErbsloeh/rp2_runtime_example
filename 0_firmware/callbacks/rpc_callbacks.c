@@ -40,7 +40,14 @@ void get_charac_system(void){
 }
 
 
-void get_charac_daq(void){
+void get_number_daq(void){
+    char buffer_send[2] = {GET_NUMBER_DAQ};
+    buffer_send[1] = 0x01;
+    transport_write(buffer_send, sizeof(buffer_send));   
+}
+
+
+void get_charac_daq(char* buffer){
     daq_data_t* data = &daq_config_raw;
     tmr_repeat_irq_t* timer = &tmr_daq0_hndl;
 
@@ -52,7 +59,7 @@ void get_charac_daq(void){
 
     char buffer_send[20] = {GET_CHARAC_DAQ};
     buffer_send[1] = (uint8_t)(data->packet_id);
-    buffer_send[2] = 0xFF;  // tail command
+    buffer_send[2] = (uint8_t)(data->packet_tail);
     buffer_send[3] = (uint8_t)(data->is_signed);
     buffer_send[4] = (uint8_t)(data->send_mode);
     buffer_send[5] = (uint8_t)(data->num_channels >> 0);
@@ -104,7 +111,7 @@ void update_period_daq(char* buffer){
 }
 
 void set_batch_daq(char* buffer){
-    daq_config_raw.send_mode = (buffer[2] & 0x03);
+    daq_config_raw.send_mode = (uint8_t)(buffer[2] & 0x03);
     daq_init_sampling(&tmr_daq0_hndl, &daq_config_raw);
 }
 
@@ -117,7 +124,8 @@ bool apply_rpc_callback(char* buffer, size_t length, bool ready){
             case ECHO:                  echo(buffer, length);                       break;
             case RESET:                 system_reset();                             break;
             case GET_SYSTEM_STATE:      get_charac_system();                        break;
-            case GET_CHARAC_DAQ:        get_charac_daq();                           break;   
+            case GET_NUMBER_DAQ:        get_number_daq();                           break;
+            case GET_CHARAC_DAQ:        get_charac_daq(buffer);                     break;   
             case ENABLE_LED:            enable_led();                               break;
             case DISABLE_LED:           disable_led();                              break;
             case TOGGLE_LED:            toggle_led();                               break;

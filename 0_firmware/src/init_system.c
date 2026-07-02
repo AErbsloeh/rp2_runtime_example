@@ -35,12 +35,13 @@ bool init_gpio_pico(bool block_com){
     gpio_set_slew_rate(BUTTON_BOARD, GPIO_SLEW_RATE_SLOW);
     gpio_set_irq_enabled_with_callback(BUTTON_BOARD, GPIO_IRQ_EDGE_FALL, true, &irq_gpio_callbacks);*/
 
-    sleep_ms(1000);
+    sleep_ms(1);
     return true;
 }
 
 
 bool init_system(void){
+    #define NUMBER_INIT_DEVICES 2
     uint8_t num_init_done = 0;
 	
 	// --- Internal ADC
@@ -51,8 +52,8 @@ bool init_system(void){
         num_init_done++;
 
     // --- Blocking Routine if init is not completed
-    sleep_ms(10);
-    if(num_init_done == 2){
+    sleep_ms(1);
+    if(num_init_done == NUMBER_INIT_DEVICES){
         set_system_state(STATE_IDLE);
         return true;
     } else {

@@ -22,14 +22,15 @@ class Commands(IntEnum):
     ECHO = 0x00
     RESET = 0x01
     GET_CHARAC_STATE = 0x02
-    GET_CHARAC_DAQ = 0x03
-    ENABLE_LED = 0x04
-    DISABLE_LED = 0x05
-    TOGGLE_LED = 0x06
-    START_DAQ = 0x07
-    STOP_DAQ = 0x08
-    SET_PERIOD_DAQ = 0x09
-    SET_BATCH_DAQ = 0x0A
+    GET_NUMBER_DAQ = 0x03
+    GET_CHARAC_DAQ = 0x04
+    ENABLE_LED = 0x05
+    DISABLE_LED = 0x06
+    TOGGLE_LED = 0x07
+    START_DAQ = 0x08
+    STOP_DAQ = 0x09
+    SET_PERIOD_DAQ = 0x0A
+    SET_BATCH_DAQ = 0x0B
 
 
 class DeviceAPI:
@@ -44,6 +45,7 @@ class DeviceAPI:
     __num_package_loss: int = 0
     __layout_channels: list[int] = list()
     __layout_labels: list[str] = list()
+    _num_daq_tasks: int = 0
     _pin_names: list[str] = ["LED_USER"]
     _state_names: list[str] = ["ERROR", "RESET", "INIT", "IDLE", "TEST", "DAQ"]
 
@@ -153,7 +155,7 @@ class DeviceAPI:
             self.stop_daq()
         self._write_without_feedback(Commands.RESET)
         self.close()
-        sleep(4)
+        sleep(1)
 
     def echo(self, data: str) -> str:
         """Sending some characters to the device and returning the result
@@ -239,12 +241,14 @@ class DeviceAPI:
             )
         self._write_without_feedback(Commands.SET_PERIOD_DAQ, int(sampling_rate))
 
-    def _enable_batch_daq(self, use_batches: bool = True) -> None:
+    def _enable_batch_daq(self, process_mode: int = 0) -> None:
         """Enabling or disabling the batch transmission mode of the DAQ
-        :param use_batches:     Boolean with True for enabling batch mode otherwise sample-wise
+        :param process_mode:    Integer for selecting the processing mode (0: sample, 1: batch, 2: ping-pong batch)
         :return:                None
         """
-        self._write_without_feedback(Commands.SET_BATCH_DAQ, int(use_batches))
+        if not process_mode in range(0, 3):
+            raise ValueError("Not the right mode")
+        self._write_without_feedback(Commands.SET_BATCH_DAQ, data=process_mode)
 
     def _check_package_loss(self, new_idx: int) -> None:
         if 1 < new_idx - self.__last_idx < 255:
@@ -259,6 +263,11 @@ class DeviceAPI:
         if not state:
             raise RuntimeError("CRC check failed.")
         return state
+
+    def _get_number_daq_tasks(self) -> int:
+        ret = self._write_with_feedback(Commands.GET_NUMBER_DAQ, data=0, size=2)
+        self._num_daq_tasks = self._bytes_to_int(ret, signed=False)
+        return self._num_daq_tasks
 
     @property
     def _package_daq_config(self) -> np.dtype:
@@ -276,11 +285,14 @@ class DeviceAPI:
             ]
         )
 
-    def get_daq_characteristics(self) -> DataAcquisitionConfig:
+    def get_daq_characteristics(self, sel_daq_tasks: int=0) -> DataAcquisitionConfig:
         """Get number of channels for acquiring data
-        :return:    Integer with number of DAQ channels
+        :param sel_daq_tasks:   Integer with number of task config to acquire
+        :return:                Integer with number of DAQ channels
         """
-        ret = self._write_with_feedback(Commands.GET_CHARAC_DAQ, size=20)
+        if not sel_daq_tasks in range(self._num_daq_tasks):
+            raise ValueError(f"Integer with selected DAQ task is out-of-range [0, {self._num_daq_tasks})")
+        ret = self._write_with_feedback(Commands.GET_CHARAC_DAQ, data=sel_daq_tasks, size=20)
         frame = np.frombuffer(ret, dtype=self._package_daq_config)[0]
         return DataAcquisitionConfig(
             head_cmd=int(frame["head"]),
@@ -345,7 +357,6 @@ class DeviceAPI:
     def _thread_read_batch(self) -> tuple[list[list], list[float]]:
         try:
             buffer = self.__device.read(self.__daq_config.num_bytes_total)
-            print(buffer)
             if not buffer:
                 raise Exception
             frames = np.frombuffer(buffer, dtype=self._package_daq_batch)[0]
@@ -357,7 +368,6 @@ class DeviceAPI:
                 self._check_package_loss(int(frames["index"]))
                 if self.__daq_config.has_crc:
                     self._check_crc(buffer, int(frames["crc"]))
-                print(frames["timestamp"])
                 dt = (frames["timestamp"][1] - frames["timestamp"][0]) / (
                     self.__daq_config.num_samples - 1
                 )
@@ -392,7 +402,8 @@ class DeviceAPI:
         """
         self.__num_package_loss = 0
         self._update_daq_sampling_rate(sampling_rate)
-        self.__daq_config = self.get_daq_characteristics()
+        num_daq_task = self._get_number_daq_tasks()
+        self.__daq_config = self.get_daq_characteristics(num_daq_task-1)
         if not self.__layout_labels:
             self.__layout_labels = [f"CH{idx}" for idx in range(self.__daq_config.num_channels)]
             self.__layout_channels = [idx for idx in range(self.__daq_config.num_channels)]

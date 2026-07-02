@@ -9,6 +9,7 @@ typedef enum {
     ECHO = 0,
     RESET,
     GET_SYSTEM_STATE,
+    GET_NUMBER_DAQ,
     GET_CHARAC_DAQ,
     ENABLE_LED,
     DISABLE_LED,

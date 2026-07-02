@@ -49,6 +49,7 @@ fifo_t a = {};
 fifo_t b = {};
 daq_data_t daq_config_raw = {
     .packet_id = 0xA0,
+    .packet_tail = 0xFF,
     .iteration = 0,
     .runtime_first = 0,
     .runtime_last = 0,

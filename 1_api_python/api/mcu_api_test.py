@@ -15,7 +15,6 @@ def dut():
     mcu_api = DeviceAPI(com_name="AUTOCOM")
     mcu_api.open()
     yield mcu_api
-    mcu_api.do_reset()
     path = get_path_to_project("temp_data")
     rmtree(path, ignore_errors=True)
 
@@ -97,24 +96,36 @@ def test_toggle_led(dut: DeviceAPI):
 
 
 @pytest.mark.hardware
-def test_control_daq_sample(dut: DeviceAPI):
+@pytest.mark.order(-2)
+def test_run_daq_sample(dut: DeviceAPI):
+    DeviceAPI().do_reset()
+    dut = DeviceAPI()
     assert dut.get_state().system == "IDLE"
 
     dut._enable_batch_daq(False)
-    dut.start_daq(sampling_rate=1.0, folder_name="temp_data")
+    dut.start_daq(sampling_rate=10.0, folder_name="temp_data")
     sleep(1.0)
     dut.stop_daq()
 
 
 @pytest.mark.hardware
-def test_control_daq_batch(dut: DeviceAPI):
+@pytest.mark.order(-1)
+def test_run_daq_batch(dut: DeviceAPI):
+    DeviceAPI().do_reset()
+    dut = DeviceAPI()
     assert dut.get_state().system == "IDLE"
 
     dut._enable_batch_daq(True)
-    dut.start_daq(sampling_rate=1.0, folder_name="temp_data")
+    dut.start_daq(sampling_rate=100.0, folder_name="temp_data")
     sleep(1.0)
     assert dut.is_daq_running
     dut.stop_daq()
+
+
+@pytest.mark.hardware
+def test_get_number_daq_tasks(dut: DeviceAPI):
+    num = dut._get_number_daq_tasks()
+    assert num == 1
 
 
 @pytest.mark.hardware
