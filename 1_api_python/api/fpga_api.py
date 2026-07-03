@@ -1,33 +1,12 @@
-from enum import IntEnum
 from logging import Logger, getLogger
 from time import sleep
 
 import numpy as np
 from tqdm import tqdm
 
-from api.mcu_api import Commands as CmdsBasic
-from api.mcu_api import DeviceAPI
-from api.src._helper import FlashInfos
-
-
-class Commands(IntEnum):
-    FLASH_INIT = len(CmdsBasic) + 0x00
-    FLASH_GET_INFOS = len(CmdsBasic) + 0x01
-    FLASH_START_ERASE_ALL = len(CmdsBasic) + 0x02
-    FLASH_START_ERASE_SEC = len(CmdsBasic) + 0x03
-    FLASH_CHECK_ERASE = len(CmdsBasic) + 0x04
-    FLASH_SET_ADDR_UPPER = len(CmdsBasic) + 0x05
-    FLASH_SET_ADDR_LOWER = len(CmdsBasic) + 0x06
-    FLASH_GET_ADDR = len(CmdsBasic) + 0x07
-    FLASH_READ_DATA = len(CmdsBasic) + 0x08
-    FLASH_WRITE_BUFFER = len(CmdsBasic) + 0x09
-    FLASH_WRITE_DATA = len(CmdsBasic) + 0x0A
-    FPGA_INIT = len(CmdsBasic) + 0x0B
-    FPGA_POWER_STATE = len(CmdsBasic) + 0x0C
-    FPGA_PROGRAM_STATE = len(CmdsBasic) + 0x0D
-    FPGA_PROGRAM_CYCLE = len(CmdsBasic) + 0x0E
-    FPGA_LOGIC_RESET = len(CmdsBasic) + 0x0F
-    FPGA_TOGGLE_LED = len(CmdsBasic) + 0x10
+from .definitions import CommandsFPGA as Commands
+from .mcu_api import DeviceAPI
+from .src._helper import FlashInfos
 
 
 class FlashFPGA(DeviceAPI):
@@ -45,7 +24,7 @@ class FlashFPGA(DeviceAPI):
 
         self.__init_flash()
         self.__init_fpga()
-        self.set_power_state(False)
+        self.set_fpga_power_state(False)
         self.fpga_set_program_state(True)
 
     def __init_flash(self):
@@ -57,14 +36,6 @@ class FlashFPGA(DeviceAPI):
         ret = self._write_with_feedback(Commands.FPGA_INIT)
         if ret[1] != 1:
             raise ValueError("Initialization of FPGA failed!")
-
-    def set_power_state(self, state: bool) -> None:
-        """Setting the power state of the FPGA
-        :param state:    Boolean value with the state of the FPGA (true = enabled, false = disabled)
-        :return:        None
-        """
-        self._write_without_feedback(Commands.FPGA_POWER_STATE, int(state))
-        sleep(0.5)
 
     @property
     def _package_flash_info(self) -> np.dtype:
@@ -224,7 +195,7 @@ class FlashFPGA(DeviceAPI):
         if len(bitstream_chunks) > sets.num_pages:
             raise ValueError("Bitstream is too long!")
 
-        self.set_power_state(False)
+        self.set_fpga_power_state(False)
         self.fpga_set_program_state(True)
         if "PROGB" in self.get_state().pins:
             raise ValueError("FPGA is not in init mode!")
@@ -272,6 +243,14 @@ class FlashFPGA(DeviceAPI):
         """
         self._write_without_feedback(Commands.FPGA_PROGRAM_CYCLE, 0)
         sleep(2)
+
+    def set_fpga_power_state(self, state: bool) -> None:
+        """Setting the power state of the FPGA
+        :param state:    Boolean value with the state of the FPGA (true = enabled, false = disabled)
+        :return:        None
+        """
+        self._write_without_feedback(Commands.FPGA_POWER_STATE, int(state))
+        sleep(0.5)
 
     def fpga_do_logic_reset(self, num_iterations: int = 1) -> None:
         """Do logic reset of the FPGA content

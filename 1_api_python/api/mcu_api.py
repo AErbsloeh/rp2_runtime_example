@@ -1,9 +1,9 @@
-from enum import IntEnum
 from logging import Logger, getLogger
 from time import sleep
 
 import numpy as np
 
+from .definitions import Commands
 from .src._helper import (
     DataAcquisitionConfig,
     SystemState,
@@ -16,21 +16,6 @@ from .src._helper import (
 from .src._interface_serial import InterfaceSerial, get_comport_name
 from .src._interface_wifi import InterfaceWifi
 from .src._lsl import ThreadLSL
-
-
-class Commands(IntEnum):
-    ECHO = 0x00
-    RESET = 0x01
-    GET_CHARAC_STATE = 0x02
-    GET_NUMBER_DAQ = 0x03
-    GET_CHARAC_DAQ = 0x04
-    ENABLE_LED = 0x05
-    DISABLE_LED = 0x06
-    TOGGLE_LED = 0x07
-    START_DAQ = 0x08
-    STOP_DAQ = 0x09
-    SET_PERIOD_DAQ = 0x0A
-    SET_BATCH_DAQ = 0x0B
 
 
 class DeviceAPI:

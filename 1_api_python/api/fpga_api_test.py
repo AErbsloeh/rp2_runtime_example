@@ -34,13 +34,13 @@ def test_check_echo(dut: FlashFPGA):
 
 @pytest.mark.hardware
 def test_check_power_state(dut: FlashFPGA):
-    dut.set_power_state(False)
+    dut.set_fpga_power_state(False)
     assert "FPGA_PWR_EN" not in dut.get_state().pins
 
-    dut.set_power_state(True)
+    dut.set_fpga_power_state(True)
     assert "FPGA_PWR_EN" in dut.get_state().pins
 
-    dut.set_power_state(False)
+    dut.set_fpga_power_state(False)
     assert "FPGA_PWR_EN" not in dut.get_state().pins
 
 

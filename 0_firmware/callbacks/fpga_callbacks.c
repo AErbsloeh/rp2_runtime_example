@@ -172,7 +172,7 @@ void fpga_logic_data_transmission(char* buffer){
     
     fpga_spi_send_data(fpga_config, data_toggle_led, data_rx0);
 
-    char buffer_send[1 + sizeof(data_rx0)] = {FPGA_LOGIC_RXTX};
+    char buffer_send[1 + sizeof(data_rx0)] = {FPGA_TOGGLE_LED};
     for(size_t idx = 0; idx < sizeof(data_rx0); idx++){
         buffer_send[1 + idx] = (uint8_t)(data_rx0[idx]);
     }
@@ -201,7 +201,7 @@ bool apply_fpga_callback(char* buffer, size_t length, bool ready){
             case FPGA_PROGRAM_STATE:    fpga_set_program_state(buffer);             break;
             case FPGA_PROGRAM_CYCLE:    fpga_program_do_cycle();                    break;
             case FPGA_LOGIC_RESET:      fpga_logic_do_reset(buffer);                break;
-            case FPGA_LOGIC_RXTX:       fpga_logic_data_transmission(buffer);       break;
+            case FPGA_TOGGLE_LED:       fpga_logic_data_transmission(buffer);       break;
             default:                    valid_state = false;                        break;        
         }  
     }

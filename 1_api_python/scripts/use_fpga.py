@@ -28,7 +28,7 @@ if __name__ == "__main__":
         if not dut.check_bitstream_from_flash(bitstream, 0):
             raise ValueError("Bitstream is not equal to the content of the FPGA flash!")
 
-    dut.set_power_state(True)
+    dut.set_fpga_power_state(True)
     dut.fpga_do_program_reset()
     sleep(2)
     dut.fpga_do_logic_reset()
