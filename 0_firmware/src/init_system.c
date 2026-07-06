@@ -94,6 +94,10 @@ bool set_system_state(system_state_t new_state){
                 set_state_default_led(false);
                 valid_state = true;
                 break;
+            case STATE_FLASH:
+                set_state_default_led(false);
+                valid_state = true;
+                break;     
             case STATE_ERASE_FLASH:
                 set_state_default_led(false);
                 valid_state = true;
