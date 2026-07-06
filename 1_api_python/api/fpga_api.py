@@ -20,7 +20,7 @@ class FlashFPGA(DeviceAPI):
         super().__init__(com_name, timeout)
         self.__logger = getLogger(__name__)
         self.extend_pins_list(["FPGA_PWR_EN", "FPGA_PROGB", "FPGA_RSTN"])
-        self.extend_states_list(["ERASE_FLASH"])
+        self.extend_states_list(["FLASHING", "ERASE_FLASH"])
 
         self.__init_flash()
         self.__init_fpga()
