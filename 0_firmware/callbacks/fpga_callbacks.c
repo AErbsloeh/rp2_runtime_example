@@ -16,6 +16,10 @@ void flash_init_phase(void){
     if(fpga_program_init(flash_config)){
         state = fpga_program_do(flash_config, true);
     }
+    gpio_init(FPGA_EN_POWER_GPIO);
+    gpio_set_dir(FPGA_EN_POWER_GPIO, GPIO_OUT);
+    gpio_put(FPGA_EN_POWER_GPIO, true);
+    state &= fpga_logic_init(fpga_config);
 
     char buffer_send[3] = {FLASH_INIT};
     buffer_send[1] = 0x00;
@@ -126,20 +130,6 @@ void write_buffer_into_flash(void){
 }
 
 
-void fpga_init_phase(void){
-    gpio_init(FPGA_EN_POWER_GPIO);
-    gpio_set_dir(FPGA_EN_POWER_GPIO, GPIO_OUT);
-    gpio_put(FPGA_EN_POWER_GPIO, true);
-
-    bool state = fpga_logic_init(fpga_config);
-
-    char buffer_send[3] = {FPGA_INIT};
-    buffer_send[1] = 0x00;
-    buffer_send[2] = (uint8_t)(state);
-    transport_write(buffer_send, sizeof(buffer_send));
-}
-
-
 void fpga_set_program_state(char* buffer){
     bool state = (buffer[2] == 0x01);
     fpga_program_do(flash_config, state);
@@ -193,7 +183,6 @@ bool apply_fpga_callback(transport_rx_buffer_t *data){
             case FLASH_READ_DATA:       read_flash_data();                          break;
             case FLASH_WRITE_BUFFER:    write_data_into_flash_buffer(buffer);       break;
             case FLASH_WRITE_DATA:      write_buffer_into_flash();                  break;
-            case FPGA_INIT:             fpga_init_phase();                          break;
             case FPGA_PROGRAM_STATE:    fpga_set_program_state(buffer);             break;
             case FPGA_PROGRAM_CYCLE:    fpga_program_do_cycle();                    break;
             case FPGA_LOGIC_RESET:      fpga_logic_do_reset(buffer);                break;

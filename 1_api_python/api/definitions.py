@@ -28,9 +28,8 @@ class CommandsFPGA(IntEnum):
     FLASH_READ_DATA = len(Commands) + 0x08
     FLASH_WRITE_BUFFER = len(Commands) + 0x09
     FLASH_WRITE_DATA = len(Commands) + 0x0A
-    FPGA_INIT = len(Commands) + 0x0B
-    FPGA_PROGRAM_STATE = len(Commands) + 0x0C
-    FPGA_PROGRAM_CYCLE = len(Commands) + 0x0D
-    FPGA_POWER_STATE = len(Commands) + 0x0E
-    FPGA_LOGIC_RESET = len(Commands) + 0x0F
-    FPGA_TOGGLE_LED = len(Commands) + 0x10
+    FPGA_PROGRAM_STATE = len(Commands) + 0x0B
+    FPGA_PROGRAM_CYCLE = len(Commands) + 0x0C
+    FPGA_POWER_STATE = len(Commands) + 0x0D
+    FPGA_LOGIC_RESET = len(Commands) + 0x0E
+    FPGA_TOGGLE_LED = len(Commands) + 0x0F
