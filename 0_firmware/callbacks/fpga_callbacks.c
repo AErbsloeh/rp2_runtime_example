@@ -3,13 +3,12 @@
 #include "version.h"
 
 #include "peri/fpga/flash.h"
-#include "peri/fpga/fpga_spi.h"
-#include "peri/fpga/fpga_config.h"
+#include "peri/fpga/logic.h"
 
 
 // ======================== FLASH / FPGA CMDS ==========================
-static flash_fpga_t *flash_config = &flash_env5;
-static fpga_spi_t *fpga_config = &fpga_env5;
+static fpga_flash_t *flash_config = &flash_env5;
+static fpga_logic_t *fpga_config = &fpga_env5;
 
 
 void flash_init_phase(void){
@@ -132,7 +131,7 @@ void fpga_init_phase(void){
     gpio_set_dir(FPGA_EN_POWER_GPIO, GPIO_OUT);
     gpio_put(FPGA_EN_POWER_GPIO, true);
 
-    bool state = fpga_spi_init(fpga_config);
+    bool state = fpga_logic_init(fpga_config);
 
     char buffer_send[3] = {FPGA_INIT};
     buffer_send[1] = 0x00;
@@ -159,7 +158,7 @@ void fpga_set_power_state(char* buffer){
 
 
 void fpga_logic_do_reset(char* buffer){
-    fpga_spi_reset_cycle(fpga_config, buffer[2]);
+    fpga_logic_reset_cycle(fpga_config, buffer[2]);
 }
 
 
@@ -167,7 +166,7 @@ void fpga_logic_data_transmission(char* buffer){
     uint8_t data_rx0[3] = {0};
     uint8_t data_toggle_led[3] = {0x08, 0x00, 0x00};
     
-    fpga_spi_send_data(fpga_config, data_toggle_led, data_rx0);
+    fpga_logic_send_data(fpga_config, data_toggle_led, data_rx0);
 
     char buffer_send[1 + sizeof(data_rx0)] = {FPGA_TOGGLE_LED};
     for(size_t idx = 0; idx < sizeof(data_rx0); idx++){
@@ -195,11 +194,11 @@ bool apply_fpga_callback(transport_rx_buffer_t *data){
             case FLASH_WRITE_BUFFER:    write_data_into_flash_buffer(buffer);       break;
             case FLASH_WRITE_DATA:      write_buffer_into_flash();                  break;
             case FPGA_INIT:             fpga_init_phase();                          break;
-            case FPGA_POWER_STATE:      fpga_set_power_state(buffer);               break;
             case FPGA_PROGRAM_STATE:    fpga_set_program_state(buffer);             break;
             case FPGA_PROGRAM_CYCLE:    fpga_program_do_cycle();                    break;
             case FPGA_LOGIC_RESET:      fpga_logic_do_reset(buffer);                break;
             case FPGA_TOGGLE_LED:       fpga_logic_data_transmission(buffer);       break;
+            case FPGA_POWER_STATE:      fpga_set_power_state(buffer);               break;
             default:                    valid_state = false;                        break;        
         }  
         data->ready = false;

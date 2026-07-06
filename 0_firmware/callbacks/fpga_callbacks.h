@@ -21,9 +21,9 @@ typedef enum {
     FPGA_INIT,
     FPGA_PROGRAM_STATE,
     FPGA_PROGRAM_CYCLE,
-    FPGA_POWER_STATE,
     FPGA_LOGIC_RESET,
     FPGA_TOGGLE_LED,
+    FPGA_POWER_STATE,
 } fpga_cmd_t;
 
 

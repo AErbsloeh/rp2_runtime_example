@@ -25,7 +25,7 @@ int main(){
         transport_poll_rx(&rx_buffer);
         valid_rpc &= apply_rpc_callback(&rx_buffer);
         #ifdef ADD_FPGA_SUPPORT
-            valid_rpc &= apply_fpga_callback(&rx_buffer);
+            //valid_rpc &= apply_fpga_callback(&rx_buffer);
         #endif
         if (!valid_rpc){
             set_system_state(STATE_ERROR);
