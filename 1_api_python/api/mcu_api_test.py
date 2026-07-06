@@ -103,7 +103,7 @@ def test_run_daq_sample(dut: DeviceAPI):
     assert dut.get_state().system == "IDLE"
 
     dut._enable_batch_daq(False)
-    dut.start_daq(sampling_rate=10.0, folder_name="temp_data")
+    dut.start_daq(sampling_rate=100.0, folder_name="temp_data")
     sleep(1.0)
     dut.stop_daq()
 
@@ -116,7 +116,7 @@ def test_run_daq_batch(dut: DeviceAPI):
     assert dut.get_state().system == "IDLE"
 
     dut._enable_batch_daq(True)
-    dut.start_daq(sampling_rate=100.0, folder_name="temp_data")
+    dut.start_daq(sampling_rate=500.0, folder_name="temp_data")
     sleep(1.0)
     assert dut.is_daq_running
     dut.stop_daq()

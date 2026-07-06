@@ -17,6 +17,7 @@ extern system_state_t system_state;
 // ==================== PIN DEFINITION =====================
 #define BUTTON_BOARD        11
 #define LED_DEFAULT         25
+#define FPGA_EN_POWER_GPIO  23
 
 // ==================== I2C DEFINITION =====================
 //extern i2c_rp2_t i2c_mod;

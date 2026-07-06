@@ -23,7 +23,7 @@ if (EXISTS ${picoVscode})
     include(${picoVscode})
 endif()
 # ===================================================================================
-set(PICO_BOARD pico2_w CACHE STRING "Board type")
+set(PICO_BOARD pico CACHE STRING "Board type")
 option(USE_LOCAL_RUNTIME_LIBRARY "Use local rp2_runtime_library" OFF)
 set(PROGRAM_VERSION "0.1")
 
@@ -43,7 +43,7 @@ add_executable(main
     main.c 
     callbacks/gpio_callbacks.c
     callbacks/rpc_callbacks.c
-    #callbacks/fpga_callbacks.c
+    callbacks/fpga_callbacks.c
     src/init_system.c
     hardware_io.c
 )
@@ -152,6 +152,10 @@ if("hal_btspp" IN_LIST LINK_LIBS)
     set(PICO_BTSTACK_ENABLED ON CACHE BOOL "Enable Bluetooth SPP HAL library" FORCE)
 else()
     set(PICO_BTSTACK_ENABLED OFF CACHE BOOL "Disable Bluetooth SPP HAL library" FORCE)
+endif()
+
+if(("peri_fpga_spi" IN_LIST LINK_LIBS) OR ("peri_fpga_flash" IN_LIST LINK_LIBS))
+    add_definitions(-DADD_FPGA_SUPPORT)
 endif()
 
 if(TRANSPORT_BACKEND STREQUAL "wifi" OR "hal_wifi_tcp" IN_LIST LINK_LIBS OR "hal_transport_wifi" IN_LIST LINK_LIBS)

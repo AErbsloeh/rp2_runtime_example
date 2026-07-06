@@ -29,12 +29,10 @@ typedef enum {
 
 
 /*! \brief Function for processing the Remote Procedure Calls (RPC) with buffer content from an interface
-* \param buffer    Char array with content to handle 
-* \param length    Length of the char array
-* \param ready     Flag indicating if the buffer is ready to be processed
-* \return          True if a valid RPC command was found and processed, false otherwise  
+* \param data       Pointer to the transport RX data buffer
+* \return           True if a valid RPC command was found and processed, false otherwise  
 */
-bool apply_fpga_callback(char* buffer, size_t length, bool ready);
+bool apply_fpga_callback(transport_rx_buffer_t *data);
 
 
 #endif

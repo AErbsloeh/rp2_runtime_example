@@ -1,6 +1,8 @@
 #include "hardware_io.h"
 #include "callbacks/rpc_callbacks.h"
-// #include "callbacks/fpga_callbacks.h"
+#ifdef ADD_FPGA_SUPPORT
+    #include "callbacks/fpga_callbacks.h"
+#endif
 #ifdef ADD_CYW43_SUPPORT
     #include "pico/cyw43_arch.h"
 #endif
@@ -21,8 +23,10 @@ int main(){
     while (true){
         // --- USB Protocol Handling ---
         transport_poll_rx(&rx_buffer);
-        valid_rpc &= apply_rpc_callback(rx_buffer.data, rx_buffer.length, rx_buffer.ready);
-        // valid_rpc &= apply_fpga_callback(rx_buffer.data, rx_buffer.length, rx_buffer.ready);
+        valid_rpc &= apply_rpc_callback(&rx_buffer);
+        #ifdef ADD_FPGA_SUPPORT
+            valid_rpc &= apply_fpga_callback(&rx_buffer);
+        #endif
         if (!valid_rpc){
             set_system_state(STATE_ERROR);
         }

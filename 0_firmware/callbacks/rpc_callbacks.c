@@ -117,11 +117,12 @@ void set_batch_daq(char* buffer){
 
 
 // ======================== CALLABLE FUNCS ==========================
-bool apply_rpc_callback(char* buffer, size_t length, bool ready){    
+bool apply_rpc_callback(transport_rx_buffer_t *data){    
     bool valid_state = true;
-    if(ready){
+    if((data->ready) && (data->data[0] < USB_CMD_COUNT)){
+        char *buffer = data->data;
         switch(buffer[0]){
-            case ECHO:                  echo(buffer, length);                       break;
+            case ECHO:                  echo(buffer, data->length);                 break;
             case RESET:                 system_reset();                             break;
             case GET_SYSTEM_STATE:      get_charac_system();                        break;
             case GET_NUMBER_DAQ:        get_number_daq();                           break;
@@ -135,6 +136,7 @@ bool apply_rpc_callback(char* buffer, size_t length, bool ready){
             case SET_BATCH_DAQ:         set_batch_daq(buffer);                      break;
             default:                    valid_state = false;                        break;        
         }  
+        data->ready = false;
     }
     return valid_state;
 }

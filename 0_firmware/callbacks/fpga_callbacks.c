@@ -8,9 +8,6 @@
 
 
 // ======================== FLASH / FPGA CMDS ==========================
-#define FPGA_EN_POWER_GPIO 23
-
-
 static flash_fpga_t *flash_config = &flash_env5;
 static fpga_spi_t *fpga_config = &fpga_env5;
 
@@ -181,9 +178,10 @@ void fpga_logic_data_transmission(char* buffer){
 
 
 // ======================== CALLABLE FUNCS ==========================
-bool apply_fpga_callback(char* buffer, size_t length, bool ready){    
+bool apply_fpga_callback(transport_rx_buffer_t *data){    
     bool valid_state = true;
-    if(ready){
+    if((data->ready) && (data->data[0] >= USB_CMD_COUNT)){
+        char *buffer = data->data;
         switch(buffer[0]){
             case FLASH_INIT:            flash_init_phase();                         break;
             case FLASH_INFOS:           get_flash_infos();                          break;
@@ -204,6 +202,7 @@ bool apply_fpga_callback(char* buffer, size_t length, bool ready){
             case FPGA_TOGGLE_LED:       fpga_logic_data_transmission(buffer);       break;
             default:                    valid_state = false;                        break;        
         }  
+        data->ready = false;
     }
     return valid_state;
 }
