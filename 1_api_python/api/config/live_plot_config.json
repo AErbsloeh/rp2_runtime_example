@@ -1,0 +1,43 @@
+
+
+{
+  "display_mode": "filtered",
+  "grid_layout":[
+    [1, 2, 3, 4],
+    [5,0, 0, 8]
+  ],
+  "channels": [
+    {
+      "channel_number": 1,
+      "name": "Channel 1",
+      "enabled": false,
+      "lsl_layer_name": "GeneratedData",
+      "window_width_sec": 5,
+      "curve_color": "r"
+    },
+    {
+      "channel_number": 2,
+      "name": "Motor Left",
+      "enabled": true,
+      "lsl_layer_name": "GeneratedData",
+      "window_width_sec": 5,
+      "curve_color": "g"
+    },
+    {
+      "channel_number": 3,
+      "name": "Channel 3",
+      "enabled": true,
+      "lsl_layer_name": "GeneratedData",
+      "window_width_sec": 5,
+      "curve_color": "b"
+    },
+    {
+      "channel_number": 4,
+      "name": "Motor Right",
+      "enabled": false,
+      "lsl_layer_name": "GeneratedData",
+      "window_width_sec": 5,
+      "curve_color": "y"
+    }
+  ]
+}

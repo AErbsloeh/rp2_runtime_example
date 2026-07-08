@@ -1,5 +1,7 @@
+from logging import config
+
 import numpy as np
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
 from pylsl import StreamInlet, resolve_bypred, proc_threadsafe, local_clock
@@ -14,6 +16,9 @@ class LivePlotterChannelConfig: # Describes what should be plotted for each chan
         lsl_layer_name (str): Name of the LSL stream layer to connect to
         curve_color (str, optional): Color of the curve in the plot. Defaults to None.
         value_translation_func (callable, optional): Function to translate raw data values. Defaults to None.
+        enabled (bool, optional): Whether the channel is enabled for visualization. Defaults to True.
+        grid_row (int, optional): Row position of the plot in the grid display mode. Defaults to None
+        grid_col (int, optional): Column position of the plot in the grid display mode. Defaults to None
     """
     name: str
     visualized_channel: int
@@ -21,24 +26,61 @@ class LivePlotterChannelConfig: # Describes what should be plotted for each chan
     window_width_sec: float
     curve_color: str ='b'
     value_translation_func: callable =None
+    enabled: bool =True  
+    grid_row: int =None
+    grid_col: int =None
 
+@dataclass
+class PlotSessionConfig: # Wraps the full plot session:which display mode to use, how many rows and columns in the grid, and which channels to visualize
+    """Configuration dataclass for the live plot session
+    Attributes:
+        display_mode (str):"filtered" (only enabled channels get a grid slot) or "grid" (all channels get a grid slot, disabled channels are empty)
+        channels (list[LivePlotterChannelConfig]): List of channel configurations to be visualized
+    """
+    display_mode: str 
+    channels: list[LivePlotterChannelConfig]= field(default_factory=list) # List of channel configurations to be visualized(whether they are enabled or not)
+   
 
 class LivePlotter: # actually connects data from LSL stream to the plot and updates it in real time
-    def __init__(self, config: LivePlotterChannelConfig):
-        self._translation_func = [i.value_translation_func for i in config]
-        self._inlet = self._search_lsl_stream_and_connect([i.lsl_layer_name for i in config])
+    def __init__(self, config: PlotSessionConfig):
+        channels=config.channels # retrieve the list of channel configurations from the PlotSessionConfig object
+        self._display_mode = config.display_mode # retrieve the display mode from the PlotSessionConfig object
+
+        self._translation_func = [i.value_translation_func for i in channels]
+        self._inlet = self._search_lsl_stream_and_connect([i.lsl_layer_name for i in channels])
         self._fs = self._get_stream_samplingrate() if self._get_stream_samplingrate() >0 else 250
-        self._visualized_channel = [i.visualized_channel for i in config]
+        self._visualized_channel = [i.visualized_channel for i in channels]
+        self._grid_positions = [(i.grid_row, i.grid_col) for i in channels] #store the grid positions for each channel, which will be used to determine where to place the plots in the grid layout
 
-        self.max_samples = int(self._fs * config.window_width_sec) if type(config) == LivePlotterChannelConfig else int(self._fs * config[0].window_width_sec)#maximum number of samples to store in the circular buffer for each stream
+        self.max_samples = int(self._fs * channels[0].window_width_sec) # calculate the maximum number of samples to store in the circular buffer based on the sampling rate and window width specified in the first channel configuration
 
-        self.data_buffers = [np.zeros(self.max_samples) for _ in config]#store the date from the LSL stream in a circular buffer for each stream, initialized to zeros with a length of max_samples
-        self.time_buffers = [np.zeros(self.max_samples) for _ in config]
-        self.write_pointers = [0 for _ in self._inlet] #Pointer to keep track of where to write new data in the circular buffer for each stream
+        self.data_buffers = [np.zeros(self.max_samples) for _ in channels]#creates one buffer foir each channel, initialized to zeros with a length of max_samples
+        self.time_buffers = [np.zeros(self.max_samples) for _ in channels]
+        self.write_pointers = [0 for _ in self._inlet] #Pointer to keep track of where to write new data in the circular buffer for each channel
         self.caluclate_counter = 0 #Counter to control how often the frequency calculation is performed (to reduce computational load)
+        self._enabled = [i.enabled for i in channels] #for each channel, store whether it is enabled or not, so that the plotter can skip disabled channels during updates
 
-        self._app, self._win, self._plot_item, self._curves, self._freq_labels =self._init_plot([i.curve_color for i in config], [i.name for i in config])
+        self._app, self._win, self._plot_items, self._curves, self._freq_labels, self._curve_source_indices =self._init_plot([i.curve_color for i in channels], [i.name for i in channels],[i.enabled for i in channels])
         self._timer = self._init_timer()
+
+    def _make_plot_item(self, win: pg.GraphicsLayoutWidget, row: int, col: int, title: str):
+      """Create and configure one empty plot box (axes, labels, grid) at a given grid position."""
+      plot_item = win.addPlot(row=row, col=col, title=title)
+      plot_item.setLabel("left", "Amplitude", units="Data Points")
+      plot_item.setLabel("bottom", "Time", units="s")
+      plot_item.showGrid(x=True, y=True)
+      return plot_item
+
+    def _make_curve(self, plot_item, curves_color: list[str], curves_name: list[str], idx: int):
+      """Attach a legend, curve and frequency label to a plot box for an enabled channel."""
+      plot_item.addLegend()
+      color = "y" if curves_color is None else curves_color[idx]
+      curve = plot_item.plot(pen=color, name=curves_name[idx])
+      freq_label = pg.TextItem(text=f"{curves_name[idx]}: -- Hz", color=color, anchor=(0, 0))
+      plot_item.addItem(freq_label)
+      freq_label.setPos(0, 0)
+      return curve, freq_label
+        
 
 
     def _search_lsl_stream_and_connect(self, lsl_layer_name: list) -> list[StreamInlet]: #Search for the specified LSL stream ,connect to it and create an inlet for data retrieval
@@ -54,9 +96,11 @@ class LivePlotter: # actually connects data from LSL stream to the plot and upda
             list[StreamInlet]: A list of connected StreamInlet objects
         """        
         inlets = []
+        print("Search for LSL Stream..")
         for layer_name in lsl_layer_name: #loops thriugh every stream name specified in the config and tries to connect to it
             streams = resolve_bypred(predicate=f"name='{layer_name}'") #Searches for an LsL stream whosenames matches the specified layer name
             if streams: #If a stream is found, it creates an inlet to connect to the stream and retrieve data from it
+                print(f"LSL Stream '{layer_name}' found, connecting...")
                 inlet = StreamInlet(streams[0], 
                                    max_buflen= 60,
                                    max_chunklen= 1024,
@@ -80,7 +124,7 @@ class LivePlotter: # actually connects data from LSL stream to the plot and upda
         return int(max(fs))
     
 
-    def _init_plot(self, curves_color: list[str], curves_name: list[str]) -> tuple:
+    def _init_plot(self, curves_color: list[str], curves_name: list[str], enabled: list[bool]) -> tuple:
         """Initialize the PyQtGraph plot for live data visualization
 
         Returns:
@@ -89,40 +133,44 @@ class LivePlotter: # actually connects data from LSL stream to the plot and upda
         app = QtWidgets.QApplication([]) #starting a new QApplication, which is necessary for any PyQt application. It manages the GUI application's control flow and main settings.
         win = pg.GraphicsLayoutWidget(show=True, title="LSL Live Plot - Live EEG Data")#creates the actual window for the plot, with a title "LSL Live Plot"
 
-        plot_item = win.addPlot()#creates the graph area inside the window where the data will be plotted, with a title "Live EEG Data"
-        plot_item.setLabel("left", "Amplitude", units="Data Points")
-        plot_item.setLabel("bottom", "Time", units="s")
-        plot_item.showGrid(x=True, y=True)#adds a grid to the plot for better visibility of the data points
-        plot_item.addLegend()
+        win.resize(1400, 700)#sets the size of the window to 1400x700 pixels
+        plots_per_row = 4
 
-        curves = [] #curve is equal to one plotted line , this creates an empty list to store the curves for each channel that will be plotted, so that they can be updated later with new data from the LSL stream
-        for idx,selected_data_buffer in enumerate(self.data_buffers):# go through every data buffer
-            curves.append(plot_item.plot(pen= "y" if curves_color is None else curves_color[idx], name=curves_name[idx]))
-        
-        # Create frequency overlay using a ViewBox with TextItems
-        freq_legend = pg.ViewBox()
-        freq_legend.setBackgroundColor((50, 50, 50, 180))
-        freq_legend.setFixedWidth(180)
-        freq_legend.setFixedHeight(20 + len(self.data_buffers) * 22)
-        freq_legend.setRange(xRange=(0, 1), yRange=(0, 1), padding=0)
-        freq_legend.setMouseEnabled(x=False, y=False)
-        freq_legend.setMenuEnabled(False)
-
+        #these lists will store the objects created in the loop
+        plot_items = []
+        curves = []
         freq_labels = []
-        for idx in range(len(self.data_buffers)):
-            color = curves_color[idx] if curves_color else "y"
-            label = pg.TextItem(text=f"{curves_name[idx]}: -- Hz", color=color, anchor=(0, 0))
-            label.setPos(0.05, 0.95 - (idx + 1) * (0.9 / (len(self.data_buffers) + 1)))
-            freq_legend.addItem(label)
-            freq_labels.append(label)
+        curve_source_indices = [] # each curve corresponds to a specific channel, and this list keeps track of which channel each curve is associated with
 
-        win.addItem(freq_legend, row=0, col=1)
+        if self._display_mode == "grid":
+         for idx in range(len(self.data_buffers)):
+            row, col = self._grid_positions[idx]
+            plot_item = self._make_plot_item(win, row, col, curves_name[idx])
+            if enabled[idx]:
+                curve, freq_label = self._make_curve(plot_item, curves_color, curves_name, idx)
+            else:
+              curve, freq_label = None, None
+            plot_items.append(plot_item)
+            curves.append(curve)
+            freq_labels.append(freq_label)
+            curve_source_indices.append(idx)
+
+        else:
+         plots_per_row = 4
+         visible_indices = [idx for idx, is_enabled in enumerate(enabled) if is_enabled]
+         for position, idx in enumerate(visible_indices):
+            row, col = position // plots_per_row, position % plots_per_row
+            plot_item = self._make_plot_item(win, row, col, curves_name[idx])
+            curve, freq_label = self._make_curve(plot_item, curves_color, curves_name, idx)
+            plot_items.append(plot_item)
+            curves.append(curve)
+            freq_labels.append(freq_label)
+            curve_source_indices.append(idx)
+
+        return app, win, plot_items, curves, freq_labels, curve_source_indices
+
         
-        title_label = pg.TextItem(text="Peak Frequency", color="w", anchor=(0, 0))
-        title_label.setPos(0.05, 0.95)
-        freq_legend.addItem(title_label)
-        
-        return app, win, plot_item, curves, freq_labels
+
     
 
     def _init_timer(self) -> QtCore.QTimer:
@@ -167,6 +215,8 @@ class LivePlotter: # actually connects data from LSL stream to the plot and upda
 
         time_now = local_clock()
         for idx, curve in enumerate(self._curves):
+            if not self._enabled[idx]: #If the channel is not enabled, skip the update for this channel and move to the next one
+                continue 
             plot_data = np.concatenate((self.data_buffers[idx][self.write_pointers[idx]:], self.data_buffers[idx][:self.write_pointers[idx]]))
             plot_time = np.concatenate((self.time_buffers[idx][self.write_pointers[idx]:], self.time_buffers[idx][:self.write_pointers[idx]]))
             valid_mask = plot_time >0 #Check for valid timestamps
