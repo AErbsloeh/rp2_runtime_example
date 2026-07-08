@@ -360,6 +360,7 @@ class ThreadLSL:
         :param require_consumers:Boolean for requiring connected LSL consumers
         :return:                None
         """
+        #create the LSL outlet for pushing the data from the DAQ system
         outlet = self._establish_lsl_outlet(
             idx=stim_idx,
             lsl_name=name,
@@ -665,7 +666,6 @@ class ThreadLSL:
         """
         line_color = ['red', 'green', 'blue', 'lime'] #becomes curve color later 
         # mode_util = 'util' in name
-        print(f"Plot stream name:{name}")
         inlet = self._establish_lsl_inlet(name) #connect to LSL stream
         # --- Extract meta(stream info) for plotting
         channels = inlet.info().channel_count() #number of channels in the stream to know how many channel configs to create

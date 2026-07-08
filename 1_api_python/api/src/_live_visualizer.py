@@ -30,9 +30,9 @@ class LivePlotter: # actually connects data from LSL stream to the plot and upda
         self._fs = self._get_stream_samplingrate() if self._get_stream_samplingrate() >0 else 250
         self._visualized_channel = [i.visualized_channel for i in config]
 
-        self.max_samples = int(self._fs * config.window_width_sec) if type(config) == LivePlotterChannelConfig else int(self._fs * config[0].window_width_sec)
+        self.max_samples = int(self._fs * config.window_width_sec) if type(config) == LivePlotterChannelConfig else int(self._fs * config[0].window_width_sec)#maximum number of samples to store in the circular buffer for each stream
 
-        self.data_buffers = [np.zeros(self.max_samples) for _ in config]
+        self.data_buffers = [np.zeros(self.max_samples) for _ in config]#store the date from the LSL stream in a circular buffer for each stream, initialized to zeros with a length of max_samples
         self.time_buffers = [np.zeros(self.max_samples) for _ in config]
         self.write_pointers = [0 for _ in self._inlet] #Pointer to keep track of where to write new data in the circular buffer for each stream
         self.caluclate_counter = 0 #Counter to control how often the frequency calculation is performed (to reduce computational load)
@@ -54,11 +54,9 @@ class LivePlotter: # actually connects data from LSL stream to the plot and upda
             list[StreamInlet]: A list of connected StreamInlet objects
         """        
         inlets = []
-        print("Search for LSL Stream..")
         for layer_name in lsl_layer_name: #loops thriugh every stream name specified in the config and tries to connect to it
             streams = resolve_bypred(predicate=f"name='{layer_name}'") #Searches for an LsL stream whosenames matches the specified layer name
             if streams: #If a stream is found, it creates an inlet to connect to the stream and retrieve data from it
-                print(f"LSL Stream '{layer_name}' found, connecting...")
                 inlet = StreamInlet(streams[0], 
                                    max_buflen= 60,
                                    max_chunklen= 1024,
@@ -88,14 +86,10 @@ class LivePlotter: # actually connects data from LSL stream to the plot and upda
         Returns:
             tuple: A tuple containing the QApplication, GraphicsLayoutWidget, PlotItem, and PlotDataItem
         """
-        print("Creating QApplication")
         app = QtWidgets.QApplication([]) #starting a new QApplication, which is necessary for any PyQt application. It manages the GUI application's control flow and main settings.
-        
-        print("Creating GraphicsLayoutWidget")
-        win = pg.GraphicsLayoutWidget(show=True, title="LSL Live Plot")#creates the actual window for the plot, with a title "LSL Live Plot"
-        print("Window created")
+        win = pg.GraphicsLayoutWidget(show=True, title="LSL Live Plot - Live EEG Data")#creates the actual window for the plot, with a title "LSL Live Plot"
 
-        plot_item = win.addPlot(title="Live EEG Data")#creates the graph area inside the window where the data will be plotted, with a title "Live EEG Data"
+        plot_item = win.addPlot()#creates the graph area inside the window where the data will be plotted, with a title "Live EEG Data"
         plot_item.setLabel("left", "Amplitude", units="Data Points")
         plot_item.setLabel("bottom", "Time", units="s")
         plot_item.showGrid(x=True, y=True)#adds a grid to the plot for better visibility of the data points
@@ -203,10 +197,8 @@ class LivePlotter: # actually connects data from LSL stream to the plot and upda
 
 
     def start(self):
-        """Start the live plotter"""   
-        print("Starting Qt event loop")     
+        """Start the live plotter"""      
         QtWidgets.QApplication.instance().exec()
-        print("Qt event loop exited, closing plotter")
 
 def start_live_plotter(config: list) -> None:
     """Start the live plotter with the given configuration"""
@@ -222,23 +214,3 @@ def translation_func_dac(value_to_translate: np.array, v_ref: float =5.) -> list
 def translation_func_adc(value_to_translate: int) -> list:
     value_to_translate = value_to_translate * 1.25 / 2 ** 23
     return value_to_translate
-
-
-if __name__ == "__main__":
-    config = [LivePlotterChannelConfig(visualized_channel=0,
-                                       name="DAC Data",
-                                       lsl_layer_name="PlayerData",
-                                       curve_color="r",
-                                       value_translation_func=translation_func_dac),
-              LivePlotterChannelConfig(visualized_channel=0,
-                                       name="Digital Twin",
-                                       lsl_layer_name="DigitalTwinOutput",
-                                       curve_color="g",
-                                       value_translation_func=None)]
-    config_DAC = [LivePlotterChannelConfig(visualized_channel=0,
-                                       name="DAC Data",
-                                       lsl_layer_name="PlayerData",
-                                       curve_color="r",
-                                       value_translation_func=translation_func_dac)]
-    plotter = LivePlotter(config=config_DAC)
-    plotter.start()
