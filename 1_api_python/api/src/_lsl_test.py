@@ -245,7 +245,7 @@ class FakeLivePlotter:
 def test_plot_stream(monkeypatch):
     dut = ThreadLSL()
     dut._establish_lsl_inlet = lambda name: FakeInlet() #mock the _establish_lsl_inlet function to return a fake inlet with the necessary info for plotting
-    monkeypatch.setattr('api.src._lsl.LivePlotter', FakeLivePlotter) #mock the LivePlotter class to use the FakeLivePlotter instead of the real one
+    monkeypatch.setattr('api.src._live_visualizer.LivePlotter', FakeLivePlotter) #mock the LivePlotter class to use the FakeLivePlotter instead of the real one
     dut.lsl_plot_stream(name='Playerdata', stim_idx=0)
 
     assert FakeLivePlotter.received_config is not None

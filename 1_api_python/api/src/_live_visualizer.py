@@ -54,9 +54,11 @@ class LivePlotter: # actually connects data from LSL stream to the plot and upda
             list[StreamInlet]: A list of connected StreamInlet objects
         """        
         inlets = []
+        print("Search for LSL Stream..")
         for layer_name in lsl_layer_name: #loops thriugh every stream name specified in the config and tries to connect to it
             streams = resolve_bypred(predicate=f"name='{layer_name}'") #Searches for an LsL stream whosenames matches the specified layer name
             if streams: #If a stream is found, it creates an inlet to connect to the stream and retrieve data from it
+                print(f"LSL Stream '{layer_name}' found, connecting...")
                 inlet = StreamInlet(streams[0], 
                                    max_buflen= 60,
                                    max_chunklen= 1024,
