@@ -14,23 +14,21 @@ int main(){
             return -1;
         }
     #endif
-
-    // Init Phase
+    // --- Init Phase
     init_gpio_pico(false);
     bool valid_rpc = init_system();
-
-    // Main Loop
+    // --- Main Loop
     while (true){
-        // --- USB Protocol Handling ---
+        // Processing USB RX data
         transport_poll_rx(&rx_buffer);
         valid_rpc &= apply_rpc_callback(&rx_buffer);
         #ifdef ADD_FPGA_SUPPORT
-            //valid_rpc &= apply_fpga_callback(&rx_buffer);
+            valid_rpc &= apply_fpga_callback(&rx_buffer);
         #endif
         if (!valid_rpc){
             set_system_state(STATE_ERROR);
         }
-        // --- Sending data in main ---
+        // Sending DAQ data
         daq_check_send_data(&daq_config_raw);
     };
 }

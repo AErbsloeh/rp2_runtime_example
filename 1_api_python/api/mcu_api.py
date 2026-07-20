@@ -371,10 +371,10 @@ class DeviceAPI:
         self,
         sampling_rate: float,
         window_sec: float = 30.0,
-        do_plot: bool = False,
+        do_plot: bool = True,
         do_record: bool = True,
         do_process: bool = True,
-        folder_name: str = "data",
+        folder_name: str = "runs",
     ) -> None:
         """Changing the state of the DAQ with starting it
         :param sampling_rate:   Float with sampling rate [Hz]

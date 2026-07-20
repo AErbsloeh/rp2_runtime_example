@@ -41,7 +41,8 @@ def test_record_samples(path: Path, dut: DeviceAPI, period: float):
         sampling_rate=100.,
         window_sec=0.1,
         do_plot=False,
-        do_batch=False
+        do_record=True,
+        do_process=False,
     )
     dut.wait_daq(period)
     dut.stop_daq()
@@ -87,7 +88,8 @@ def test_record_batch(path: Path, dut: DeviceAPI, period: float):
         sampling_rate=100.,
         window_sec=0.1,
         do_plot=False,
-        do_batch=True
+        do_record=True,
+        do_process=False,
     )
     dut.wait_daq(period)
     dut.stop_daq()
@@ -133,7 +135,8 @@ def test_record_batch_with_layout(path: Path, dut: DeviceAPI, period: float):
         sampling_rate=100.,
         window_sec=0.1,
         do_plot=False,
-        do_batch=True
+        do_record=True,
+        do_process=False,
     )
     dut.wait_daq(period)
     dut.stop_daq()
