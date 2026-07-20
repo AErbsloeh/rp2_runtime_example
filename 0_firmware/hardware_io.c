@@ -57,8 +57,9 @@ daq_data_t daq_config_raw = {
     .element_size = sizeof(uint16_t),
     .num_channels = 2,
     .num_samples = 16,
-    .send_mode = DAQ_MODE_SAMPLE,
+    .send_mode = DAQ_MODE_BUFFER_SINGLE,
     .new_data = false,
+    .first_buffer_full = false,
     .data0 = &a,
     .data1 = &b
 };
