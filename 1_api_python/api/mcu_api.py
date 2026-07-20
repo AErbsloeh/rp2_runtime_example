@@ -325,7 +325,7 @@ class DeviceAPI:
             ('index', 'u1'),
             ('timestamp', '<u8', (2,)),
             ('data', self.__daq_config.dtype_sample, self.__daq_config.data_shape),
-            #('crc', '<u2'),
+            ('crc', '<u2'),
             ('tail', 'u1')
         ])
 
@@ -417,15 +417,12 @@ class DeviceAPI:
             path2data = get_path_to_project(new_folder=folder_name)
             self.__threads.register(func=self.__threads.lsl_record_stream, args=(stream_idx, [output_stream, 'util'], path2data))
             stream_idx += 1
-            
-        plot_args=None
-        if do_plot:
-            plot_args=(stream_idx, output_stream, window_sec)
-        #starts the threads and the DAQ, if plotting is enabled, the plot thread will be started as well
+
         self.__device.timeout = 2 / self.__daq_config.sampling_rate
         self.__threads.start()
         self._write_without_feedback(Commands.START_DAQ)
-        if do_plot and plot_args is not None:
+        if do_plot:
+            plot_args = (stream_idx, output_stream, window_sec)
             #start the plotting thread after the DAQ in the main thread to avoid blocking the LSL threads
             self.__threads.lsl_plot_stream(*plot_args)
 

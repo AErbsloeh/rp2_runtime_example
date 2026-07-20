@@ -1,9 +1,11 @@
 **/.idea
 **/__pycache__
 **/.pytest_cache
-**/*data*
+**/runs
 **/dist
+.devenv
 .venv
 .python-version
 uv.lock
 *.out
+data
