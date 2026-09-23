@@ -13,7 +13,7 @@ if __name__ == "__main__":
     )
 
     #temporary debug prints
-    config = dut._get_daq_characteristics()
+    config = dut.get_daq_characteristics()
 
     print("\n===== DAQ CONFIGURATION =====")
     print("send_batch:", config.send_batch)
@@ -26,8 +26,8 @@ if __name__ == "__main__":
     print("expected_with_crc:", config.expected_bytes_without_crc + 2)
     print("=============================\n")
 
-    print("layout:", dut._DeviceAPI__layout_channels)
-    print("labels:", dut._DeviceAPI__layout_labels)
+    #print("layout:", dut._DeviceAPI__layout_channels)
+    #print("labels:", dut._DeviceAPI__layout_labels)
 
     dut.start_daq(
         sampling_rate=500.0,
