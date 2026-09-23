@@ -45,29 +45,30 @@ transport_rx_buffer_t rx_buffer = {
 };  
 
 // --- DAQ Sampling
-fifo_t a = {};
-fifo_t b = {};
+double_buffer_t daq_double_buffer = {0};  // write_fifo/read_fifo are wired up inside daq_init_sampling()
 daq_data_t daq_config_raw = {
     .packet_id = 0xA0,
-    .packet_tail = 0xFF,
     .iteration = 0,
     .runtime_first = 0,
     .runtime_last = 0,
     .is_signed = false,
-    .element_size = sizeof(uint16_t),
-    .num_channels = 2,
+    .num_channels = 8,
     .num_samples = 16,
-    .send_mode = DAQ_MODE_BUFFER_SINGLE,
-    .new_data = false,
-    .first_buffer_full = false,
-    .data0 = &a,
-    .data1 = &b
+    .data = &daq_double_buffer,
+    .send_batch = true,
+    .new_data = false
 };
 
-uint16_t data[2] = {0, 0};
+// No external sensors are wired up right now, so channels 2-7 are just
+// simple placeholder values, purely to give the DAQ more data to move
+// per sample and put real load on the buffering.
+uint16_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 bool irq_tmr_daq0(repeating_timer_t *rt){
     data[0] += 16;
     data[1] = rp2_adc_read_raw(&adc_temp);
+    for (uint8_t ch = 2; ch < 8; ch++){
+        data[ch] = data[0] + ch;   // placeholder data
+    }
     return daq_irq_process(&daq_config_raw, data);
 };
 repeating_timer_t tmr_daq0;

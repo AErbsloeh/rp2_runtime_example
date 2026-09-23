@@ -186,9 +186,6 @@ def convert_rp2_temp_value(raw: int) -> float:
     volt = convert_rp2_adc_value(raw)
     return 27 - (volt - 0.706) / 0.001721
 
-def build_checksum(data: bytes) -> int:
-    """Function for calculating the CRC-16-CCITT checksum for the given data bytes"""
-    return sum(data) % 2**16
 def build_crc16_ccitt(data: bytes) -> int:
     """Function for calculating the CRC-16-CCITT checksum for the given data bytes"""
     return binascii.crc_hqx(data, 0xffff)

@@ -1,3 +1,4 @@
+import uuid
 import numpy as np
 from logging import getLogger, Logger
 from h5py import File, string_dtype
@@ -188,7 +189,7 @@ class ThreadLSL:
             channel_count=channel_num,
             nominal_srate=sampling_rate,
             channel_format=channel_type,
-            source_id=f"{lsl_name}_uid"
+            source_id=f"{lsl_name}_uid_{uuid.uuid4().hex[:8]}"
         )
         info.set_channel_units(units)
         info.set_channel_labels(channel_labels)
@@ -819,3 +820,4 @@ class ThreadLSL:
             start=True
         )
         app.run() """
+

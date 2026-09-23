@@ -32,6 +32,7 @@ class Commands(IntEnum):
     STOP_DAQ = 0x08
     SET_PERIOD_DAQ = 0x09
     SET_BATCH_DAQ = 0x0A
+    SET_BUFFER_MODE = 0x0B
 
 
 class DeviceAPI:
@@ -242,6 +243,15 @@ class DeviceAPI:
         """
         self._write_without_feedback(Commands.SET_BATCH_DAQ, int(use_batches))
 
+    def set_buffer_mode(self, use_double_buffer: bool=True) -> None:
+        """Switching the DAQ between single-buffer and double-buffer sampling mode.
+        No reflashing needed, this takes effect immediately on the device.
+        :param use_double_buffer:   Boolean with True for double buffering (higher sampling rate),
+                                     False for the original single-buffer behavior
+        :return:                    None
+        """
+        self._write_without_feedback(Commands.SET_BUFFER_MODE, int(use_double_buffer))
+
     def _check_package_loss(self, new_idx: int) -> None:
         if 1 < new_idx - self.__last_idx < 255:
             self.__num_package_loss += 1
@@ -332,14 +342,13 @@ class DeviceAPI:
     def _thread_read_batch(self) -> tuple[list[list], list[float]]:
         try:
             buffer = self.__device.read(self.__daq_config.num_bytes_total)
-            print(f"Buffer length: {len(buffer)}")
             if not buffer:
                 raise Exception
             frames = np.frombuffer(buffer, dtype=self._package_daq_batch)[0]
             mask = (frames['head'], frames['tail']) == (self.__daq_config.head_cmd, self.__daq_config.tail_cmd)
             if mask:
                 self._check_package_loss(int(frames['index']))
-                if self.__daq_config.has_crc and False:
+                if self.__daq_config.has_crc:
                     self._check_crc(buffer, int(frames['crc']))
                 dt = (frames['timestamp'][1] - frames['timestamp'][0]) / (self.__daq_config.num_samples-1)
                 timestamps = [float(1e-6 * (frames['timestamp'][0] + dt*idx)) for idx in range(self.__daq_config.num_samples)]

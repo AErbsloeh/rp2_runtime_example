@@ -1,25 +1,25 @@
 
 
 {
-  "display_mode": "filtered",
+  "display_mode": "grid",
   "grid_layout":[
     [1, 2, 3, 4],
-    [5,0, 0, 8]
+    [5, 6, 7, 8]
   ],
   "channels": [
     {
       "channel_number": 1,
       "name": "Channel 1",
       "enabled": false,
-      "lsl_layer_name": "GeneratedData",
+      "lsl_layer_name": "data",
       "window_width_sec": 5,
       "curve_color": "r"
     },
     {
       "channel_number": 2,
-      "name": "Motor Left",
+      "name": "Channel 2",
       "enabled": true,
-      "lsl_layer_name": "GeneratedData",
+      "lsl_layer_name": "data",
       "window_width_sec": 5,
       "curve_color": "g"
     },
@@ -27,17 +27,51 @@
       "channel_number": 3,
       "name": "Channel 3",
       "enabled": true,
-      "lsl_layer_name": "GeneratedData",
+      "lsl_layer_name": "data",
       "window_width_sec": 5,
       "curve_color": "b"
     },
     {
       "channel_number": 4,
-      "name": "Motor Right",
+      "name": "Channel 4",
       "enabled": false,
-      "lsl_layer_name": "GeneratedData",
+      "lsl_layer_name": "data",
+      "window_width_sec": 5,
+      "curve_color": "y"
+    },
+
+    {
+      "channel_number": 5,
+      "name": "Channel 5",
+      "enabled": false,
+      "lsl_layer_name": "data",
+      "window_width_sec": 5,
+      "curve_color": "y"
+    },
+    {
+      "channel_number": 6,
+      "name": "Channel 6",
+      "enabled": true,
+      "lsl_layer_name": "data",
+      "window_width_sec": 5,
+      "curve_color": "y"
+    },
+    {
+      "channel_number": 7,
+      "name": "Channel 7",
+      "enabled": false,
+      "lsl_layer_name": "data",
+      "window_width_sec": 5,
+      "curve_color": "y"
+    },
+    {
+      "channel_number": 8,
+      "name": "Channel 8",
+      "enabled": true,
+      "lsl_layer_name": "data",
       "window_width_sec": 5,
       "curve_color": "y"
     }
+    
   ]
 }

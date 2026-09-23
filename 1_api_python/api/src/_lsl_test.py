@@ -9,7 +9,7 @@ from shutil import rmtree
 from time import sleep
 from logging import basicConfig, DEBUG
 import pylsl 
-from api import get_path_to_project
+from api import get_path_to_project, DeviceAPI
 from api.src._lsl import (
     RingBuffer,
     ThreadLSL
@@ -303,6 +303,46 @@ def test_generated_plot():
         #testing the real LivePlotter class with the generated data inlets, creating a live plot for each channel with the specified configuration
         plotter = LivePlotter(config=config)
         plotter.start()
+
+
+# Real-hardware counterpart to test_generated_plot() above. Same config file,
+# same LivePlotter, same plot - the only difference is that this one gets its
+# data from an actual connected Pico instead of GeneratedDataInlet's fake sine
+# waves. Nothing about test_generated_plot() or GeneratedDataInlet above was
+# changed to add this - it's a separate, independent test.
+#
+# This will not find a stream yet: live_plot_config.json's channels still say
+# lsl_layer_name = "GeneratedData", which no real hardware stream is named.
+# It needs that value changed to "data" (the stream name start_daq() uses
+# when do_process=False, same as we use in benchmark.py to avoid the
+# __process_stream_func() 2-channel bug) before this test can connect.
+def test_real_hardware_plot():
+    config_path = (
+        Path(__file__).resolve().parent.parent
+        / "config"
+        / "live_plot_config.json"
+    )
+    config = load_plot_config(config_path)
+
+    DeviceAPI().do_reset()
+    dut = DeviceAPI()
+    dut.start_daq(
+        sampling_rate=250,
+        do_plot=False,
+        do_process=False,  # skip the processing stage - __process_stream_func()
+                            # is hardcoded for 2 channels, our DAQ has 8
+        do_record=False,   # just streaming for the live plot, not saving to disk
+    )
+
+    try:
+        # No patch.object() here, unlike test_generated_plot() above - this lets
+        # LivePlotter's real _search_lsl_stream_and_connect() actually search for
+        # and connect to the real LSL stream start_daq() just started.
+        plotter = LivePlotter(config=config)
+        plotter.start()
+    finally:
+        dut.stop_daq()
+        dut.close()
 class FakeLivePlotter:
     received_config = None # class variable to store the received configuration for plotting
     started = False # class variable to indicate whether the plotter has been started
