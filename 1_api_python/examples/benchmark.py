@@ -7,14 +7,16 @@ from time import sleep
 from logging import basicConfig, DEBUG, INFO
 
 
-def run_experiment(sampling_rate: float, do_batch: bool, run_trial_sec: float, repeat_trial: int=4, folder_name: str="bench_data") -> None:
+def run_experiment(sampling_rate: float, use_double_buffer: bool, run_trial_sec: float, repeat_trial: int=4, folder_name: str="bench_data") -> None:
     for _ in range(repeat_trial):
         DeviceAPI().do_reset()
         dut = DeviceAPI()
+        dut.set_buffer_mode(use_double_buffer)
         dut.start_daq(
             sampling_rate=sampling_rate,
-            do_batch=do_batch,
             do_plot=False,
+            do_process=False,  # __process_stream_func() in mcu_api.py hardcodes 2 channels;
+                                # our DAQ has 8, so skip it and record the raw 'data' stream.
             window_sec=10.,
             folder_name=folder_name
         )
@@ -29,9 +31,9 @@ def extract_results(path: Path) -> tuple[list, list]:
     results = list()
 
     dut = DataAPI(path)
-    for idx, file in enumerate(path.glob("*_filt.h5")):
+    for idx, file in enumerate(path.glob("*_data.h5")):
         dut.select_file(idx)
-        data = dut.get_data('filt')
+        data = dut.get_data('data')
         dt = np.diff(data.time)
         results.append(dt)
         freq.append(data.sampling_rate)
@@ -64,27 +66,44 @@ def plot_results(sampling_rate: np.ndarray, samp_rate: list, dt_data: list) -> N
 if __name__ == "__main__":
     basicConfig(level=INFO)
     # --- Experiment definition
-    path2data = Path(get_path_to_project()) / "bench_data_batch"
-    sampling_rate_range = np.logspace(start=1, stop=4, num=15, endpoint=False)
+    # Same total point count as before (8), but reallocated: 3 coarse points
+    # for the low/flat region (10 Hz - 3 kHz, nothing interesting expected),
+    # 5 points from 3 kHz up to the 9.5 kHz client-side limit in mcu_api.py's
+    # _update_daq_sampling_rate() - that's where a break, if there is one, is
+    # most likely to be, so it gets more of the (fixed) point budget.
+    sampling_rate_range = np.concatenate([
+        np.logspace(start=1, stop=np.log10(3000), num=3, endpoint=False),
+        np.linspace(start=3000, stop=9500, num=5),
+    ])
     num_repetitions = 1
-    only_extract = True
+    only_extract = False
+
+    # Buffer modes to compare: folder suffix -> use_double_buffer
+    modes = {
+        "single_buffer": False,
+        "double_buffer": True,
+    }
 
     # --- Experiment run
     if not only_extract:
-        if path2data.exists():
-            rmtree(path2data, ignore_errors=True)
+        for mode_name, use_double_buffer in modes.items():
+            path2data = Path(get_path_to_project()) / f"bench_data_{mode_name}"
+            if path2data.exists():
+                rmtree(path2data, ignore_errors=True)
 
-        for fs in sampling_rate_range:
-            run_test_sec = 10
-            print(f"Run trial with Sampling rate: {fs} Hz")
-            run_experiment(
-                sampling_rate=fs,
-                do_batch=True,
-                run_trial_sec=run_test_sec,
-                repeat_trial=num_repetitions,
-                folder_name=path2data.name
-            )
+            for fs in sampling_rate_range:
+                run_test_sec = 10
+                print(f"[{mode_name}] Run trial with Sampling rate: {fs} Hz")
+                run_experiment(
+                    sampling_rate=fs,
+                    use_double_buffer=use_double_buffer,
+                    run_trial_sec=run_test_sec,
+                    repeat_trial=num_repetitions,
+                    folder_name=path2data.name
+                )
 
-    # --- Evaluation
-    samp_rat, results = extract_results(path2data)
-    plot_results(sampling_rate_range, samp_rat, results)
+    # --- Evaluation: one plot per mode, same style as before
+    for mode_name in modes:
+        path2data = Path(get_path_to_project()) / f"bench_data_{mode_name}"
+        samp_rat, results = extract_results(path2data)
+        plot_results(sampling_rate_range, samp_rat, results)
