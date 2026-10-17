@@ -4,7 +4,6 @@ from pathlib import Path
 from queue import Empty, Queue
 from threading import Event, Lock, Thread
 from time import sleep
-from typing import cast
 
 import numpy as np
 import pylsl
@@ -12,10 +11,9 @@ from h5py import File
 from psutil import cpu_percent, virtual_memory
 from pylsl import StreamInfo, StreamInlet, StreamOutlet, proc_threadsafe, resolve_bypred
 from tqdm import tqdm
-from vispy import app, scene
-from vispy.scene import ViewBox
 
 from api.data_api import DataAPI, StreamRecording
+from api.src._live_visualizer import LivePlotter
 
 
 class RingBuffer:
@@ -184,10 +182,10 @@ class ThreadLSL:
         lsl_name: str,
         lsl_type: str,
         sampling_rate: float,
-        units: str | list[str],
         channel_num: int,
         channel_labels: list[str],
-        channel_layout: list[int],
+        channel_units: list[str],
+        channel_layout: list[list[int]],
         channel_type: int = pylsl.cf_int16,
         check_for_consumers: bool = False,
     ) -> StreamOutlet:
@@ -199,11 +197,9 @@ class ThreadLSL:
             channel_format=channel_type,
             source_id=f"{lsl_name}_uid",
         )
-        units_casted = cast(list[str | int], units)
-        info.set_channel_units(units_casted)
         info.set_channel_labels(channel_labels)
-        chan = [str(val) for val in channel_layout]
-        info.set_channel_types(chan)
+        info.set_channel_types(str(channel_layout))
+        info.set_channel_units(channel_units)
 
         outlet = StreamOutlet(info)
         self._logger.debug(f"LSL outlet ({lsl_name}, {idx}): {outlet.get_info()}")
@@ -213,7 +209,7 @@ class ThreadLSL:
         self._logger.debug(f"LSL outlet ({lsl_name}, {idx}): running")
         return outlet
 
-    def _establish_lsl_inlet(self, name: str, timeout: float = 1.0) -> StreamInlet:
+    def _establish_lsl_inlet(self, name: str, timeout: float = 10.0) -> StreamInlet:
         info = resolve_bypred(predicate=f"name='{name}'", minimum=1, timeout=timeout)
         if not info:
             raise ValueError(f"LSL stream with {name} not found")
@@ -283,7 +279,6 @@ class ThreadLSL:
             lsl_name=name,
             lsl_type="mock_daq",
             sampling_rate=sampling_rate,
-            units="",
             channel_labels=[f"CH{idx}" for idx in range(channel_num)],
             channel_layout=[idx for idx in range(channel_num)],
             channel_num=channel_num,
@@ -378,8 +373,8 @@ class ThreadLSL:
         daq_func,
         sampling_rate: float,
         channel_labels: list[str],
-        channel_layout: list[int],
-        channel_units: str,
+        channel_units: list[str],
+        channel_layout: list[list[int]],
         format: int = pylsl.cf_int32,
         require_consumers: bool = True,
     ) -> None:
@@ -390,7 +385,6 @@ class ThreadLSL:
         :param sampling_rate:   Floating value with sampling rate in Hz
         :param channel_labels:  List with name/label of each channel
         :param channel_layout:  List with integers to define the DAQ layout (spatial information)
-        :param channel_units:   List with units of each channel
         :param format:          Defined LSL datatype for saving data in the stream
         :param require_consumers:Boolean for requiring connected LSL consumers
         :return:                None
@@ -399,10 +393,10 @@ class ThreadLSL:
             idx=stim_idx,
             lsl_name=name,
             lsl_type="stream_daq",
-            units=channel_units,
             sampling_rate=sampling_rate,
             channel_num=len(channel_labels),
             channel_labels=channel_labels,
+            channel_units=channel_units,
             channel_layout=channel_layout,
             channel_type=format,
             check_for_consumers=require_consumers,
@@ -458,11 +452,11 @@ class ThreadLSL:
             idx=stim_idx,
             lsl_name=name,
             lsl_type="utilization",
-            units="%",
             sampling_rate=sampling_rate,
             channel_num=2,
             channel_labels=["CPU", "RAM"],
-            channel_layout=[0, 1],
+            channel_units=["%", "%"],
+            channel_layout=[[1, 2]],
             channel_type=pylsl.cf_float32,
             check_for_consumers=False,
         )
@@ -498,7 +492,6 @@ class ThreadLSL:
                     idx=stim_idx,
                     lsl_name=name,
                     lsl_type=inlet.info().type(),
-                    units=inlet.info().get_channel_units(),
                     sampling_rate=inlet.info().nominal_srate(),
                     channel_num=inlet.info().channel_count(),
                     channel_type=inlet.info().channel_format(),
@@ -553,7 +546,6 @@ class ThreadLSL:
             idx=stim_idx,
             lsl_name=name_out,
             lsl_type=inlet.info().type(),
-            units=inlet.info().get_channel_units(),
             sampling_rate=sampling_rate,
             channel_num=inlet.info().channel_count(),
             channel_labels=inlet.info().get_channel_labels(),
@@ -680,145 +672,17 @@ class ThreadLSL:
                 self._thread_active[stim_idx] = False
 
     def lsl_plot_stream(
-        self, stim_idx: int, name: str, window_length: float = 10.0, update_rate: float = 12.0
+            self, stim_idx: int, name: str, window_length: float = 10.
     ) -> None:
         """Function for LSL to enable live plotting of the incoming results using VisPy
         :param stim_idx:        Integer with array index to write into heartbeat feedback array
         :param name:            String with the name of the LSL stream to get data
         :param window_length:   Floating value with length of the time window for plotting in seconds
-        :param update_rate:     Floating value with update rate of the LSL datastream
         :return:                None
         """
-        line_color = ["red", "green", "blue", "lime"]
-        mode_util = "util" in name
-        inlet = self._establish_lsl_inlet(name)
-        # --- Extract meta
-        channels = inlet.info().channel_count()
-        sampling_rate = inlet.info().nominal_srate()
-        # --- Build ring buffer and update func
-        number_samples_window = int(window_length * sampling_rate)
-        buffer_lsl = [RingBuffer(number_samples_window) for _ in range(channels)]
-        buffer_gpu = buffer_lsl.copy()
-        iteration_update = 0
-
-        # --- Build app
-        canvas = scene.SceneCanvas(
-            size=(800, 150 + channels * 120),
-            title=f"Live Plot @{sampling_rate} Hz ({name})",
-            keys=None,
-            app="glfw",
-            show=True,
+        plotter = LivePlotter(
+            lsl_name=name,
+            window_width_sec=window_length,
+            path2config=None
         )
-        grid = canvas.central_widget.add_grid(spacing=1)
-        x_range = (0, number_samples_window - 1)
-        y_range = (0, 65535) if not mode_util else (0, 100)
-
-        views: list[ViewBox] = []
-        lines: list = []
-
-        for ch in range(channels):
-            view = grid.add_view(row=ch, col=1, camera="panzoom")
-            view.camera.set_range(x=x_range, y=y_range)
-            views.append(view)
-
-            y_axis = scene.AxisWidget(orientation="left")
-            x_axis = scene.AxisWidget(orientation="bottom")
-
-            grid.add_widget(y_axis, row=ch, col=0)
-            grid.add_widget(x_axis, row=ch, col=1)
-
-            y_axis.link_view(view)
-            # xaxis.link_view(view)
-
-            data = buffer_gpu[ch].get_data()
-            line = scene.visuals.Line(
-                pos=data,
-                color=line_color[ch % len(line_color)],
-                width=2,  # parent=view.scene
-            )
-            lines.append(line)
-
-            scene.visuals.Text(
-                text=f"C{ch + 1}",
-                # parent=view.scene,
-                pos=(30, 0),
-                anchor_x="right",
-                anchor_y="center",
-                color="white",
-                font_size=10,
-            )
-
-        status_text = scene.visuals.Text(
-            text="LSL: OK",
-            # parent=views[-1].scene,
-            color="green",
-            pos=(0.95 * number_samples_window, 30),
-            font_size=8,
-        )
-        fps_text = scene.visuals.Text(
-            text="FPS: 0",
-            color="green",
-            # parent=views[-1].scene,
-            pos=(0.75 * number_samples_window, 100),
-            font_size=8,
-        )
-
-        def update_plot_data():
-            nonlocal buffer_lsl
-            while self._event.is_set() and self._is_active:
-                try:
-                    samples, _ = inlet.pull_chunk(
-                        max_samples=self._get_number_stream_samples(sampling_rate), timeout=10e-3
-                    )
-                    if not samples:
-                        continue
-                    else:
-                        with self._lock:
-                            self._thread_active[stim_idx + 1] = True
-                        for sample in samples:
-                            for ch0, value in enumerate(sample):
-                                buffer_lsl[ch0].append(value)
-                except Exception as e:
-                    with self._lock:
-                        self._exception.put(e)
-
-        def update_plot_canvas(events):
-            nonlocal buffer_gpu
-            nonlocal iteration_update
-            if not self._event.is_set() and self._is_active:
-                app.quit()
-
-            buffer_gpu = buffer_lsl
-            for ch0 in range(channels):
-                # Updating plot graphics
-                data0 = buffer_gpu[ch0].get_data()
-                lines[ch0].set_data(data0)
-
-                # Updating the scaling factor
-                if iteration_update > int(16 / update_rate):
-                    iteration_update = 0
-                    y = data0[:, 1]
-                    y_min = y.min()
-                    y_max = y.max()
-                    views[ch0].camera.set_range(
-                        x=(0, number_samples_window - 1), y=(y_min - 1, y_max + 1)
-                    )
-                else:
-                    iteration_update += 1
-
-            if not self._is_active:
-                status_text.text = "LSL: DEAD"
-                status_text.color = "red"
-
-        def update_on_fps(fps):
-            with self._lock:
-                self._thread_active[stim_idx] = fps > 0
-            fps_text.text = f"FPS: {fps:.1f}"
-
-        # --- Starting the process
-        self.register(func=update_plot_data, args=())
-        self._thread_active.extend([0])
-        self._thread[-1].start()
-        canvas.measure_fps(callback=update_on_fps)
-        app.Timer(interval=1 / update_rate, connect=update_plot_canvas, start=True)
-        app.run()
+        plotter.start()
