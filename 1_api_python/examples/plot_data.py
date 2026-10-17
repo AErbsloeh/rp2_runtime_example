@@ -86,12 +86,12 @@ if __name__ == "__main__":
     basicConfig(level=INFO)
     read_util = False
 
-    path2data = Path(get_path_to_project()) / "data"
+    path2data = Path(get_path_to_project()) / "runs"
     use_case = -1
 
     dut = DataAPI(path2data)
     dut.select_file(use_case)
-    data = dut.get_data('filt')
+    data = dut.get_data('data')
 
     if read_util and dut.is_utilization_available:
         util = dut.get_utilization()

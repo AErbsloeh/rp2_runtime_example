@@ -28,8 +28,9 @@ class DeviceAPI:
     # PID of RP2350 = 0x0009 and RP2040 = 0x000A
     __last_idx: int = 255
     __num_package_loss: int = 0
-    __layout_channels: list[int] = list()
+    __layout_channels: list[list[int]] = list()
     __layout_labels: list[str] = list()
+    __layout_units: list[str] = list()
     _num_daq_tasks: int = 0
     _pin_names: list[str] = ["LED_USER"]
     _state_names: list[str] = ["ERROR", "RESET", "INIT", "IDLE", "TEST", "DAQ"]
@@ -200,15 +201,17 @@ class DeviceAPI:
         """
         self._write_without_feedback(Commands.TOGGLE_LED)
 
-    def define_channel_layout(self, channel_layout: list[int], channel_names: list[str]) -> None:
+    def define_channel_layout(self, channel_layout: list[list[int]], channel_names: list[str], channel_units: list[str]) -> None:
         """Defining the channel layout of the real DAQ system
         :param channel_layout:   List of strings with channel number
         :param channel_names:    List of strings with channel names
+        :param channel_units:    List of strings with channel units
         """
         self.__layout_channels = channel_layout
         self.__layout_labels = channel_names
+        self.__layout_units = channel_units
 
-    def get_channel_layout(self) -> tuple[list[int], list[str]]:
+    def get_channel_layout(self) -> tuple[list[list[int]], list[str]]:
         """Returning the channel information of the DAQ system
         :return:    Tuple with (1) layout and (2) labels of the channel layout
         """
@@ -391,8 +394,10 @@ class DeviceAPI:
         self.__daq_config = self.get_daq_characteristics(num_daq_task-1)
         if not self.__layout_labels:
             self.__layout_labels = [f"CH{idx}" for idx in range(self.__daq_config.num_channels)]
-            self.__layout_channels = [idx for idx in range(self.__daq_config.num_channels)]
-        if not len(self.__layout_labels) == len(self.__layout_channels) == self.__daq_config.num_channels:
+            self.__layout_channels = [[idx for idx in range(self.__daq_config.num_channels)]]
+            self.__layout_units = [" " for _ in range(self.__daq_config.num_channels)]
+        active = sum(1 for channel_number in self.__layout_channels if channel_number)
+        if not len(self.__layout_labels) == active == self.__daq_config.num_channels:
             raise ValueError(
                 f"Number of channels in layout ({self.__daq_config.num_channels}) does not match number of channels in DAQ ({len(self.__layout_labels)})"
             )
@@ -414,8 +419,8 @@ class DeviceAPI:
                 self._thread_read_batch if self.__daq_config.send_batch else self._thread_read_frame,
                 self.__daq_config.sampling_rate,
                 self.__layout_labels,
-                self.__layout_channels,
-                "V",
+                self.__layout_units,
+                self.__layout_channels
             ),
             kwargs={"require_consumers": require_system_consumers},
         )
@@ -446,14 +451,16 @@ class DeviceAPI:
             )
             stream_idx += 1
 
-        if do_plot:
-            self.__threads.register(
-                func=self.__threads.lsl_plot_stream, args=(stream_idx, output_stream, window_sec)
-            )
-
         self.__device.timeout = 2 / self.__daq_config.sampling_rate
         self.__threads.start()
         self._write_without_feedback(Commands.START_DAQ)
+
+        if do_plot:
+            plot_args = (stream_idx, output_stream, window_sec)
+            self.__threads.lsl_plot_stream(*plot_args)
+            # self.__threads.register(
+            #    func=self.__threads.lsl_plot_stream, args=(stream_idx, output_stream, window_sec)
+            # )
 
     def stop_daq(self) -> None:
         """Changing the state of the DAQ with stopping it

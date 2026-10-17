@@ -1,270 +1,284 @@
+import json
+import time
 from dataclasses import dataclass
+from pathlib import Path
+import ast
 
 import numpy as np
 import pyqtgraph as pg
-from pylsl import StreamInlet, local_clock, proc_threadsafe, resolve_bypred
 from pyqtgraph.Qt import QtCore, QtWidgets
+from pylsl import StreamInlet, resolve_bypred, proc_threadsafe
 
 
 @dataclass
 class LivePlotterChannelConfig:
-    """Cofiguration dataclass for each channel to be visualized in the live plotter
-    Attributes:
-        name (str): Name of the channel that will be displayed in the plot legend
-        visualized_channel (int): Index of the channel in the LSL stream to be visualized
-        lsl_layer_name (str): Name of the LSL stream layer to connect to
-        curve_color (str, optional): Color of the curve in the plot. Defaults to None.
-        value_translation_func (callable, optional): Function to translate raw data values. Defaults to None.
-    """
-
     name: str
+    unit: str
     visualized_channel: int
-    lsl_layer_name: str
-    window_width_sec: float
     curve_color: str = "b"
-    value_translation_func: callable = None
+    grid_row: int = None
+    grid_col: int = None
+
+
+@dataclass
+class PlotSessionConfig:
+    curve_color: str
+    channels: list[LivePlotterChannelConfig]
+
+
+class RingBuffer:
+    def __init__(self, size: int) -> None:
+        self._size = size
+        self._data = np.zeros(2 * size)
+        self._ptr = 0
+        self._filled = 0
+
+    def extend(self, values: np.ndarray) -> None:
+        values = np.asarray(values)[-self._size:]
+        n = len(values)
+        idx = (self._ptr + np.arange(n)) % self._size
+        self._data[idx] = values
+        self._data[idx + self._size] = values
+        self._ptr = (self._ptr + n) % self._size
+        self._filled = min(self._filled + n, self._size)
+
+    def get(self) -> np.ndarray:
+        if self._filled < self._size:
+            return self._data[:self._filled]
+        return self._data[self._ptr:self._ptr + self._size]
+
+    def __len__(self) -> int:
+        return self._filled
 
 
 class LivePlotter:
-    def __init__(self, config: LivePlotterChannelConfig):
-        self._translation_func = [i.value_translation_func for i in config]
-        self._inlet = self._search_lsl_stream_and_connect([i.lsl_layer_name for i in config])
-        self._fs = self._get_stream_samplingrate() if self._get_stream_samplingrate() > 0 else 250
-        self._visualized_channel = [i.visualized_channel for i in config]
+    UPDATE_INTERVAL_MS: int = 33
+    PLOTS_PER_ROW: int = 4
+    LINE_WIDTH: int = 2
 
-        self.max_samples = (
-            int(self._fs * config.window_width_sec)
-            if type(config) == LivePlotterChannelConfig
-            else int(self._fs * config[0].window_width_sec)
-        )
+    def __init__(self, lsl_name: str, window_width_sec: float, path2config: Path | None = None) -> None:
+        self._window_width_sec = window_width_sec
+        self._inlet = self._search_lsl_stream_and_connect(lsl_name)
+        info = self._inlet.info()
+        if path2config is None:
+            config = load_plot_config_from_stream(self._inlet, curve_color='r')
+        else:
+            config = load_plot_config_from_json(path2config, curve_color='r')
 
-        self.data_buffers = [np.zeros(self.max_samples) for _ in config]
-        self.time_buffers = [np.zeros(self.max_samples) for _ in config]
-        self.write_pointers = [0 for _ in self._inlet]
-        self.caluclate_counter = 0
+        channels = config.channels
+        self._display_mode = "grid" if all(c.grid_row is not None for c in channels) else "filtered"
+        self._visualized_channel = [c.visualized_channel for c in channels]
+        self._grid_positions = [(c.grid_row, c.grid_col) for c in channels]
+        self._grid_units = [c.unit for c in channels]
 
-        self._app, self._win, self._plot_item, self._curves, self._freq_labels = self._init_plot(
-            [i.curve_color for i in config], [i.name for i in config]
+        self._validate_channels()
+        self.max_samples = max(1, int(round(info.nominal_srate() * self._window_width_sec)))
+        self.data_buffers = [RingBuffer(self.max_samples) for _ in channels]
+        self._time_buffer = RingBuffer(self.max_samples)
+        self._start_time = time.monotonic()
+        self._last_runtime_sec = -1
+        self._app, self._win, self._plot_items, self._curves, self._curve_source_indices = self._init_plot(
+            curve_color=config.curve_color,
+            curve_labels=[c.name for c in channels]
         )
         self._timer = self._init_timer()
 
-    def _search_lsl_stream_and_connect(self, lsl_layer_name: list) -> list[StreamInlet]:
-        """Search for an LSL streams by name and connecting to them
-
-        Args:
-            lsl_layer_name (list): A list of LSL stream layer names to search for
-
-        Raises:
-            RuntimeError: If no stream with the specified layer name is found
-
-        Returns:
-            list[StreamInlet]: A list of connected StreamInlet objects
-        """
-        inlets = []
-        print("Search for LSL Stream..")
-        for layer_name in lsl_layer_name:
-            streams = resolve_bypred(predicate=f"name='{layer_name}'")
-            if streams:
-                print(f"LSL Stream '{layer_name}' found, connecting...")
-                inlet = StreamInlet(
-                    streams[0],
-                    max_buflen=60,
-                    max_chunklen=1024,
-                    recover=True,
-                    processing_flags=proc_threadsafe,
-                )
-                inlets.append(inlet)
-            else:
-                raise RuntimeError(f"No Stream with Layer Name {layer_name} found!")
-        return inlets
-
-    def _get_stream_samplingrate(self) -> int:
-        """Getting the highest nominal sampling rate of the connected LSL streams
-
-        Returns:
-            int: Highest nominal sampling rate of the streams
-        """
-        fs = []
-        for inlet in self._inlet:
-            fs.append(inlet.info().nominal_srate())
-        return int(max(fs))
-
-    def _init_plot(self, curves_color: list[str], curves_name: list[str]) -> tuple:
-        """Initialize the PyQtGraph plot for live data visualization
-
-        Returns:
-            tuple: A tuple containing the QApplication, GraphicsLayoutWidget, PlotItem, and PlotDataItem
-        """
-        app = QtWidgets.QApplication([])
-        win = pg.GraphicsLayoutWidget(show=True, title="LSL Live Plot")
-        plot_item = win.addPlot(title="Live EEG Data")
-        plot_item.setLabel("left", "Amplitude", units="Data Points")
+    def _make_plot_item(self, win: pg.GraphicsLayoutWidget, row: int, col: int, unit: str):
+        plot_item = win.addPlot(row=row, col=col)
+        plot_item.setLabel("left", "Value", units=f" {unit}" if unit else "")
         plot_item.setLabel("bottom", "Time", units="s")
         plot_item.showGrid(x=True, y=True)
+        plot_item.setClipToView(True)
+        plot_item.setDownsampling(auto=True, mode="peak")
+        plot_item.setXRange(-self._window_width_sec, 0, padding=0.02)
+        plot_item.enableAutoRange(axis="x", enable=False)
+        num_ticks = max(2, int(self._window_width_sec / 2))
+        ticks = [(float(v), f"{v:g}") for v in np.linspace(-self._window_width_sec, 0, num_ticks)]
+        plot_item.getAxis("bottom").setTicks([ticks])
+        return plot_item
+
+    def _make_curve(self, plot_item, curve_color: str, curve_labels: list[str], idx: int):
         plot_item.addLegend()
+        pen = pg.mkPen(color=curve_color, width=self.LINE_WIDTH)
+        return plot_item.plot(pen=pen, name=curve_labels[idx])
 
-        curves = []
-        for idx, selected_data_buffer in enumerate(self.data_buffers):
-            curves.append(
-                plot_item.plot(
-                    pen="y" if curves_color is None else curves_color[idx], name=curves_name[idx]
+    def _search_lsl_stream_and_connect(self, lsl_name: str) -> StreamInlet:
+        streams = resolve_bypred(predicate=f"name='{lsl_name}'")
+        if not streams:
+            raise RuntimeError(f"No Stream with Layer Name {lsl_name} found!")
+        return StreamInlet(
+            streams[0],
+            max_buflen=60,
+            max_chunklen=1024,
+            recover=True,
+            processing_flags=proc_threadsafe,
+        )
+
+    def _validate_channels(self) -> None:
+        channel_count = self._inlet.channel_count
+        for ch in self._visualized_channel:
+            if ch < 0 or ch >= channel_count:
+                raise ValueError(
+                    f"Visualized channel index {ch} is outside the stream channel range 0..{channel_count - 1}."
                 )
-            )
 
-        # Create frequency overlay using a ViewBox with TextItems
-        freq_legend = pg.ViewBox()
-        freq_legend.setBackgroundColor((50, 50, 50, 180))
-        freq_legend.setFixedWidth(180)
-        freq_legend.setFixedHeight(20 + len(self.data_buffers) * 22)
-        freq_legend.setRange(xRange=(0, 1), yRange=(0, 1), padding=0)
-        freq_legend.setMouseEnabled(x=False, y=False)
-        freq_legend.setMenuEnabled(False)
+    def _init_plot(self, curve_color: str, curve_labels: list[str]) -> tuple:
+        app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+        win = pg.GraphicsLayoutWidget(show=True, title="LSL Live Plot")
+        win.resize(1400, 700)
 
-        freq_labels = []
-        for idx in range(len(self.data_buffers)):
-            color = curves_color[idx] if curves_color else "y"
-            label = pg.TextItem(text=f"{curves_name[idx]}: -- Hz", color=color, anchor=(0, 0))
-            label.setPos(0.05, 0.95 - (idx + 1) * (0.9 / (len(self.data_buffers) + 1)))
-            freq_legend.addItem(label)
-            freq_labels.append(label)
+        if self._display_mode == "grid":
+            num_cols = max((col for _, col in self._grid_positions), default=0) + 1
+        else:
+            num_cols = max(1, min(len(self.data_buffers), self.PLOTS_PER_ROW))
+        self._runtime_label = win.addLabel(
+            "Laufzeit: 00:00:00", row=0, col=0, colspan=num_cols, justify="left", size="12pt"
+        )
 
-        win.addItem(freq_legend, row=0, col=1)
+        plot_items = []
+        curves = []
+        curve_source_indices = []
 
-        title_label = pg.TextItem(text="Peak Frequency", color="w", anchor=(0, 0))
-        title_label.setPos(0.05, 0.95)
-        freq_legend.addItem(title_label)
+        if self._display_mode == "grid":
+            for idx in range(len(self.data_buffers)):
+                row, col = self._grid_positions[idx]
+                plot_item = self._make_plot_item(win, row + 1, col, self._grid_units[idx])
+                curve = self._make_curve(plot_item, curve_color, curve_labels, idx)
+                plot_items.append(plot_item)
+                curves.append(curve)
+                curve_source_indices.append(idx)
+        else:
+            for idx in range(len(self.data_buffers)):
+                row, col = divmod(idx, self.PLOTS_PER_ROW)
+                plot_item = self._make_plot_item(win, row + 1, col, self._grid_units[idx])
+                curve = self._make_curve(plot_item, curve_color, curve_labels, idx)
+                plot_items.append(plot_item)
+                curves.append(curve)
+                curve_source_indices.append(idx)
 
-        return app, win, plot_item, curves, freq_labels
+        return app, win, plot_items, curves, curve_source_indices
 
     def _init_timer(self) -> QtCore.QTimer:
-        """Initialize the QTimer for periodic plot updates
-
-        Returns:
-            QtCore.QTimer: The initialized QTimer object
-        """
         timer = QtCore.QTimer()
         timer.timeout.connect(self._update)
-        timer.start(20)
+        timer.start(self.UPDATE_INTERVAL_MS)
         return timer
 
-    def _update(self, iterr_threshold_for_calulaction: int = 10) -> None:
-        """Update the plot with new data from the LSL stream
+    def _append_chunk(self, data: np.ndarray, timestamps: np.ndarray) -> None:
+        for i, ch in enumerate(self._visualized_channel):
+            column = data[:, ch]
+            self.data_buffers[i].extend(column)
+        self._time_buffer.extend(timestamps)
 
-        Args:
-            iterr_threshold_for_calulaction (int, optional): Threshold for the calculation. Defaults to 10.
-        """
-        for idx, selected_inlet in enumerate(self._inlet):
-            data, timestamp = selected_inlet.pull_chunk(timeout=0.0, max_samples=self.max_samples)
-            if not data:
+    def _update_runtime_label(self) -> None:
+        elapsed = int(time.monotonic() - self._start_time)
+        if elapsed == self._last_runtime_sec:
+            return
+        self._last_runtime_sec = elapsed
+        hours, remainder = divmod(elapsed, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        self._runtime_label.setText(f"Laufzeit: {hours:02d}:{minutes:02d}:{seconds:02d}")
+
+    def _update(self) -> None:
+        self._update_runtime_label()
+
+        data, timestamps = self._inlet.pull_chunk(timeout=0.0, max_samples=self.max_samples)
+        if len(timestamps) > 0:
+            self._append_chunk(np.asarray(data), np.asarray(timestamps))
+
+        if len(self._time_buffer) == 0:
+            return
+
+        time_axis = self._time_buffer.get()
+        time_axis = time_axis - time_axis[-1]
+
+        for curve, src_idx in zip(self._curves, self._curve_source_indices):
+            if curve is None:
                 continue
-            data = np.array(data)[:, self._visualized_channel[idx]]
-            timestamp = np.array(timestamp)
-            end_pointer = self.write_pointers[idx] + len(data)
-            if self._translation_func[idx] is not None:
-                data = self._translation_func[idx](data)
+            curve.setData(time_axis, self.data_buffers[src_idx].get(), skipFiniteCheck=True)
 
-            if end_pointer <= self.max_samples:
-                self.data_buffers[idx][self.write_pointers[idx] : end_pointer] = data
-                self.time_buffers[idx][self.write_pointers[idx] : end_pointer] = np.array(timestamp)
-            else:
-                break_point = self.max_samples - self.write_pointers[idx]
-                self.data_buffers[idx][self.write_pointers[idx] :] = data[:break_point]
-                self.data_buffers[idx][: len(data) - break_point] = data[break_point:]
+    def start(self) -> None:
+        QtWidgets.QApplication.instance().exec()
 
-                self.time_buffers[idx][self.write_pointers[idx] :] = timestamp[:break_point]
-                self.time_buffers[idx][: len(data) - break_point] = timestamp[break_point:]
-            self.write_pointers[idx] = (self.write_pointers[idx] + len(data)) % self.max_samples
 
-        time_now = local_clock()
-        for idx, curve in enumerate(self._curves):
-            plot_data = np.concatenate(
-                (
-                    self.data_buffers[idx][self.write_pointers[idx] :],
-                    self.data_buffers[idx][: self.write_pointers[idx]],
-                )
+def load_plot_config_from_json(config_path: Path, curve_color: str) -> PlotSessionConfig:
+    with config_path.open("r", encoding="utf-8") as config_file:
+        config_data = json.load(config_file)
+
+    channels = config_data.get("channels")
+    if not isinstance(channels, list):
+        raise ValueError('The plot configuration must contain a "channels" list.')
+    display_mode = config_data.get("display_mode", "filtered")
+    grid_layout = config_data.get("grid_layout") or []
+
+    position_by_channel_number = {
+        channel_number: (row_idx, col_idx)
+        for row_idx, row in enumerate(grid_layout)
+        for col_idx, channel_number in enumerate(row)
+        if channel_number
+    }
+    if display_mode != "grid":
+        position_by_channel_number = {}
+
+    plot_configs: list[LivePlotterChannelConfig] = []
+    for channel in channels:
+        channel_number = channel["channel_number"]
+        grid_row, grid_col = position_by_channel_number.get(channel_number, (None, None))
+        plot_configs.append(
+            LivePlotterChannelConfig(
+                name=channel["name"],
+                visualized_channel=channel_number - 1,
+                curve_color=channel.get("curve_color", "b"),
+                grid_row=grid_row,
+                grid_col=grid_col,
+                unit=channel.get("unit", ""),
             )
-            plot_time = np.concatenate(
-                (
-                    self.time_buffers[idx][self.write_pointers[idx] :],
-                    self.time_buffers[idx][: self.write_pointers[idx]],
-                )
-            )
-            valid_mask = plot_time > 0  # Check for valid timestamps
-            if np.any(valid_mask):
-                curve.setData(plot_time[valid_mask] - time_now, plot_data[valid_mask])
-                if (
-                    np.sum(valid_mask) >= self.max_samples
-                    and self.caluclate_counter >= iterr_threshold_for_calulaction
-                ):
-                    self._caluclate_frequency(
-                        idx=idx, data=plot_data[valid_mask], time=plot_time[valid_mask]
-                    )
-        if self.caluclate_counter >= iterr_threshold_for_calulaction:
-            self.caluclate_counter = 0
-        else:
-            self.caluclate_counter += 1
-
-    def _caluclate_frequency(self, idx: int, data: np.ndarray, time: np.ndarray) -> None:
-        """Calculate the peak frequency of the signal using FFT
-
-        Args:
-            idx (int): Index of the Curve
-            data (np.ndarray): Data array for frequency calculation, after concatenation
-            time (np.ndarray): Time array corresponding to the data, after concatenation
-        """
-        fs = 1 / np.mean(np.diff(time[-1024:]))
-        fft_values = np.abs(np.fft.rfft(data[-1024:]))
-        freqs = np.fft.rfftfreq(1024, d=1.0 / fs)
-        max_idx = np.argmax(fft_values)
-        peak_freq = freqs[max_idx]
-        self._freq_labels[idx].setText(f"{peak_freq:.2f} Hz")
-
-    def start(self):
-        """Start the live plotter"""
-        QtWidgets.QApplication.instance().exec_()
-
-
-def start_live_plotter(config: list) -> None:
-    """Start the live plotter with the given configuration"""
-    plotter = LivePlotter(config=config)
-    plotter.start()
-
-
-def translation_func_dac(value_to_translate: np.array, v_ref: float = 5.0) -> list:
-    value_to_translate = v_ref * ((value_to_translate / (2**15)) - 1)
-    return value_to_translate
-
-
-def translation_func_adc(value_to_translate: int) -> list:
-    value_to_translate = value_to_translate * 1.25 / 2**23
-    return value_to_translate
-
-
-if __name__ == "__main__":
-    config = [
-        LivePlotterChannelConfig(
-            visualized_channel=0,
-            name="DAC Data",
-            lsl_layer_name="PlayerData",
-            curve_color="r",
-            value_translation_func=translation_func_dac,
-        ),
-        LivePlotterChannelConfig(
-            visualized_channel=0,
-            name="Digital Twin",
-            lsl_layer_name="DigitalTwinOutput",
-            curve_color="g",
-            value_translation_func=None,
-        ),
-    ]
-    config_DAC = [
-        LivePlotterChannelConfig(
-            visualized_channel=0,
-            name="DAC Data",
-            lsl_layer_name="PlayerData",
-            curve_color="r",
-            value_translation_func=translation_func_dac,
         )
-    ]
-    plotter = LivePlotter(config=config_DAC)
-    plotter.start()
+
+    if display_mode == "grid" and any(c.grid_row is None for c in plot_configs):
+        raise ValueError('Display mode "grid" requires every channel to appear in "grid_layout".')
+
+    return PlotSessionConfig(
+        channels=plot_configs,
+        curve_color=curve_color
+    )
+
+
+def load_plot_config_from_stream(inlet: StreamInlet, curve_color: str) -> PlotSessionConfig:
+    info = inlet.info()
+    channel_count = info.channel_count()
+    labels = info.get_channel_labels() or []
+    units = info.get_channel_units() or []
+    types = info.get_channel_types() or []
+
+    def parse_layout(entry: str | None) -> list[list[int]]:
+        if not isinstance(entry, str) or not entry.strip().startswith("["):
+            return []
+        try:
+            rows = json.loads(entry)
+        except ValueError:
+            rows = ast.literal_eval(entry)
+        return [json.loads(row) if isinstance(row, str) else [int(x) for x in row] for row in rows]
+
+    grid_layout = parse_layout(types[0] if types else None)
+    position_by_channel_number = {
+        int(channel_number): (row_idx, col_idx)
+        for row_idx, row in enumerate(grid_layout)
+        for col_idx, channel_number in enumerate(row)
+        if channel_number
+    }
+
+    channels: list[LivePlotterChannelConfig] = []
+    for i in range(channel_count):
+        grid_row, grid_col = position_by_channel_number.get(i + 1, (None, None))
+        channels.append(
+            LivePlotterChannelConfig(
+                name=labels[i] if i < len(labels) and labels[i] else f"Channel {i + 1}",
+                visualized_channel=i,
+                curve_color=curve_color,
+                grid_row=grid_row,
+                grid_col=grid_col,
+                unit=units[i] if i < len(units) and units[i] else "",
+            )
+        )
+    return PlotSessionConfig(curve_color=curve_color, channels=channels)
