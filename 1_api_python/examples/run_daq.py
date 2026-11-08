@@ -1,22 +1,52 @@
 from api import DeviceAPI
 from logging import basicConfig, DEBUG, INFO
 
+from api.src._live_visualize import ChannelConfig
 
 if __name__ == "__main__":
     basicConfig(level=INFO)
 
     DeviceAPI().do_reset()
     dut = DeviceAPI()
-    dut.define_channel_layout(
-        channel_layout=[[1, 0], [0, 2]],
-        channel_names=["CH0", "CH1"],
-        channel_units=["LSB", "LSB"]
+    do_plot = True
+    do_record = True
+    do_process = False
+
+    dut.setup_live_plotter(
+        plot_titles=[["plot1", "plot2"], ["plot3","plot4"]]
     )
+
+    dut.add_plot_channel(
+        lsl_stream_name="data",
+        channel_name="CH0 Raw",
+        channel_unit="LSB",
+        curve_color='r',
+        position=(0, 0),
+        stream_channel_idx=0
+    )
+    dut.add_plot_channel(
+        lsl_stream_name="data",
+        channel_name="CH1 Raw",
+        channel_unit="LSB",
+        curve_color='b',
+        position=(0, 1),
+        stream_channel_idx=1
+    )
+
+    if do_process:
+        dut.add_plot_channel(
+            lsl_stream_name="filt",
+            channel_name="CH0 Filtered",
+            channel_unit="LSB",
+            curve_color="#FF0000",  # Rot
+            position=(0, 1),
+            stream_channel_idx=0
+        )
     dut.start_daq(
         sampling_rate=1000.0,
-        do_plot=True,
-        do_record=True,
-        do_process=False,
+        do_plot=do_plot,
+        do_record=do_record,
+        do_process=do_process,
         window_sec=10.0,
     )
     dut.stop_daq()

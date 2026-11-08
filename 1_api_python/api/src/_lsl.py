@@ -1,3 +1,4 @@
+import sys
 from datetime import datetime
 from logging import Logger, getLogger
 from pathlib import Path
@@ -10,10 +11,11 @@ import pylsl
 from h5py import File
 from psutil import cpu_percent, virtual_memory
 from pylsl import StreamInfo, StreamInlet, StreamOutlet, proc_threadsafe, resolve_bypred
+from pyqtgraph.Qt import QtWidgets
 from tqdm import tqdm
 
 from api.data_api import DataAPI, StreamRecording
-from api.src._live_visualizer import LivePlotter
+from api.src._live_visualize import LivePlotter, LivePlotterChannelConfig
 
 
 class RingBuffer:
@@ -672,17 +674,16 @@ class ThreadLSL:
                 self._thread_active[stim_idx] = False
 
     def lsl_plot_stream(
-            self, stim_idx: int, name: str, window_length: float = 10.
+            self,
+            plot_config: LivePlotterChannelConfig,
+            window_length: float = 10.0,
     ) -> None:
-        """Function for LSL to enable live plotting of the incoming results using VisPy
-        :param stim_idx:        Integer with array index to write into heartbeat feedback array
-        :param name:            String with the name of the LSL stream to get data
-        :param window_length:   Floating value with length of the time window for plotting in seconds
-        :return:                None
+        """Function for LSL to enable live plotting using LivePlotter (PyQtGraph)
+        receiving a pre-built LivePlotterChannelConfig object.
         """
-        plotter = LivePlotter(
-            lsl_name=name,
-            window_width_sec=window_length,
-            path2config=None
-        )
-        plotter.start()
+        app = QtWidgets.QApplication.instance()
+        if app is None:
+            app = QtWidgets.QApplication(sys.argv)
+
+        plotter = LivePlotter(plot_config, window_width_sec=window_length)
+        app.exec()

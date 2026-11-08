@@ -15,6 +15,7 @@ from .src._helper import (
 )
 from .src._interface_serial import InterfaceSerial, get_comport_name
 from .src._interface_wifi import InterfaceWifi
+from .src._live_visualize import LivePlotterChannelConfig, ChannelConfig
 from .src._lsl import ThreadLSL
 
 
@@ -31,6 +32,7 @@ class DeviceAPI:
     __layout_channels: list[list[int]] = list()
     __layout_labels: list[str] = list()
     __layout_units: list[str] = list()
+    __plot_config: LivePlotterChannelConfig | None = None
     _num_daq_tasks: int = 0
     _pin_names: list[str] = ["LED_USER"]
     _state_names: list[str] = ["ERROR", "RESET", "INIT", "IDLE", "TEST", "DAQ"]
@@ -201,21 +203,40 @@ class DeviceAPI:
         """
         self._write_without_feedback(Commands.TOGGLE_LED)
 
-    def define_channel_layout(self, channel_layout: list[list[int]], channel_names: list[str], channel_units: list[str]) -> None:
-        """Defining the channel layout of the real DAQ system
-        :param channel_layout:   List of strings with channel number
-        :param channel_names:    List of strings with channel names
-        :param channel_units:    List of strings with channel units
+    def setup_live_plotter(self, plot_titles: list[list[str]]) -> None:
+        """Initialisiert das Plotter-Raster (Zeilen x Spalten).
+        Kanäle werden anschließend schrittweise mit add_plot_channel() hinzugefügt.
         """
-        self.__layout_channels = channel_layout
-        self.__layout_labels = channel_names
-        self.__layout_units = channel_units
+        self.__plot_config = LivePlotterChannelConfig(
+            plot_title=plot_titles,
+            channel_configs=[]
+        )
 
-    def get_channel_layout(self) -> tuple[list[list[int]], list[str]]:
-        """Returning the channel information of the DAQ system
-        :return:    Tuple with (1) layout and (2) labels of the channel layout
+    def add_plot_channel(
+            self,
+            lsl_stream_name: str,
+            channel_name: str,
+            channel_unit: str,
+            curve_color: str,
+            position: tuple[int, int],
+            stream_channel_idx: int = 0,
+    ) -> None:
+        """Fügt der Plot-Konfiguration einen Kanal hinzu.
+        Kann beliebig oft (z. B. vor und nach der Vorverarbeitung) aufgerufen werden.
         """
-        return self.__layout_channels, self.__layout_labels
+        if self.__plot_config is None:
+            raise RuntimeError("Bitte zuerst setup_live_plotter(plot_titles=...) aufrufen!")
+
+        self.__plot_config.channel_configs.append(
+            ChannelConfig(
+                lsl_stream_name=lsl_stream_name,
+                channel_name=channel_name,
+                channel_unit=channel_unit,
+                curve_color=curve_color,
+                position=position,
+                stream_channel_idx=stream_channel_idx,
+            )
+        )
 
     def _update_daq_sampling_rate(self, sampling_rate: float) -> None:
         """Updating the sampling rate of the DAQ
@@ -394,13 +415,8 @@ class DeviceAPI:
         self.__daq_config = self.get_daq_characteristics(num_daq_task-1)
         if not self.__layout_labels:
             self.__layout_labels = [f"CH{idx}" for idx in range(self.__daq_config.num_channels)]
-            self.__layout_channels = [[idx for idx in range(self.__daq_config.num_channels)]]
-            self.__layout_units = [" " for _ in range(self.__daq_config.num_channels)]
-        active = sum(1 for channel_number in self.__layout_channels if channel_number)
-        if not len(self.__layout_labels) == active == self.__daq_config.num_channels:
-            raise ValueError(
-                f"Number of channels in layout ({self.__daq_config.num_channels}) does not match number of channels in DAQ ({len(self.__layout_labels)})"
-            )
+            self.__layout_channels = [[idx] for idx in range(self.__daq_config.num_channels)]
+            self.__layout_units = ["LSB" for _ in range(self.__daq_config.num_channels)]
 
         stream_idx = 0
         source_stream = "data"
@@ -456,11 +472,12 @@ class DeviceAPI:
         self._write_without_feedback(Commands.START_DAQ)
 
         if do_plot:
-            plot_args = (stream_idx, output_stream, window_sec)
-            self.__threads.lsl_plot_stream(*plot_args)
-            # self.__threads.register(
-            #    func=self.__threads.lsl_plot_stream, args=(stream_idx, output_stream, window_sec)
-            # )
+            if self.__plot_config is None or not self.__plot_config.channel_configs:
+                raise RuntimeError("LivePlotter is not configured!")
+            self.__threads.lsl_plot_stream(
+                plot_config=self.__plot_config,
+                window_length=window_sec
+            )
 
     def stop_daq(self) -> None:
         """Changing the state of the DAQ with stopping it
