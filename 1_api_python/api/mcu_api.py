@@ -204,8 +204,8 @@ class DeviceAPI:
         self._write_without_feedback(Commands.TOGGLE_LED)
 
     def setup_live_plotter(self, plot_titles: list[list[str|None]]) -> None:
-        """Initialisiert das Plotter-Raster (Zeilen x Spalten).
-        Kanäle werden anschließend schrittweise mit add_plot_channel() hinzugefügt.
+        """initialize the live plotter ( row * col).
+        channels can be added afterwards with add_plot_channel()
         """
         self.__plot_config = LivePlotterChannelConfig(
             plot_title=plot_titles,
@@ -221,11 +221,10 @@ class DeviceAPI:
             position: tuple[int, int],
             stream_channel_idx: int = 0,
     ) -> None:
-        """Fügt der Plot-Konfiguration einen Kanal hinzu.
-        Kann beliebig oft (z. B. vor und nach der Vorverarbeitung) aufgerufen werden.
+        """add a channel to the live plotter
         """
         if self.__plot_config is None:
-            raise RuntimeError("Bitte zuerst setup_live_plotter(plot_titles=...) aufrufen!")
+            raise RuntimeError("please set up setup_live_plotter(plot_titles=..) first!")
 
         self.__plot_config.channel_configs.append(
             ChannelConfig(
