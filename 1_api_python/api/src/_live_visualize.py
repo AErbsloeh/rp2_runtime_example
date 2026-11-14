@@ -4,8 +4,8 @@ from typing import Any
 
 import numpy as np
 import pyqtgraph as pg
-from pyqtgraph.Qt import QtCore, QtWidgets
-from pylsl import StreamInlet, resolve_bypred, proc_threadsafe, StreamInfo, StreamOutlet
+from pyqtgraph.Qt import QtCore
+from pylsl import StreamInlet, resolve_bypred, proc_threadsafe
 
 
 @dataclass
@@ -20,7 +20,7 @@ class ChannelConfig:
 
 @dataclass
 class LivePlotterChannelConfig:
-    plot_title: list[list[str]] #[row][col]
+    plot_title: list[list[str|None]] #[row][col]
     channel_configs: list[ChannelConfig]
 
 class RingBuffer:
@@ -74,7 +74,7 @@ class LivePlotter:
         streams = resolve_bypred(predicate=f"name='{lsl_name}'", timeout=timeout)
 
         if not streams:
-            raise RuntimeError(f"LSL Stream '{lsl_name}' wurde nicht innerhalb von {timeout}s gefunden!")
+            raise RuntimeError(f"LSL Stream '{lsl_name}' was not found in {timeout}s !")
         return StreamInlet(
             streams[0],
             max_buflen=60,
@@ -96,7 +96,7 @@ class LivePlotter:
         return inlets
 
     def _init_ui(self) -> None:
-        self._win = pg.GraphicsLayoutWidget(show=True, title="LSL Live Plot\t Laufzeit: 00:00:00")
+        self._win = pg.GraphicsLayoutWidget(show=True, title="LSL Live Plot\t Runtime: 00:00:00")
         self._win.resize(1400, 700)
 
         self.plots = {}
@@ -107,10 +107,14 @@ class LivePlotter:
             channels_by_pos.setdefault(ch.position, []).append(ch)
 
         for row in range(len(self.channel_config.plot_title)):
-            for col in range(len(self.channel_config.plot_title[0])):
-                plot_item = self._win.addPlot(row=row, col=col, title=self.channel_config.plot_title[row][col] )
-                plot_item.showGrid(x=True, y=True, alpha=0.3)
-                plot_item.setXRange(0, self._window_width_sec*1000, padding=0)
+            for col in range(len(self.channel_config.plot_title[row])):
+                plot_title = self.channel_config.plot_title[row][col]
+                if plot_title is None:                  #if, then add an empty block to keep order
+                    self._win.addViewBox(row=row,col=col)
+                else:
+                    plot_item = self._win.addPlot(row=row, col=col, title=plot_title)
+                    plot_item.showGrid(x=True, y=True, alpha=0.3)
+                    plot_item.setXRange(0, self._window_width_sec*1000, padding=0)
 
         for ch in self.channels:
             row, col = ch.position
@@ -150,7 +154,7 @@ class LivePlotter:
         self._last_runtime_sec = elapsed
         hours, remainder = divmod(elapsed, 3600)
         minutes, seconds = divmod(remainder, 60)
-        self._win.setWindowTitle(f"LSL Live Plot\t Laufzeit: {hours:02d}:{minutes:02d}:{seconds:02d}")
+        self._win.setWindowTitle(f"LSL Live Plot\t Runtime: {hours:02d}:{minutes:02d}:{seconds:02d}")
 
     def _update_plots(self) -> None:
         chunks_by_stream = {}
