@@ -1,7 +1,6 @@
 from api import DeviceAPI
 from logging import basicConfig, DEBUG, INFO
 
-from api.src._live_visualize import ChannelConfig
 
 if __name__ == "__main__":
     basicConfig(level=INFO)
@@ -13,7 +12,7 @@ if __name__ == "__main__":
     do_process = False
 
     dut.setup_live_plotter(
-        plot_titles=[["plot1", "plot2"], ["plot3","plot4"]]
+        plot_titles=[["plot1", "plot2"], [None,"plot3"]]
     )
 
     dut.add_plot_channel(
@@ -29,7 +28,7 @@ if __name__ == "__main__":
         channel_name="CH1 Raw",
         channel_unit="LSB",
         curve_color='b',
-        position=(0, 1),
+        position=(0, 0),
         stream_channel_idx=1
     )
 

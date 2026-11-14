@@ -203,7 +203,7 @@ class DeviceAPI:
         """
         self._write_without_feedback(Commands.TOGGLE_LED)
 
-    def setup_live_plotter(self, plot_titles: list[list[str]]) -> None:
+    def setup_live_plotter(self, plot_titles: list[list[str|None]]) -> None:
         """Initialisiert das Plotter-Raster (Zeilen x Spalten).
         Kanäle werden anschließend schrittweise mit add_plot_channel() hinzugefügt.
         """
