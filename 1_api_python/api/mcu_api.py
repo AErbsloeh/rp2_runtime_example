@@ -1,9 +1,12 @@
+import json
 from logging import Logger, getLogger
 from time import sleep
+from pathlib import Path
 
 import numpy as np
 
 from .definitions import Commands
+from .src import _helper
 from .src._helper import (
     DataAcquisitionConfig,
     SystemState,
@@ -500,6 +503,38 @@ class DeviceAPI:
         """
         self.__threads.wait_for_seconds(time_sec)
 
+    def set_liveplotter_config_manually(
+        self,
+        do_process: bool = True,):
+        self.setup_live_plotter(
+            plot_titles=[["plot1", "plot2"], [None, "plot3"]]
+        )
+
+        self.add_plot_channel(
+            lsl_stream_name="data",
+            channel_name="CH0 Raw",
+            channel_unit="LSB",
+            curve_color='r',
+            position=(0, 0),
+            stream_channel_idx=0
+        )
+        self.add_plot_channel(
+            lsl_stream_name="data",
+            channel_name="CH1 Raw",
+            channel_unit="LSB",
+            curve_color='b',
+            position=(1, 1),
+            stream_channel_idx=1
+        )
+        if do_process:
+            self.add_plot_channel(
+                lsl_stream_name="filt",
+                channel_name="CH0 Filtered",
+                channel_unit="LSB",
+                curve_color="#FF0000",
+                position=(0, 1),
+                stream_channel_idx=0
+            )
     def __process_stream_init(self, sampling_rate: float) -> None:
         pass
 
@@ -509,3 +544,46 @@ class DeviceAPI:
             dat = [data[0] - 32768, data[1]]
             data_out.append(dat)
         return data_out
+
+    def load_plotconfigs_from_json(self, file_path: str | Path) -> None:
+        """Loading plot and channel layout configurations from a JSON file
+        :param file_path:   Path to the JSON configuration file
+        :return:            Dictionary containing the parsed plot configurations
+        """
+        path = Path(_helper.get_path_to_project(), file_path)
+
+        with open(path, "r", encoding="utf-8") as json_file:
+            raw_data = json.load(json_file)
+
+        channel_configs = [
+            ChannelConfig(
+                lsl_stream_name=ch["lsl_stream_name"],
+                channel_name=ch["channel_name"],
+                channel_unit=ch["channel_unit"],
+                curve_color=ch["curve_color"],
+                position=tuple(ch["position"]),
+                stream_channel_idx=ch.get("stream_channel_idx", 0),
+            )
+            for ch in raw_data["channel_configs"]
+        ]
+
+        self.__plot_config = LivePlotterChannelConfig(
+            plot_title=raw_data["plot_title"],
+            channel_configs=channel_configs,
+        )
+        self.__logger.info(f"Loaded plot configurations from {path}")
+
+    def save_plotconfigs_to_json(
+            self,
+            file_path: str | Path,
+    ) -> None:
+        """Saving current plot and channel layout configurations to a JSON file
+        :param file_path:       Path to the target JSON configuration file
+
+        :return:                Dictionary containing the saved plot configurations
+        """
+        path = Path(_helper.get_path_to_project(), file_path)
+
+        with open(path, "w", encoding="utf-8") as json_file:
+            json.dump(self.__plot_config, json_file, default=lambda o: o.__dict__, indent=4, ensure_ascii=False)
+        self.__logger.info(f"Saved plot configurations to {path}")
