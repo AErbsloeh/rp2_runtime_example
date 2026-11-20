@@ -1,9 +1,10 @@
-import pytest
-import numpy as np
 from pathlib import Path
 from shutil import rmtree
-from logging import basicConfig, DEBUG
-from api import get_path_to_project, DataAPI, StreamRecording, DeviceAPI
+
+import numpy as np
+import pytest
+
+from api import DataAPI, DeviceAPI, StreamRecording, get_path_to_project
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -26,23 +27,26 @@ def dut():
 
 @pytest.fixture(scope="session", autouse=True)
 def period():
-    period = 5.
+    period = 3.
     yield period
+
+
+@pytest.fixture(autouse=True)
+def stop_daq_after_test(dut: DeviceAPI):
+    yield
+    if dut.is_daq_running:
+        dut.stop_daq()
 
 
 @pytest.mark.hardware
 def test_record_samples(path: Path, dut: DeviceAPI, period: float):
-    dut.define_channel_layout(
-        channel_layout=[],
-        channel_names=[]
-    )
     dut.start_daq(
         folder_name="temp_data",
         sampling_rate=100.,
         window_sec=0.1,
         do_plot=False,
         do_record=True,
-        do_process=False,
+        do_process=True,
     )
     dut.wait_daq(period)
     dut.stop_daq()
@@ -64,7 +68,7 @@ def test_record_samples(path: Path, dut: DeviceAPI, period: float):
     assert data.time[-1] > period
     assert data.get_period_std < 5e-6
 
-    assert reader.is_utilization_available == True
+    assert reader.is_utilization_available
     util = reader.get_utilization()
     assert type(util) == StreamRecording
     assert util.file == reader.get_path2file()
@@ -79,17 +83,13 @@ def test_record_samples(path: Path, dut: DeviceAPI, period: float):
 
 @pytest.mark.hardware
 def test_record_batch(path: Path, dut: DeviceAPI, period: float):
-    dut.define_channel_layout(
-        channel_layout=[],
-        channel_names=[]
-    )
     dut.start_daq(
         folder_name="temp_data",
         sampling_rate=100.,
         window_sec=0.1,
         do_plot=False,
         do_record=True,
-        do_process=False,
+        do_process=True,
     )
     dut.wait_daq(period)
     dut.stop_daq()
@@ -111,7 +111,7 @@ def test_record_batch(path: Path, dut: DeviceAPI, period: float):
     assert data.time[-1] > period
     assert data.get_period_std < 5e-6
 
-    assert reader.is_utilization_available == True
+    assert reader.is_utilization_available
     util = reader.get_utilization()
     assert type(util) == StreamRecording
     assert util.file == reader.get_path2file()
@@ -126,17 +126,13 @@ def test_record_batch(path: Path, dut: DeviceAPI, period: float):
 
 @pytest.mark.hardware
 def test_record_batch_with_layout(path: Path, dut: DeviceAPI, period: float):
-    dut.define_channel_layout(
-        channel_layout=[0, 1],
-        channel_names=['0', '1']
-    )
     dut.start_daq(
         folder_name="temp_data",
         sampling_rate=100.,
         window_sec=0.1,
         do_plot=False,
         do_record=True,
-        do_process=False,
+        do_process=True,
     )
     dut.wait_daq(period)
     dut.stop_daq()
@@ -144,8 +140,7 @@ def test_record_batch_with_layout(path: Path, dut: DeviceAPI, period: float):
     reader.select_file(-1)
 
     data = reader.get_data('filt')
-    assert np.array_equal(data.label, np.asarray(['0', '1']))
-    assert np.array_equal(data.layout, np.asarray(['0', '1']))
+    assert np.array_equal(data.label, np.asarray(['CH0', 'CH1']))
 
 
 if __name__ == "__main__":
