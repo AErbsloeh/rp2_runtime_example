@@ -1,11 +1,12 @@
+import math
 import time
 from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
 import pyqtgraph as pg
+from pylsl import StreamInlet, proc_threadsafe, resolve_bypred
 from pyqtgraph.Qt import QtCore
-from pylsl import StreamInlet, resolve_bypred, proc_threadsafe
 
 
 @dataclass
@@ -22,6 +23,17 @@ class ChannelConfig:
 class LivePlotterChannelConfig:
     plot_title: list[list[str|None]] #[row][col]
     channel_configs: list[ChannelConfig]
+
+def get_time_ticks(window_sec: float, max_intervals: int = 6) -> list[tuple[float, str]]:
+    """Ticks for the time axis (time relative to now) incl. start (-window_sec) and end (0) of the window"""
+    magnitude = 10 ** math.floor(math.log10(window_sec / max_intervals))
+    step = next(factor * magnitude for factor in (1, 2, 5, 10) if window_sec / (factor * magnitude) <= max_intervals)
+    values = [idx * step for idx in range(int(window_sec / step + 1e-9) + 1)]
+    if len(values) > 1 and window_sec - values[-1] <= 0.5 * step:
+        values.pop()
+    values.append(window_sec)
+    return [(-val, f"{-round(val, 6) + 0.0:g}") for val in reversed(values)]
+
 
 class RingBuffer:
     def __init__(self, size: int) -> None:
@@ -62,6 +74,9 @@ class LivePlotter:
         }
 
         self.max_samples = max(1, int(round(max(inlet.info().nominal_srate()*self._window_width_sec for inlet in self.inlets))))
+        self._sample_period_sec = {
+            inlet.info().name(): self._get_sample_period(inlet.info().nominal_srate()) for inlet in self.inlets
+        }
         self.data_buffers = [RingBuffer(self.max_samples) for _ in self.channels]
         self._time_buffer = RingBuffer(self.max_samples)
         self._start_time = time.monotonic()
@@ -69,6 +84,11 @@ class LivePlotter:
 
         self._init_ui()
         self.timer = self._init_timer()
+
+    def _get_sample_period(self, sampling_rate: float) -> float:
+        if sampling_rate > 0:
+            return 1.0 / sampling_rate
+        return self._window_width_sec / self.max_samples
 
     def _search_lsl_stream_and_connect(self, lsl_name: str, timeout: float = 2.0) -> StreamInlet:
         streams = resolve_bypred(predicate=f"name='{lsl_name}'", timeout=timeout)
@@ -109,12 +129,17 @@ class LivePlotter:
         for row in range(len(self.channel_config.plot_title)):
             for col in range(len(self.channel_config.plot_title[row])):
                 plot_title = self.channel_config.plot_title[row][col]
-                if plot_title is None:                  #if, then add an empty block to keep order
-                    self._win.addViewBox(row=row,col=col)
+                if plot_title is None or (row, col) not in channels_by_pos:
+                    self._win.addViewBox(row=row, col=col)
                 else:
-                    plot_item = self._win.addPlot(row=row, col=col, title=plot_title)
+                    plot_item = self._win.addPlot(row=row, col=col)
                     plot_item.showGrid(x=True, y=True, alpha=0.3)
-                    plot_item.setXRange(0, self._window_width_sec*1000, padding=0)
+                    plot_item.setXRange(-self._window_width_sec, 0, padding=0.04)
+                    plot_item.getAxis("bottom").setTicks([get_time_ticks(self._window_width_sec)])
+
+        num_rows = len(self.channel_config.plot_title)
+        num_cols = max(len(row) for row in self.channel_config.plot_title)
+        self._win.addLabel("Time [s]", row=num_rows, col=0, colspan=num_cols, justify="center")
 
         for ch in self.channels:
             row, col = ch.position
@@ -178,4 +203,5 @@ class LivePlotter:
 
             y_data = self.data_buffers[idx].get()
             if len(y_data) > 0:
-                self.curves[ch.channel_name].setData(y_data)
+                x_data = (np.arange(len(y_data)) - len(y_data) + 1) * self._sample_period_sec[stream_name]
+                self.curves[ch.channel_name].setData(x_data, y_data)
