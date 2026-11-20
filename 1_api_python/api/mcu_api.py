@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 from logging import Logger, getLogger
 from pathlib import Path
 from time import monotonic, sleep
@@ -524,17 +525,31 @@ class DeviceAPI:
             )
             for name, config in zip(stream_names, daq_configs)
         ]
+
+        # The processed stream inherits the default metadata of the first DAQ stream
+        filt_labels, filt_units, filt_layout = self._get_stream_metadata(
+            "filt", streams[0].channel_labels, streams[0].channel_units, streams[0].channel_layout
+        )
+        # Channels defined in the plot configuration override the default labels / units / layout of each stream
+        streams = [
+            replace(
+                stream,
+                **dict(
+                    zip(
+                        ("channel_labels", "channel_units", "channel_layout"),
+                        self._get_stream_metadata(
+                            stream.name, stream.channel_labels, stream.channel_units, stream.channel_layout
+                        ),
+                    )
+                ),
+            )
+            for stream in streams
+        ]
         self.__logger.debug(f"DAQ streams: {streams}")
 
         stream_idx = 0
         source_stream = stream_names[0]
         output_stream = source_stream
-        data_labels, data_units, data_layout = self._get_stream_metadata(
-            source_stream, self.__layout_labels, self.__layout_units, self.__layout_channels
-        )
-        filt_labels, filt_units, filt_layout = self._get_stream_metadata(
-            "filt", self.__layout_labels, self.__layout_units, self.__layout_channels
-        )
 
         if do_record:
             self.__threads.register(func=self.__threads.lsl_stream_util, args=(stream_idx, "util"))

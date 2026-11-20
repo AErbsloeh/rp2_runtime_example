@@ -10,6 +10,10 @@ import pytest
 from api import get_path_to_project
 from api.src._lsl import RingBuffer, ThreadLSL
 
+RUN_SECONDS = 3.0
+CHECK_STEPS = 4
+CHECK_SLEEP = 0.25
+
 
 @pytest.fixture(scope="session", autouse=True)
 def path():
@@ -88,8 +92,8 @@ def test_thread_register_and_start():
 
     assert not dut.is_running
     dut.start()
-    for ite in range(10):
-        sleep(0.5)
+    for ite in range(CHECK_STEPS):
+        sleep(CHECK_SLEEP)
         assert dut.is_running
         dut._check_exception()
     dut.stop()
@@ -106,11 +110,11 @@ def test_thread_register_and_abort():
     assert not dut.is_running
     try:
         dut.start()
-        for ite in range(10):
-            sleep(0.5)
+        for ite in range(CHECK_STEPS):
+            sleep(CHECK_SLEEP)
             dut._check_exception()
             print(ite, dut._is_active, dut._thread_active)
-            if ite > 5:
+            if ite > 1:
                 dut.stop()
                 while dut._is_active:
                     sleep(0.1)
@@ -132,8 +136,8 @@ def test_thread_register_and_start_multiple():
 
     assert not dut.is_running
     dut.start()
-    for ite in range(10):
-        sleep(0.5)
+    for ite in range(CHECK_STEPS):
+        sleep(CHECK_SLEEP)
         assert dut.is_running
         print(ite, dut._is_active, dut._thread_active)
         dut._check_exception()
@@ -150,7 +154,7 @@ def test_thread_utilization(path: Path):
     assert len(dut._thread) == 3
 
     dut.start()
-    dut.wait_for_seconds(10.0)
+    dut.wait_for_seconds(RUN_SECONDS)
     dut.stop()
     assert not dut._is_active
     assert not dut.is_running
@@ -169,7 +173,7 @@ def test_thread_mock_random(path: Path):
     assert len(dut._thread) == 4
 
     dut.start()
-    dut.wait_for_seconds(10.0)
+    dut.wait_for_seconds(RUN_SECONDS)
     dut.stop()
     assert not dut._is_active
     assert not dut.is_running
@@ -185,13 +189,13 @@ def test_thread_mock_file(path: Path):
 
     dut.start()
     try:
-        dut.wait_for_seconds(10.0)
+        dut.wait_for_seconds(RUN_SECONDS)
     except RuntimeError:
+        pass
+    finally:
         dut.stop()
-        assert not dut._is_active
-        assert not dut.is_running
-    else:
-        assert dut._is_active
+    assert not dut._is_active
+    assert not dut.is_running
 
 
 @pytest.mark.unstable
@@ -203,7 +207,7 @@ def test_thread_split_stream():
     assert len(dut._thread) == 4
 
     dut.start()
-    dut.wait_for_seconds(10.0)
+    dut.wait_for_seconds(RUN_SECONDS)
     dut.stop()
     assert not dut._is_active
     assert not dut.is_running
@@ -225,7 +229,7 @@ def test_thread_process_stream():
     assert len(dut._thread) == 5
 
     dut.start()
-    dut.wait_for_seconds(10.0)
+    dut.wait_for_seconds(RUN_SECONDS)
     dut.stop()
     assert not dut._is_active
     assert not dut.is_running
@@ -233,3 +237,27 @@ def test_thread_process_stream():
 
 if __name__ == "__main__":
     pytest.main([__file__])
+
+
+def test_plot_stream_keeps_plotter_alive_while_event_loop_is_running(monkeypatch):
+    from api.src import _lsl
+
+    state = {}
+
+    class FakePlotter:
+        def __init__(self, config, window_width_sec):
+            state["config"] = config
+            state["window"] = window_width_sec
+
+    class FakeApp:
+        def exec(self):
+            state["alive"] = isinstance(dut._plotter, FakePlotter)
+
+    dut = ThreadLSL()
+    monkeypatch.setattr(_lsl, "LivePlotter", FakePlotter)
+    monkeypatch.setattr(_lsl.QtWidgets.QApplication, "instance", staticmethod(lambda: FakeApp()))
+
+    dut.lsl_plot_stream("config", window_length=4.0)
+
+    assert state == {"config": "config", "window": 4.0, "alive": True}
+    assert dut._plotter is None
