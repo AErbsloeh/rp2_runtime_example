@@ -33,3 +33,4 @@ class CommandsFPGA(IntEnum):
     FPGA_POWER_STATE = len(Commands) + 0x0D
     FPGA_LOGIC_RESET = len(Commands) + 0x0E
     FPGA_TOGGLE_LED = len(Commands) + 0x0F
+    FPGA_RXTX_DATA = len(Commands) + 0x10

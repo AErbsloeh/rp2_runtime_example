@@ -88,27 +88,6 @@ in {
         ${uv_bin} build
       '';
     };
-    "docs:check" = {
-      exec = ''
-        export LC_ALL=C  # necessary to run in github action
-        ${uv_run} sphinx-build -b singlehtml docs build/docs
-      '';
-      after = ["docs:clean"];
-    };
-    "docs:build" = {
-      exec = ''
-        export LC_ALL=C  # necessary to run in github action
-        ${uv_run} sphinx-build -j auto -b html docs build/docs
-        touch build/docs/.nojekyll  # prevent github from trying to build the docs
-      '';
-      after = ["docs:clean"];
-    };
-    "docs:clean" = {
-      exec = ''
-        rm -rf build/docs/*
-      '';
-      before = ["docs:build"];
-    };
     "test:init" = {
       exec = ''
         rm -rf .testmondata*

@@ -13,8 +13,6 @@ if __name__ == "__main__":
         timeout=0.5,
     )
 
-    dut.define_channel_layout(channel_layout=[0, 1], channel_names=["CH0", "CH1"])
-
     is_running = False
     try:
         dut.start_daq(
