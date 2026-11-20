@@ -1,8 +1,9 @@
+from dataclasses import dataclass
+from logging import Logger, getLogger
+from pathlib import Path
+
 import h5py
 import numpy as np
-from dataclasses import dataclass
-from logging import getLogger, Logger
-from pathlib import Path
 
 
 @dataclass(frozen=True)
@@ -50,7 +51,7 @@ class DataAPI:
         """
         path = Path(path2data) if type(path2data) == str else path2data
         self.__logger = getLogger(__name__)
-        self.__overview = [file.absolute() for file in path.glob("*.h5")]
+        self.__overview = sorted((file.absolute() for file in path.glob("*.h5")), key=lambda file: file.name)
 
     @property
     def get_overview_files(self) -> list[Path]:
@@ -122,7 +123,7 @@ class DataAPI:
         """
         if not self.__file:
             raise ValueError("Please select a file first!")
-        if not name in self.get_overview_datatypes():
+        if name not in self.get_overview_datatypes():
             raise ValueError(f"Dataset with {name} is not available ({self.get_overview_datatypes()}")
         return self.__read_data_file(name)
 
