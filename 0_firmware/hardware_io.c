@@ -39,8 +39,8 @@ rp2_adc_t adc_temp = {
 // --- USB PROTOCOL
 transport_rx_buffer_t rx_buffer = {
 	.ready = false,
-	.length = 3,
-	.position = 2,
+	.length = 4,
+	.position = 3,
     .data = NULL
 };  
 

@@ -4,8 +4,13 @@ from shutil import rmtree
 
 import pytest
 
-from api import get_path_to_project
+from api import DeviceAPI, get_path_to_project
 from api.fpga_api import FlashFPGA
+
+pytestmark = [
+    pytest.mark.fpga,
+    pytest.mark.skipif(not DeviceAPI.has_fpga, reason="No FPGA declared (DeviceAPI.has_fpga is False)"),
+]
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -21,7 +26,7 @@ def dut():
 
 @pytest.mark.hardware
 def test_num_bytes(dut: FlashFPGA):
-    assert dut.total_num_bytes == 3
+    assert dut.total_num_bytes == dut._num_bytes_head + dut._num_bytes_data
 
 
 @pytest.mark.hardware

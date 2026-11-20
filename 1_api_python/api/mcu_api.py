@@ -1,7 +1,7 @@
 import json
 from logging import Logger, getLogger
-from time import sleep
 from pathlib import Path
+from time import monotonic, sleep
 
 import numpy as np
 
@@ -18,12 +18,15 @@ from .src._helper import (
 )
 from .src._interface_serial import InterfaceSerial, get_comport_name
 from .src._interface_wifi import InterfaceWifi
-from .src._live_visualize import LivePlotterChannelConfig, ChannelConfig
+from .src._live_visualize import ChannelConfig, LivePlotterChannelConfig
 from .src._lsl import ThreadLSL
 
 
 class DeviceAPI:
     __logger: Logger
+    _num_bytes_head: int = 1
+    _num_bytes_data: int = 3
+    has_fpga: bool = False
     __device: InterfaceSerial | InterfaceWifi
     __threads: ThreadLSL
     __daq_config: DataAcquisitionConfig
@@ -49,6 +52,7 @@ class DeviceAPI:
         port: int = 4242,
     ) -> None:
         """Interface class for handling with a custom DAQ device
+        Set the class attribute has_fpga to True if an FPGA is connected to the MCU
         :param com_name:    String with the serial port name of the used device
         :param timeout:     Floating value with timeout for the communication [Default, not during DAQ]
         :param transport:   String with transport backend, either "usb" or "wifi"
@@ -59,15 +63,13 @@ class DeviceAPI:
         self.__threads = ThreadLSL()
         self.__timeout_default = timeout
 
-        num_bytes_head = 1
-        num_bytes_data = 2
         transport = transport.lower()
         if transport == "usb":
             self.__device = InterfaceSerial(
                 com_name=com_name if com_name != "AUTOCOM" else get_comport_name(usb_vid=self.__usb_vid),
                 baud=230400,
-                num_bytes_head=num_bytes_head,
-                num_bytes_data=num_bytes_data,
+                num_bytes_head=self._num_bytes_head,
+                num_bytes_data=self._num_bytes_data,
                 timeout=self.__timeout_default,
             )
         elif transport == "wifi":
@@ -76,8 +78,8 @@ class DeviceAPI:
             self.__device = InterfaceWifi(
                 host=host,
                 port=port,
-                num_bytes_head=num_bytes_head,
-                num_bytes_data=num_bytes_data,
+                num_bytes_head=self._num_bytes_head,
+                num_bytes_data=self._num_bytes_data,
                 timeout=self.__timeout_default,
             )
         else:
@@ -100,7 +102,7 @@ class DeviceAPI:
     def _write_with_feedback(self, head: Commands, data: int = 0, size: int = 0) -> bytes:
         data = self.__device.write_wfb(data=self.__device.convert(head, data), size=size)
         if data[0] != head:
-            raise ValueError(f"Get: {data}")
+            raise ValueError(f"Get: {data.hex(" ")}")
         return data[1:]
 
     def _write_without_feedback(self, head: Commands, data: int = 0) -> None:
@@ -146,18 +148,39 @@ class DeviceAPI:
             self.stop_daq()
         self._write_without_feedback(Commands.RESET)
         self.close()
-        sleep(1)
+        if isinstance(self.__device, InterfaceSerial):
+            self._wait_for_usb_device()
+        else:
+            sleep(2.)
+
+    def _is_usb_device_available(self) -> bool:
+        try:
+            get_comport_name(usb_vid=self.__usb_vid)
+        except ConnectionError:
+            return False
+        return True
+
+    def _wait_for_usb_device(self, timeout: float = 15.0, timeout_gone: float = 3.0) -> None:
+        start = monotonic()
+        while monotonic() - start < timeout_gone and self._is_usb_device_available():
+            sleep(0.1)
+        start = monotonic()
+        while monotonic() - start < timeout:
+            if self._is_usb_device_available():
+                sleep(0.5)
+                return
+            sleep(0.2)
+        raise ConnectionError(f"USB device did not return within {timeout} s after reset")
 
     def echo(self, data: str) -> str:
         """Sending some characters to the device and returning the result
         :param data:    String with the data to be sent
         :return:        String with returned data from DAQ
         """
-        do_padding = len(data) % self.__device.num_bytes == 1
-        val = bytes()
-        for chunk in self.__device.serialize_string(data, do_padding):
-            val += self._write_with_feedback(Commands.ECHO, chunk)
-        return self.__device.deserialize_string(val, do_padding)
+        raw_len = len(data.encode("utf-8"))
+        chunks = self.__device.serialize_string(data)
+        val = b"".join(self._write_with_feedback(Commands.ECHO, chunk) for chunk in chunks)
+        return self.__device.deserialize_string(val, raw_len)
 
     @property
     def _package_system_state(self) -> np.dtype:
@@ -240,6 +263,32 @@ class DeviceAPI:
             )
         )
 
+    def _get_stream_metadata(
+        self, stream_name: str, labels: list[str], units: list[str], layout: list[list[int]]
+    ) -> tuple[list[str], list[str], list[list[int]]]:
+        """Getting labels, units and layout of an LSL stream, channels defined in the plot configuration override the defaults
+        :param stream_name: String with name of the LSL stream
+        :param labels:      List with default labels of each channel
+        :param units:       List with default units of each channel
+        :param layout:      List with default layout of each channel
+        :return:            Tuple with (1) labels, (2) units and (3) layout of each channel
+        """
+        labels, units, layout = list(labels), list(units), list(layout)
+        if self.__plot_config is None:
+            return labels, units, layout
+        for ch in self.__plot_config.channel_configs:
+            if ch.lsl_stream_name != stream_name:
+                continue
+            idx = ch.stream_channel_idx
+            if not 0 <= idx < len(labels):
+                raise ValueError(
+                    f"Plot channel '{ch.channel_name}' uses channel {idx}, but stream '{stream_name}' has {len(labels)} channels"
+                )
+            labels[idx] = ch.channel_name
+            units[idx] = ch.channel_unit
+            layout[idx] = list(ch.position)
+        return labels, units, layout
+
     def _update_daq_sampling_rate(self, sampling_rate: float) -> None:
         """Updating the sampling rate of the DAQ
         :param sampling_rate:   Float with sampling rate [Hz]
@@ -257,7 +306,7 @@ class DeviceAPI:
         :param process_mode:    Integer for selecting the processing mode (0: sample, 1: batch, 2: ping-pong batch)
         :return:                None
         """
-        if not process_mode in range(0, 3):
+        if process_mode not in range(0, 3):
             raise ValueError("Not the right mode")
         self._write_without_feedback(Commands.SET_BATCH_DAQ, data=process_mode)
 
@@ -292,7 +341,7 @@ class DeviceAPI:
                 ("num_samples", "<u2"),
                 ("num_bytes", "<u2"),
                 ("bytes_sample", "u1"),
-                ("period", "<i8"),
+                ("period", "<u8"),
             ]
         )
 
@@ -301,7 +350,7 @@ class DeviceAPI:
         :param sel_daq_tasks:   Integer with number of task config to acquire
         :return:                Integer with number of DAQ channels
         """
-        if not sel_daq_tasks in range(self._num_daq_tasks):
+        if sel_daq_tasks not in range(self._num_daq_tasks):
             raise ValueError(f"Integer with selected DAQ task is out-of-range [0, {self._num_daq_tasks})")
         ret = self._write_with_feedback(Commands.GET_CHARAC_DAQ, data=sel_daq_tasks, size=20)
         frame = np.frombuffer(ret, dtype=self._package_daq_config)[0]
@@ -313,7 +362,7 @@ class DeviceAPI:
             num_bytes_total=int(frame["num_bytes"]),
             send_batch=bool(frame["mode"]),
             bytes_sample=int(frame["bytes_sample"]),
-            sampling_rate=float(-1e6 / frame["period"]),
+            sampling_rate=float(1e6 / frame["period"]),
             is_signed=bool(frame["signed"]),
         )
 
@@ -423,6 +472,12 @@ class DeviceAPI:
         stream_idx = 0
         source_stream = "data"
         output_stream = source_stream
+        data_labels, data_units, data_layout = self._get_stream_metadata(
+            source_stream, self.__layout_labels, self.__layout_units, self.__layout_channels
+        )
+        filt_labels, filt_units, filt_layout = self._get_stream_metadata(
+            "filt", self.__layout_labels, self.__layout_units, self.__layout_channels
+        )
 
         if do_record:
             self.__threads.register(func=self.__threads.lsl_stream_util, args=(stream_idx, "util"))
@@ -436,9 +491,9 @@ class DeviceAPI:
                 source_stream,
                 self._thread_read_batch if self.__daq_config.send_batch else self._thread_read_frame,
                 self.__daq_config.sampling_rate,
-                self.__layout_labels,
-                self.__layout_units,
-                self.__layout_channels
+                data_labels,
+                data_units,
+                data_layout,
             ),
             kwargs={"require_consumers": require_system_consumers},
         )
@@ -457,7 +512,12 @@ class DeviceAPI:
                     self.__process_stream_init,
                     self.__process_stream_func,
                 ),
-                kwargs={"require_consumers": require_process_consumers},
+                kwargs={
+                    "require_consumers": require_process_consumers,
+                    "channel_labels": filt_labels,
+                    "channel_units": filt_units,
+                    "channel_layout": filt_layout,
+                },
             )
             stream_idx += 1
 
@@ -488,13 +548,20 @@ class DeviceAPI:
         self._write_without_feedback(Commands.STOP_DAQ)
         sleep(0.5)
         self.__device.timeout = self.__timeout_default
-        while self.__threads.is_alive:
-            self.__threads.stop()
-            sleep(0.5)
-        self.__device.empty_buffer()
+        self.__threads.stop()
+        self._drain_input_buffer()
         if self.__num_package_loss > 0:
             self.__logger.info(f"Number of package losses: {self.__num_package_loss}")
-        sleep(1.0)
+
+    def _drain_input_buffer(self, max_tries: int = 25, wait_sec: float = 0.2) -> None:
+        self.__device.empty_buffer()
+        for idx in range(max_tries):
+            sleep(wait_sec)
+            if self.__device.empty_buffer() == 0:
+                return
+            if idx == max_tries // 2:
+                self._write_without_feedback(Commands.STOP_DAQ)
+        self.__logger.warning("Device still sends data after stopping the DAQ")
 
     def wait_daq(self, time_sec: float) -> None:
         """Waiting routine incl. returning possible thread errors
@@ -507,7 +574,7 @@ class DeviceAPI:
         self,
         do_process: bool = True,):
         self.setup_live_plotter(
-            plot_titles=[["plot1", "plot2"], [None, "plot3"]]
+            plot_titles=[["plot1", None], [None, "plot3"]]
         )
 
         self.add_plot_channel(
@@ -532,7 +599,7 @@ class DeviceAPI:
                 channel_name="CH0 Filtered",
                 channel_unit="LSB",
                 curve_color="#FF0000",
-                position=(0, 1),
+                position=(0, 0),
                 stream_channel_idx=0
             )
     def __process_stream_init(self, sampling_rate: float) -> None:

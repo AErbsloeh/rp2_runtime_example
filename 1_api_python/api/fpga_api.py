@@ -11,12 +11,17 @@ from .src._helper import FlashInfos
 
 class FlashFPGA(DeviceAPI):
     __logger: Logger
+    _num_bytes_head: int
+    _num_bytes_data: int
+    _num_spi_middleware: tuple[int, int, int] = (2, 6, 16)  # (CMD, ADR, DATA) in bits
 
     def __init__(self, com_name: str = "AUTOCOM", timeout: float = 1.0) -> None:
         """Interface class for flashing the FPGA on a custom DAQ device
         :param com_name:    String with the serial port name of the used device
         :param timeout:     Floating value with timeout for the communication [Default, not during DAQ]
         """
+        if not DeviceAPI.has_fpga:
+            raise RuntimeError("No FPGA is declared: set has_fpga = True in DeviceAPI if an FPGA is connected")
         super().__init__(com_name, timeout)
         self.__logger = getLogger(__name__)
         self.extend_pins_list([])
@@ -68,9 +73,9 @@ class FlashFPGA(DeviceAPI):
         self._write_without_feedback(Commands.FLASH_START_ERASE_ALL)
         print("Start erasing the FPGA flash ...")
         while True:
-            ret = self._write_with_feedback(Commands.FLASH_CHECK_ERASE)
-            sleep(0.5)
-            if ret[1] == 1:
+            ret = self._write_with_feedback(Commands.FLASH_CHECK_ERASE, size=2)
+            sleep(0.25)
+            if ret[0] == 1:
                 break
         if self.get_state().system == "ERASE_FLASH":
             raise SystemError("System state is not correct!")
@@ -85,9 +90,9 @@ class FlashFPGA(DeviceAPI):
         self._set_flash_starting_address(page * bytes_page)
         self._write_without_feedback(Commands.FLASH_START_ERASE_SEC)
         while True:
-            ret = self._write_with_feedback(Commands.FLASH_CHECK_ERASE)
-            sleep(0.5)
-            if ret[1] == 1:
+            ret = self._write_with_feedback(Commands.FLASH_CHECK_ERASE, size=2)
+            sleep(0.1)
+            if ret[0] == 1:
                 break
         if self.get_state().system == "ERASE_FLASH":
             raise SystemError("System state is not correct!")
@@ -137,23 +142,34 @@ class FlashFPGA(DeviceAPI):
         upper = (addr >> 16) & 0xFFFF
         lower = addr & 0xFFFF
 
-        out = bytearray()
-        out.extend(upper.to_bytes(2, "little"))
-        out.append(Commands.FLASH_SET_ADDR_UPPER)
-        out.extend(lower.to_bytes(2, "little"))
-        out.append(Commands.FLASH_SET_ADDR_LOWER)
-        out.extend(lower.to_bytes(2, "little"))
-        out.append(Commands.FLASH_SET_ADDR_LOWER)
-        out.extend(x for a, b in zip(data[::2], data[1::2]) for x in (b, a, Commands.FLASH_WRITE_BUFFER))
-        out.extend((0, 0, Commands.FLASH_WRITE_DATA))
+        n = self._num_bytes_data
+        rest = len(data) % n
+        full = data[:len(data) - rest]
+        tail = data[len(data) - rest:]
 
-        ret = self._write_bytes(bytes(out), size=3)
+        out = bytearray()
+        out.extend(upper.to_bytes(2, "little") + bytes(n - 2))
+        out.append(Commands.FLASH_SET_ADDR_UPPER)
+        out.extend(lower.to_bytes(2, "little") + bytes(n - 2))
+        out.append(Commands.FLASH_SET_ADDR_LOWER)
+        out.extend(
+            x
+            for i in range(0, len(full), n)
+            for x in (*reversed(full[i:i + n]), Commands.FLASH_WRITE_BUFFER)
+        )
+        if tail:
+            out.extend(b"\x00" * (n - len(tail)))
+            out.extend(reversed(tail))
+            out.append(Commands.FLASH_WRITE_BUFFER)
+        out.extend((*([0] * self._num_bytes_data), Commands.FLASH_WRITE_DATA))
+
+        ret = self._write_bytes(bytes(out), size=2)
         if ret[-1] != 1 and ret[0] != Commands.FLASH_WRITE_DATA:
             raise ValueError("Write process was not correct!")
         if do_check:
             data_check = bytes(self._read_page_from_flash(page, bytes_page))
             if data != data_check:
-                raise ValueError("Data are unequal (Read data after writing is not equal!")
+                raise ValueError(f"Data are unequal!\nwrite: {data.hex(" ")}\n read: {data_check.hex(" ")}")
 
     @staticmethod
     def _split_stream_into_pages(bitstream: bytes, pagesize: int) -> list[bytes]:
@@ -256,9 +272,43 @@ class FlashFPGA(DeviceAPI):
         self._write_without_feedback(Commands.FPGA_LOGIC_RESET, num_iterations)
         sleep(0.1)
 
+    def _convert_raw_into_middleware(self, cmd: int, adr: int, data: int) -> int:
+        """Packing cmd/adr/data into the SPI frame of the middleware
+        Frame: [CMD | ADR | DATA] (MSB first), widths from self._num_spi_middleware
+        :param cmd:     Integer with the command
+        :param adr:     Integer with the address
+        :param data:    Integer with the data
+        :return:        Integer with the complete frame
+        """
+        bits_cmd, bits_adr, bits_data = self._num_spi_middleware
+        for name, val, width in (("cmd", cmd, bits_cmd), ("adr", adr, bits_adr), ("data", data, bits_data)):
+            if not 0 <= val < 2**width:
+                raise ValueError(f"{name} must be in [0, {2**width}) ({width} bit)")
+        return (cmd << (bits_adr + bits_data)) | (adr << bits_data) | data
+
     def fpga_toggle_led(self) -> None:
         """Toggling the LED of the FPGA
         :return:    None
         """
-        ret = self._write_with_feedback(Commands.FPGA_TOGGLE_LED, data=0, size=4)
-        print(ret)
+        data = self._convert_raw_into_middleware(cmd=0, adr=8, data=0)
+        self._write_without_feedback(Commands.FPGA_TOGGLE_LED, data=data)
+
+    def fpga_control_led(self, state: bool) -> None:
+        """Controlling the LED of the FPGA
+        :param:     State of the LED
+        :return:    None
+        """
+        data = self._convert_raw_into_middleware(cmd=0, adr=4, data=int(state))
+        self._write_without_feedback(Commands.FPGA_TOGGLE_LED, data=data)
+
+    def fpga_send_data(self, data: bytes) -> bytes:
+        """Instruction to send data from host computer to the FPGA and return data.
+        :param data:    Bytes with data content to the FPGA
+        :return:        Bytes with data from the FPGA
+        """
+        num_bytes_frame = (sum(self._num_spi_middleware) + 7) // 8
+        return self._write_with_feedback(
+            head=Commands.FPGA_RXTX_DATA,
+            data=int.from_bytes(bytes=data, byteorder="big", signed=False),
+            size=1 + num_bytes_frame
+        )

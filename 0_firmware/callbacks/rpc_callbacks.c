@@ -55,7 +55,7 @@ void get_charac_daq(char* buffer){
     uint16_t num_bytes_batch = daq_get_number_bytes_per_batch(data);
     uint16_t num_bytes = (data->send_mode) ? num_bytes_batch : num_bytes_sample;
     uint16_t num_samples = (data->send_mode) ? data->num_samples : 1;
-    int64_t runtime = timer->period_us;
+    uint64_t runtime = -timer->period_us;
 
     char buffer_send[20] = {GET_CHARAC_DAQ};
     buffer_send[1] = (uint8_t)(data->packet_id);
@@ -104,14 +104,14 @@ void stop_daq(void){
 }
 
 
-void update_period_daq(char* buffer){
-    float new_sampling_rate_hz = (buffer[1] << 8) | (buffer[2] << 0);
+void update_period_daq(char* buffer, size_t length){
+    float new_sampling_rate_hz = (buffer[length-2] << 8) | (buffer[length-1] << 0);
     int64_t new_rate_us = (float)-1000000 / new_sampling_rate_hz;
     daq_update_sampling_rate(&tmr_daq0_hndl, new_rate_us);
 }
 
-void set_batch_daq(char* buffer){
-    daq_config_raw.send_mode = (uint8_t)(buffer[2] & 0x03);
+void set_batch_daq(char* buffer, size_t length){
+    daq_config_raw.send_mode = (uint8_t)(buffer[length-1] & 0x03);
     daq_init_sampling(&tmr_daq0_hndl, &daq_config_raw);
 }
 
@@ -132,8 +132,8 @@ bool apply_rpc_callback(transport_rx_buffer_t *data){
             case TOGGLE_LED:            toggle_led();                               break;
             case START_DAQ:             start_daq();                                break;
             case STOP_DAQ:              stop_daq();                                 break;
-            case SET_PERIOD_DAQ:        update_period_daq(buffer);                  break;
-            case SET_BATCH_DAQ:         set_batch_daq(buffer);                      break;
+            case SET_PERIOD_DAQ:        update_period_daq(buffer, data->length);    break;
+            case SET_BATCH_DAQ:         set_batch_daq(buffer, data->length);        break;
             default:                    valid_state = false;                        break;        
         }  
         data->ready = false;

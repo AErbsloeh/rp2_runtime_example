@@ -21,7 +21,7 @@ def dut():
 
 @pytest.mark.hardware
 def test_num_bytes(dut: DeviceAPI):
-    assert dut.total_num_bytes == 3
+    assert dut.total_num_bytes == dut._num_bytes_head + dut._num_bytes_data
 
 
 @pytest.mark.hardware
@@ -103,7 +103,7 @@ def test_run_daq_sample(dut: DeviceAPI):
     assert dut.get_state().system == "IDLE"
 
     dut._enable_batch_daq(False)
-    dut.start_daq(sampling_rate=100.0, folder_name="temp_data")
+    dut.start_daq(sampling_rate=100.0, folder_name="temp_data", do_plot=False)
     sleep(1.0)
     dut.stop_daq()
 
@@ -116,7 +116,7 @@ def test_run_daq_batch(dut: DeviceAPI):
     assert dut.get_state().system == "IDLE"
 
     dut._enable_batch_daq(True)
-    dut.start_daq(sampling_rate=500.0, folder_name="temp_data")
+    dut.start_daq(sampling_rate=500.0, folder_name="temp_data", do_plot=False)
     sleep(1.0)
     assert dut.is_daq_running
     dut.stop_daq()
@@ -183,18 +183,6 @@ def test_system_states(dut: DeviceAPI):
     check = ["ERROR", "RESET", "INIT", "IDLE", "TEST", "DAQ"]
     rslt = [convert_system_state(idx, dut._state_names) for idx in data_in]
     assert rslt == check
-
-
-@pytest.mark.hardware
-def test_define_layout(dut: DeviceAPI):
-    sets = dut.get_daq_characteristics()
-    result_layout = [idx for idx in range(sets.num_channels)]
-    result_labels = [f"CH{idx}" for idx in range(sets.num_channels)]
-
-    dut.define_channel_layout(channel_layout=result_layout, channel_names=result_labels)
-    check_layout, check_labels = dut.get_channel_layout()
-    assert check_layout == result_layout
-    assert check_labels == result_labels
 
 
 @pytest.mark.hardware
