@@ -30,10 +30,16 @@ if __name__ == "__main__":
 
     dut.set_fpga_power_state(True)
     dut.fpga_do_program_reset()
-    sleep(2)
     dut.fpga_do_logic_reset()
-    for _ in range(10):
-        for _ in range(20):
-            dut.fpga_toggle_led()
-            sleep(0.5)
-        dut.toggle_led()
+    sleep(2)
+    print(dut.get_state())
+
+    old_val = -1
+    for _ in range(100):
+        dut.fpga_toggle_led()
+        for _ in range(4):
+            sleep(0.1)
+            val = int(dut.fpga_send_data(b"\x40\x00\x01").hex(), 16)
+            print(val)
+            assert val - old_val == 1
+            old_val = val

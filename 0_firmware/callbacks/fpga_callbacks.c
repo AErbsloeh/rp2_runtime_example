@@ -72,22 +72,21 @@ void check_erasing_flash(void){
         }
     }
 
-    char buffer_send[3] = {FLASH_CHECK_ERASE};
-    buffer_send[1] = 0x00;
-    buffer_send[2] = (uint8_t)(state);
+    char buffer_send[2] = {FLASH_CHECK_ERASE};
+    buffer_send[1] = (uint8_t)(state);
     transport_write(buffer_send, sizeof(buffer_send));
 }
 
 
-void set_flash_starting_address_upper(char* buffer){
-    uint16_t upper = (buffer[1] << 8) | buffer[2];
+void set_flash_starting_address_upper(char* buffer, size_t length){
+    uint16_t upper = (buffer[length-2] << 8) | buffer[length-1];
     flash_config->flash_data.address = (uint32_t)(upper << 16);
     flash_config->flash_data.position = 0;
 }
 
 
-void set_flash_starting_address_lower(char* buffer){
-    uint16_t lower = (buffer[1] << 8) | buffer[2];
+void set_flash_starting_address_lower(char* buffer, size_t length){
+    uint16_t lower = (buffer[length-2] << 8) | buffer[length-1];
     flash_config->flash_data.address |= lower;
     flash_config->flash_data.position = 0;
 }
@@ -114,24 +113,24 @@ void read_flash_data(void){
 }
 
 
-void write_data_into_flash_buffer(char* buffer){    
-    flash_data_write_byte(&flash_config->flash_data, buffer[1]);
-    flash_data_write_byte(&flash_config->flash_data, buffer[2]);
+void write_data_into_flash_buffer(char* buffer, size_t length){
+    for(size_t idx = 0; idx < length - 1; idx++){
+        flash_data_write_byte(&flash_config->flash_data, buffer[1 + idx]);
+    }
 }
 
 
 void write_buffer_into_flash(void){
     bool state = flash_write_data_from_buffer(flash_config);
 
-    char buffer_send[3] = {FLASH_WRITE_DATA};
-    buffer_send[1] = 0x00;
-    buffer_send[2] = (uint8_t)(state);
+    char buffer_send[2] = {FLASH_WRITE_DATA};
+    buffer_send[1] = (uint8_t)(state);
     transport_write(buffer_send, sizeof(buffer_send));
 }
 
 
-void fpga_set_program_state(char* buffer){
-    bool state = (buffer[2] == 0x01);
+void fpga_set_program_state(char* buffer, size_t length){
+    bool state = (buffer[length-1] == 0x01);
     fpga_program_do(flash_config, state);
 }
 
@@ -141,24 +140,30 @@ void fpga_program_do_cycle(void){
 }
 
 
-void fpga_set_power_state(char* buffer){
-    bool state = (buffer[2] == 0x01);
+void fpga_set_power_state(char* buffer, size_t length){
+    bool state = (buffer[length-1] == 0x01);
     gpio_put(FPGA_EN_POWER_GPIO, state);
 }
 
 
-void fpga_logic_do_reset(char* buffer){
-    fpga_logic_reset_cycle(fpga_config, buffer[2]);
+void fpga_logic_do_reset(char* buffer, size_t length){
+    fpga_logic_reset_cycle(fpga_config, buffer[length-1]);
 }
 
 
-void fpga_logic_data_transmission(char* buffer){
+void fpga_control_led(char* buffer, size_t length){
     uint8_t data_rx0[3] = {0};
-    uint8_t data_toggle_led[3] = {0x08, 0x00, 0x00};
-    
-    fpga_logic_send_data(fpga_config, data_toggle_led, data_rx0);
+    uint8_t data_tx0[3] = {buffer[1], 0x00, buffer[length-1]};
+    fpga_logic_send_data(fpga_config, data_tx0, data_rx0);
+}
 
-    char buffer_send[1 + sizeof(data_rx0)] = {FPGA_TOGGLE_LED};
+
+void fpga_logic_rxtx_data(char* buffer){
+    uint8_t data_rx0[3] = {0};
+    uint8_t data_tx0[3] = {buffer[1], buffer[2], buffer[3]};
+
+    fpga_logic_send_data(fpga_config, data_tx0, data_rx0);
+    char buffer_send[1 + sizeof(data_rx0)] = {FPGA_RXTX_DATA};
     for(size_t idx = 0; idx < sizeof(data_rx0); idx++){
         buffer_send[1 + idx] = (uint8_t)(data_rx0[idx]);
     }
@@ -172,23 +177,24 @@ bool apply_fpga_callback(transport_rx_buffer_t *data){
     if((data->ready) && (data->data[0] >= USB_CMD_COUNT)){
         char *buffer = data->data;
         switch(buffer[0]){
-            case FLASH_INIT:            flash_init_phase();                         break;
-            case FLASH_INFOS:           get_flash_infos();                          break;
-            case FLASH_START_ERASE_ALL: start_erasing_flash_all();                  break;
-            case FLASH_START_ERASE_SEC: start_erasing_flash_sector();               break;
-            case FLASH_CHECK_ERASE:     check_erasing_flash();                      break;
-            case FLASH_SET_ADDR_UPPER:  set_flash_starting_address_upper(buffer);   break;
-            case FLASH_SET_ADDR_LOWER:  set_flash_starting_address_lower(buffer);   break;
-            case FLASH_GET_ADDR:        get_flash_starting_address();               break;
-            case FLASH_READ_DATA:       read_flash_data();                          break;
-            case FLASH_WRITE_BUFFER:    write_data_into_flash_buffer(buffer);       break;
-            case FLASH_WRITE_DATA:      write_buffer_into_flash();                  break;
-            case FPGA_PROGRAM_STATE:    fpga_set_program_state(buffer);             break;
-            case FPGA_PROGRAM_CYCLE:    fpga_program_do_cycle();                    break;
-            case FPGA_LOGIC_RESET:      fpga_logic_do_reset(buffer);                break;
-            case FPGA_TOGGLE_LED:       fpga_logic_data_transmission(buffer);       break;
-            case FPGA_POWER_STATE:      fpga_set_power_state(buffer);               break;
-            default:                    valid_state = false;                        break;        
+            case FLASH_INIT:            flash_init_phase();                                     break;
+            case FLASH_INFOS:           get_flash_infos();                                      break;
+            case FLASH_START_ERASE_ALL: start_erasing_flash_all();                              break;
+            case FLASH_START_ERASE_SEC: start_erasing_flash_sector();                           break;
+            case FLASH_CHECK_ERASE:     check_erasing_flash();                                  break;
+            case FLASH_SET_ADDR_UPPER:  set_flash_starting_address_upper(buffer, data->length); break;
+            case FLASH_SET_ADDR_LOWER:  set_flash_starting_address_lower(buffer, data->length); break;
+            case FLASH_GET_ADDR:        get_flash_starting_address();                           break;
+            case FLASH_READ_DATA:       read_flash_data();                                      break;
+            case FLASH_WRITE_BUFFER:    write_data_into_flash_buffer(buffer, data->length);     break;
+            case FLASH_WRITE_DATA:      write_buffer_into_flash();                              break;
+            case FPGA_PROGRAM_STATE:    fpga_set_program_state(buffer, data->length);           break;
+            case FPGA_PROGRAM_CYCLE:    fpga_program_do_cycle();                                break;
+            case FPGA_POWER_STATE:      fpga_set_power_state(buffer, data->length);             break;
+            case FPGA_LOGIC_RESET:      fpga_logic_do_reset(buffer, data->length);              break;
+            case FPGA_CONTROL_LED:      fpga_control_led(buffer, data->length);                 break;
+            case FPGA_RXTX_DATA:        fpga_logic_rxtx_data(buffer);                           break;
+            default:                    valid_state = false;                                    break;        
         }  
         data->ready = false;
     }
