@@ -101,18 +101,15 @@ class InterfaceSerial:
         self.__device.write(data)
         return self.__device.read_until()
 
-    @staticmethod
-    def serialize_string(data: str, do_padding: bool) -> list:
-        """Serialize a string to bytes"""
-        if do_padding:
-            data += " "
-        chunks = [int.from_bytes(data[i : i + 2].encode("utf-8"), "big") for i in range(0, len(data), 2)]
-        return chunks
+    def serialize_string(self, data: str) -> list:
+        n = self.__BYTES_DATA
+        raw = data.encode("utf-8")
+        raw += b" " * ((-len(raw)) % n)
+        return [int.from_bytes(raw[i:i + n], "big") for i in range(0, len(raw), n)]
 
     @staticmethod
-    def deserialize_string(data: bytes, do_padding: bool) -> str:
-        val = data if not do_padding else data[:-1]
-        return val.decode("utf8")
+    def deserialize_string(data: bytes, length: int) -> str:
+        return data[:length].decode("utf-8")
 
     def open(self) -> None:
         """Starting a connection to device"""
@@ -124,7 +121,11 @@ class InterfaceSerial:
         """Closing a connection to device"""
         self.__device.close()
 
-    def empty_buffer(self) -> None:
-        """Function for emptying input and output buffers"""
+    def empty_buffer(self) -> int:
+        """Function for emptying input and output buffers
+        :return:    Integer with number of discarded input bytes
+        """
+        num_bytes = self.__device.in_waiting
         self.__device.reset_input_buffer()
         self.__device.reset_output_buffer()
+        return num_bytes

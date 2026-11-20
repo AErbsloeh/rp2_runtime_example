@@ -64,6 +64,7 @@ class ThreadLSL:
     _thread_active: list[int]
     _is_active: bool
     _num_missed: int = 0
+    _plotter: LivePlotter | None = None
 
     def __init__(self) -> None:
         """Class for managing all threads for the LSL data processing
@@ -117,10 +118,18 @@ class ThreadLSL:
         :return:        None
         """
         if not len(self._thread):
-            self._thread = [Thread(target=self._thread_watchdog_heartbeat, args=())]
+            self._thread = [Thread(target=self._thread_watchdog_heartbeat, args=(), daemon=True)]
             self._logger.debug("Registering thread: heartbeat")
-        self._thread.append(Thread(target=func, args=args, kwargs=kwargs or {}))
+        self._thread.append(Thread(target=self._run_thread, args=(func, args, kwargs or {}), daemon=True))
         self._logger.debug(f"Registering thread: {func.__name__}")
+
+    def _run_thread(self, func, args, kwargs: dict) -> None:
+        try:
+            func(*args, **kwargs)
+        except Exception as e:
+            self._logger.error(f"Thread {func.__name__} stopped with error: {e!r}")
+            with self._lock:
+                self._exception.put(e)
 
     def start(self) -> None:
         """Starting all threads including heartbeat watchdog in own thread
@@ -151,6 +160,14 @@ class ThreadLSL:
         self._logger.debug("Disabling all LSL threads")
 
     @staticmethod
+    def _to_str_list(values: list | str | None, length: int) -> list[str]:
+        if not values:
+            return [""] * length
+        if isinstance(values, str):
+            return [values] * length
+        return [str(val) if val is not None else "" for val in values]
+
+    @staticmethod
     def _get_number_stream_samples(sampling_rate: float) -> int:
         return int(sampling_rate / 50) if sampling_rate > 500.0 else 10
 
@@ -177,6 +194,7 @@ class ThreadLSL:
                 sleep(1.0)
             else:
                 raise RuntimeError(f"One thread is shutdown [{self._is_active}] - {self._thread_active}")
+        self._check_exception()
 
     def _establish_lsl_outlet(
         self,
@@ -187,7 +205,7 @@ class ThreadLSL:
         channel_num: int,
         channel_labels: list[str],
         channel_units: list[str],
-        channel_layout: list[list[int]],
+        channel_layout: list[list[int]] | list[str],
         channel_type: int = pylsl.cf_int16,
         check_for_consumers: bool = False,
     ) -> StreamOutlet:
@@ -200,7 +218,10 @@ class ThreadLSL:
             source_id=f"{lsl_name}_uid",
         )
         info.set_channel_labels(channel_labels)
-        info.set_channel_types(str(channel_layout))
+        if len(channel_layout) > 0 and all(isinstance(val, str) for val in channel_layout):
+            info.set_channel_types([str(val) for val in channel_layout])
+        else:
+            info.set_channel_types(str(list(channel_layout)))
         info.set_channel_units(channel_units)
 
         outlet = StreamOutlet(info)
@@ -281,6 +302,7 @@ class ThreadLSL:
             lsl_name=name,
             lsl_type="mock_daq",
             sampling_rate=sampling_rate,
+            channel_units=["" for _ in range(channel_num)],
             channel_labels=[f"CH{idx}" for idx in range(channel_num)],
             channel_layout=[idx for idx in range(channel_num)],
             channel_num=channel_num,
@@ -342,7 +364,7 @@ class ThreadLSL:
             idx=stim_idx,
             lsl_name=name,
             lsl_type="mock_daq",
-            units=data.units,
+            channel_units=data.units,
             sampling_rate=float(data.sampling_rate),
             channel_labels=data.label,
             channel_layout=data.layout,
@@ -495,6 +517,7 @@ class ThreadLSL:
                     lsl_name=name,
                     lsl_type=inlet.info().type(),
                     sampling_rate=inlet.info().nominal_srate(),
+                    channel_units=inlet.info().get_channel_units(),
                     channel_num=inlet.info().channel_count(),
                     channel_type=inlet.info().channel_format(),
                     channel_labels=inlet.info().get_channel_labels(),
@@ -529,6 +552,9 @@ class ThreadLSL:
         func_process_daq,
         lsl_format: int = 0,
         require_consumers: bool = True,
+        channel_labels: list[str] | None = None,
+        channel_units: list[str] | None = None,
+        channel_layout: list[list[int]] | None = None,
     ) -> None:
         """Function for processing the incoming data from LSL stream
         :param stim_idx:        Integer with array index to write into heartbeat feedback array
@@ -539,6 +565,9 @@ class ThreadLSL:
         :param func_process_daq:Function to process the data from a DAQ device (needs input: list with chunk data, returned: chunk output)
         :param lsl_format:      Integer with lsl datatype format cf_*
         :param require_consumers:Boolean for requiring connected LSL consumers
+        :param channel_labels:  Optional list with labels of the output channels (default: labels of the input stream)
+        :param channel_units:   Optional list with units of the output channels (default: units of the input stream)
+        :param channel_layout:  Optional list with layout of the output channels (default: layout of the input stream)
         :return:                None
         """
         inlet = self._establish_lsl_inlet(name_in)
@@ -549,9 +578,10 @@ class ThreadLSL:
             lsl_name=name_out,
             lsl_type=inlet.info().type(),
             sampling_rate=sampling_rate,
+            channel_units=channel_units if channel_units is not None else inlet.info().get_channel_units(),
             channel_num=inlet.info().channel_count(),
-            channel_labels=inlet.info().get_channel_labels(),
-            channel_layout=inlet.info().get_channel_types(),
+            channel_labels=channel_labels if channel_labels is not None else inlet.info().get_channel_labels(),
+            channel_layout=channel_layout if channel_layout is not None else inlet.info().get_channel_types(),
             channel_type=inlet.info().channel_format() if lsl_format == 0 else lsl_format,
             check_for_consumers=False,
         )
@@ -640,9 +670,9 @@ class ThreadLSL:
                 stream_data.append(
                     f.create_dataset(f"{name}_data", (0, channel), maxshape=(None, channel), dtype=format)
                 )
-                stream_data[idx].attrs["unit"] = inlet.info().get_channel_units()
-                stream_data[idx].attrs["label"] = inlet.info().get_channel_labels()
-                stream_data[idx].attrs["layout"] = inlet.info().get_channel_types()
+                stream_data[idx].attrs["unit"] = self._to_str_list(inlet.info().get_channel_units(), channel)
+                stream_data[idx].attrs["label"] = self._to_str_list(inlet.info().get_channel_labels(), channel)
+                stream_data[idx].attrs["layout"] = self._to_str_list(inlet.info().get_channel_types(), channel)
                 stream_data[idx].attrs["sampling_rate"] = inlet.info().nominal_srate()
                 stream_data[idx].attrs["channel_count"] = inlet.info().channel_count()
                 stream_data[idx].attrs["type"] = inlet.info().type()
@@ -685,5 +715,8 @@ class ThreadLSL:
         if app is None:
             app = QtWidgets.QApplication(sys.argv)
 
-        plotter = LivePlotter(plot_config, window_width_sec=window_length)
-        app.exec()
+        self._plotter = LivePlotter(plot_config, window_width_sec=window_length)
+        try:
+            app.exec()
+        finally:
+            self._plotter = None

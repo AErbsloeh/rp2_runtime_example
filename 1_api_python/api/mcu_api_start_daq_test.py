@@ -63,13 +63,16 @@ def _make_device_api():
 
     dut._DeviceAPI__threads = threads
     dut._DeviceAPI__device = device
-    dut._DeviceAPI__layout_channels = [0, 1]
+    dut._DeviceAPI__layout_channels = [[0], [1]]
     dut._DeviceAPI__layout_labels = ["CH0", "CH1"]
+    dut._DeviceAPI__layout_units = ["LSB", "LSB"]
+    dut._DeviceAPI__plot_config = None
     dut._DeviceAPI__num_package_loss = 0
 
     dut._enable_batch_daq = lambda use_batches: calls.append(("batch", use_batches))
     dut._update_daq_sampling_rate = lambda sampling_rate: calls.append(("rate", sampling_rate))
-    dut.get_daq_characteristics = _make_daq_config
+    dut._get_number_daq_tasks = lambda: 1
+    dut.get_daq_characteristics = lambda sel_daq_tasks=0: _make_daq_config()
     dut._write_without_feedback = lambda head, data=0: calls.append(("write", head, data))
 
     return dut, threads, device, calls
@@ -81,6 +84,7 @@ def test_start_daq_can_publish_processed_lsl_without_internal_recording():
 
     dut.start_daq(
         sampling_rate=500.0,
+        do_plot=False,
         do_record=False,
         do_process=True,
     )
@@ -101,6 +105,7 @@ def test_start_daq_can_publish_raw_lsl_without_internal_recording_or_processing(
 
     dut.start_daq(
         sampling_rate=500.0,
+        do_plot=False,
         do_record=False,
         do_process=False,
     )
@@ -108,3 +113,42 @@ def test_start_daq_can_publish_raw_lsl_without_internal_recording_or_processing(
     assert [name for name, _, _ in threads.registered] == ["lsl_stream_system"]
     assert threads.registered[0][1][0:2] == (0, "data")
     assert threads.registered[0][2]["require_consumers"] is False
+
+
+def test_start_daq_without_plot_definition_uses_default_stream_metadata():
+    dut, threads, _, _ = _make_device_api()
+
+    dut.start_daq(sampling_rate=500.0, do_plot=False, do_record=False, do_process=True)
+
+    assert threads.registered[0][1][4:7] == (["CH0", "CH1"], ["LSB", "LSB"], [[0], [1]])
+    kwargs = threads.registered[1][2]
+    assert kwargs["channel_labels"] == ["CH0", "CH1"]
+    assert kwargs["channel_units"] == ["LSB", "LSB"]
+    assert kwargs["channel_layout"] == [[0], [1]]
+
+
+def test_start_daq_uses_plot_definition_for_stream_metadata():
+    dut, threads, _, _ = _make_device_api()
+    dut.setup_live_plotter(plot_titles=[["Raw", "Filtered"]])
+    dut.add_plot_channel("data", "Voltage A", "mV", "r", (0, 0), 0)
+    dut.add_plot_channel("data", "Voltage B", "uV", "b", (0, 0), 1)
+    dut.add_plot_channel("filt", "Voltage A filtered", "mV", "w", (0, 1), 0)
+
+    dut.start_daq(sampling_rate=500.0, do_plot=False, do_record=False, do_process=True)
+
+    assert threads.registered[0][1][4:7] == (["Voltage A", "Voltage B"], ["mV", "uV"], [[0, 0], [0, 0]])
+    kwargs = threads.registered[1][2]
+    assert kwargs["channel_labels"] == ["Voltage A filtered", "CH1"]
+    assert kwargs["channel_units"] == ["mV", "LSB"]
+    assert kwargs["channel_layout"] == [[0, 1], [1]]
+
+
+def test_start_daq_rejects_plot_channel_outside_of_stream():
+    dut, threads, _, _ = _make_device_api()
+    dut.setup_live_plotter(plot_titles=[["Raw"]])
+    dut.add_plot_channel("data", "Voltage", "mV", "r", (0, 0), 5)
+
+    with pytest.raises(ValueError):
+        dut.start_daq(sampling_rate=500.0, do_plot=False, do_record=False, do_process=False)
+
+    assert threads.registered == []
