@@ -42,13 +42,20 @@ void get_charac_system(void){
 
 void get_number_daq(void){
     char buffer_send[2] = {GET_NUMBER_DAQ};
-    buffer_send[1] = 0x01;
+    buffer_send[1] = daq_num_streams;
     transport_write(buffer_send, sizeof(buffer_send));   
 }
 
 
 void get_charac_daq(char* buffer){
-    daq_data_t* data = &daq_config_raw;
+    char buffer_send[20] = {GET_CHARAC_DAQ};
+    uint8_t sel_stream = (uint8_t)buffer[2];
+    if(sel_stream >= daq_num_streams){
+        // Invalid index: answer with an all-zero description (keeps RPC framing intact)
+        transport_write(buffer_send, sizeof(buffer_send));
+        return;
+    }
+    daq_data_t* data = daq_streams[sel_stream];
     tmr_repeat_irq_t* timer = &tmr_daq0_hndl;
 
     uint16_t num_bytes_sample = daq_get_number_bytes_per_sample(data);
@@ -57,7 +64,6 @@ void get_charac_daq(char* buffer){
     uint16_t num_samples = (data->send_mode) ? data->num_samples : 1;
     int64_t runtime = timer->period_us;
 
-    char buffer_send[20] = {GET_CHARAC_DAQ};
     buffer_send[1] = (uint8_t)(data->packet_id);
     buffer_send[2] = (uint8_t)(data->packet_tail);
     buffer_send[3] = (uint8_t)(data->is_signed);
@@ -111,8 +117,10 @@ void update_period_daq(char* buffer){
 }
 
 void set_batch_daq(char* buffer){
-    daq_config_raw.send_mode = (uint8_t)(buffer[2] & 0x03);
-    daq_init_sampling(&tmr_daq0_hndl, &daq_config_raw);
+    for(uint8_t idx = 0; idx < daq_num_streams; idx++){
+        daq_streams[idx]->send_mode = (uint8_t)(buffer[2] & 0x03);
+        daq_init_sampling(&tmr_daq0_hndl, daq_streams[idx]);
+    }
 }
 
 

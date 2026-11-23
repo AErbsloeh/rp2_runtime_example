@@ -4,7 +4,7 @@ from logging import Logger, getLogger
 from pathlib import Path
 from queue import Empty, Queue
 from threading import Event, Lock, Thread
-from time import sleep
+from time import monotonic, sleep
 
 import numpy as np
 import pylsl
@@ -15,6 +15,7 @@ from pyqtgraph.Qt import QtWidgets
 from tqdm import tqdm
 
 from api.data_api import DataAPI, StreamRecording
+from api.src._helper import DaqStreamDescription
 from api.src._live_visualize import LivePlotter, LivePlotterChannelConfig
 
 
@@ -371,74 +372,72 @@ class ThreadLSL:
     def lsl_stream_system(
         self,
         stim_idx: int,
-        name: str,
+        streams: list[DaqStreamDescription],
         daq_func,
-        sampling_rate: float,
-        channel_labels: list[str],
-        channel_units: list[str],
-        channel_layout: list[list[int]],
         format: int = pylsl.cf_int32,
         require_consumers: bool = True,
+        consumer_timeout: float = 10.0,
     ) -> None:
-        """Process for starting a Lab Streaming Layer (LSL) to process the data stream from DAQ system
+        """Process for starting a Lab Streaming Layer (LSL) to process the data streams from DAQ system.
+        One thread reads the (shared) device interface and demultiplexes the packets into one LSL outlet per stream.
         :param stim_idx:        Integer with array index to write into heartbeat feedback array
-        :param name:            String with name of the LSL stream (must match with a recording process)
-        :param daq_func:        Function to get data from a DAQ device (returned list)
-        :param sampling_rate:   Floating value with sampling rate in Hz
-        :param channel_labels:  List with name/label of each channel
-        :param channel_layout:  List with integers to define the DAQ layout (spatial information)
+        :param streams:         List with descriptions of each DAQ stream / LSL outlet
+        :param daq_func:        Function to get the next packet from the DAQ device, returning
+                                (head_cmd, data, timestamp). For sample streams data is a list[channels] and
+                                timestamp a float, for batch streams data is list[samples][channels] and timestamp
+                                a list[float]. On timeout / invalid data it returns (None, [], None).
         :param format:          Defined LSL datatype for saving data in the stream
-        :param require_consumers:Boolean for requiring connected LSL consumers
+        :param require_consumers:Boolean for requiring at least one consumer on any of the outlets
+        :param consumer_timeout:Floating value with timeout [s] for waiting for consumers
         :return:                None
         """
-        outlet = self._establish_lsl_outlet(
-            idx=stim_idx,
-            lsl_name=name,
-            lsl_type="stream_daq",
-            sampling_rate=sampling_rate,
-            channel_num=len(channel_labels),
-            channel_labels=channel_labels,
-            channel_units=channel_units,
-            channel_layout=channel_layout,
-            channel_type=format,
-            check_for_consumers=require_consumers,
-        )
+        outlets: dict[int, tuple[StreamOutlet, bool]] = dict()
+        for stream in streams:
+            outlet = self._establish_lsl_outlet(
+                idx=stim_idx,
+                lsl_name=stream.name,
+                lsl_type="stream_daq",
+                sampling_rate=stream.sampling_rate,
+                channel_num=len(stream.channel_labels),
+                channel_labels=stream.channel_labels,
+                channel_units=stream.channel_units,
+                channel_layout=stream.channel_layout,
+                channel_type=format,
+                check_for_consumers=False,
+            )
+            outlets[stream.head_cmd] = (outlet, stream.is_batch)
 
-        use_batch_mode = "batch" in daq_func.__name__
-        if use_batch_mode:
-            while self._event.is_set() and self._is_active:
-                try:
-                    # Data Processing
-                    data, tb = daq_func()
-                    if not data or tb is None:
-                        continue
-                    if len(tb) != len(data[0]):
+        def has_consumers() -> bool:
+            return any(outlet.have_consumers() for outlet, _ in outlets.values())
+
+        # Not every stream needs a consumer (e.g. only one is plotted), so wait for any of them
+        if require_consumers:
+            deadline = monotonic() + consumer_timeout
+            while not has_consumers():
+                if monotonic() > deadline:
+                    raise ConnectionError("no consumers available")
+                sleep(0.05)
+
+        while self._event.is_set() and self._is_active:
+            try:
+                head, data, tb = daq_func()
+                if head is None or not data or tb is None:
+                    continue
+                outlet, is_batch = outlets[head]
+                if is_batch:
+                    if len(tb) != len(data):
                         continue
                     outlet.push_chunk(x=data, timestamp=tb, pushthrough=True)
-                    # Heartbeat
-                    with self._lock:
-                        self._thread_active[stim_idx] = (not require_consumers) or outlet.have_consumers()
-                except Exception as e:
-                    with self._lock:
-                        self._exception.put(e)
-            with self._lock:
-                self._thread_active[stim_idx] = False
-        else:
-            while self._event.is_set() and self._is_active:
-                try:
-                    # Data Processing
-                    data, tb = daq_func()
-                    if not data or tb is None:
-                        continue
+                else:
                     outlet.push_sample(x=data, timestamp=tb, pushthrough=True)
-                    # Heartbeat
-                    with self._lock:
-                        self._thread_active[stim_idx] = (not require_consumers) or outlet.have_consumers()
-                except Exception as e:
-                    with self._lock:
-                        self._exception.put(e)
-            with self._lock:
-                self._thread_active[stim_idx] = False
+                # Heartbeat
+                with self._lock:
+                    self._thread_active[stim_idx] = (not require_consumers) or has_consumers()
+            except Exception as e:
+                with self._lock:
+                    self._exception.put(e)
+        with self._lock:
+            self._thread_active[stim_idx] = False
 
     def lsl_stream_util(self, stim_idx: int, name: str, sampling_rate: float = 2.0) -> None:
         """Process for starting a Lab Streaming Layer (LSL) to process the utilization of the host computer

@@ -29,6 +29,8 @@ int main(){
             set_system_state(STATE_ERROR);
         }
         // Sending DAQ data
-        daq_check_send_data(&daq_config_raw);
+        for (uint8_t idx = 0; idx < daq_num_streams; idx++){
+            daq_check_send_data(daq_streams[idx]);
+        }
     };
 }

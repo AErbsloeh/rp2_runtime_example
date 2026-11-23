@@ -1,3 +1,5 @@
+from logging import getLogger
+
 import pytest
 
 from api.mcu_api import (
@@ -63,13 +65,13 @@ def _make_device_api():
 
     dut._DeviceAPI__threads = threads
     dut._DeviceAPI__device = device
-    dut._DeviceAPI__layout_channels = [0, 1]
-    dut._DeviceAPI__layout_labels = ["CH0", "CH1"]
+    dut._DeviceAPI__logger = getLogger(__name__)
     dut._DeviceAPI__num_package_loss = 0
 
     dut._enable_batch_daq = lambda use_batches: calls.append(("batch", use_batches))
     dut._update_daq_sampling_rate = lambda sampling_rate: calls.append(("rate", sampling_rate))
-    dut.get_daq_characteristics = _make_daq_config
+    dut._get_number_daq_tasks = lambda: 1
+    dut.get_daq_characteristics = lambda sel_daq_tasks=0: _make_daq_config()
     dut._write_without_feedback = lambda head, data=0: calls.append(("write", head, data))
 
     return dut, threads, device, calls
@@ -82,11 +84,13 @@ def test_start_daq_can_publish_processed_lsl_without_internal_recording():
     dut.start_daq(
         sampling_rate=500.0,
         do_record=False,
+        do_plot=False,
         do_process=True,
     )
 
     assert [name for name, _, _ in threads.registered] == ["lsl_stream_system", "lsl_process_stream"]
-    assert threads.registered[0][1][0:2] == (0, "data")
+    assert threads.registered[0][1][0] == 0
+    assert [stream.name for stream in threads.registered[0][1][1]] == ["data"]
     assert threads.registered[0][2]["require_consumers"] is True
     assert threads.registered[1][1][0:3] == (1, "data", "filt")
     assert threads.registered[1][2]["require_consumers"] is False
@@ -102,9 +106,11 @@ def test_start_daq_can_publish_raw_lsl_without_internal_recording_or_processing(
     dut.start_daq(
         sampling_rate=500.0,
         do_record=False,
+        do_plot=False,
         do_process=False,
     )
 
     assert [name for name, _, _ in threads.registered] == ["lsl_stream_system"]
-    assert threads.registered[0][1][0:2] == (0, "data")
+    assert threads.registered[0][1][0] == 0
+    assert [stream.name for stream in threads.registered[0][1][1]] == ["data"]
     assert threads.registered[0][2]["require_consumers"] is False

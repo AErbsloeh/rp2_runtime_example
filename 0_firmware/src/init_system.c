@@ -48,7 +48,12 @@ bool init_system(void){
 	if(rp2_adc_init(&adc_temp))
 		num_init_done++;
 
-    if(daq_init_sampling(&tmr_daq0_hndl, &daq_config_raw))
+    // --- DAQ streams (all share the same timer, counted as one device)
+    bool daq_init_ok = true;
+    for(uint8_t idx = 0; idx < daq_num_streams; idx++){
+        daq_init_ok &= daq_init_sampling(&tmr_daq0_hndl, daq_streams[idx]);
+    }
+    if(daq_init_ok)
         num_init_done++;
 
     // --- Blocking Routine if init is not completed
