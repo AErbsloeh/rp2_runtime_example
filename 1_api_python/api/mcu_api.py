@@ -585,8 +585,8 @@ class DeviceAPI:
             lsl_stream_name="data1",
             channel_name="CH1.1 Raw",
             channel_unit="LSB",
-            curve_color='b',
-            position=(0, 0),
+            curve_color='g',
+            position=(0, 1),
             stream_channel_idx=0
         )
         if do_process:
