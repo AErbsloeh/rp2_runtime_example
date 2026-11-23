@@ -87,6 +87,28 @@ class DataAcquisitionConfig:
 
 
 @dataclass(frozen=True)
+class DaqStreamDescription:
+    """Dataclass describing one LSL outlet fed by a DAQ stream of the device
+    Attributes:
+        name:           String with the LSL stream name
+        head_cmd:       Integer with the packet head byte identifying this stream on the wire
+        sampling_rate:  Float with nominal sampling rate [Hz]
+        channel_labels: List with label of each channel
+        channel_units:  List with unit of each channel
+        channel_layout: List with channel layout (spatial information)
+        is_batch:       Boolean if the stream delivers chunks (batch mode) instead of single samples
+    """
+
+    name: str
+    head_cmd: int
+    sampling_rate: float
+    channel_labels: list[str]
+    channel_units: list[str]
+    channel_layout: list[list[int]]
+    is_batch: bool
+
+
+@dataclass(frozen=True)
 class SystemState:
     """Dataclass for handling the system state of the device
     Attributes:

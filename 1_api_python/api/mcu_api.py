@@ -8,6 +8,7 @@ import numpy as np
 from .definitions import Commands
 from .src import _helper
 from .src._helper import (
+    DaqStreamDescription,
     DataAcquisitionConfig,
     SystemState,
     build_crc_excluding_endframe,
@@ -27,14 +28,15 @@ class DeviceAPI:
     __device: InterfaceSerial | InterfaceWifi
     __threads: ThreadLSL
     __daq_config: DataAcquisitionConfig
+    __daq_streams: dict[int, DataAcquisitionConfig] = dict()
+    __daq_dtypes: dict[int, np.dtype] = dict()
+    __rx_buffer: bytearray = bytearray()
+    __num_skipped_bytes: int = 0
     __timeout_default: float
     __usb_vid: int = 0x2E8A
     # PID of RP2350 = 0x0009 and RP2040 = 0x000A
-    __last_idx: int = 255
+    __last_idx: dict[int, int] = dict()
     __num_package_loss: int = 0
-    __layout_channels: list[list[int]] = list()
-    __layout_labels: list[str] = list()
-    __layout_units: list[str] = list()
     __plot_config: LivePlotterChannelConfig | None = None
     _num_daq_tasks: int = 0
     _pin_names: list[str] = ["LED_USER"]
@@ -261,11 +263,15 @@ class DeviceAPI:
             raise ValueError("Not the right mode")
         self._write_without_feedback(Commands.SET_BATCH_DAQ, data=process_mode)
 
-    def _check_package_loss(self, new_idx: int) -> None:
-        if 1 < new_idx - self.__last_idx < 255:
-            self.__num_package_loss += 1
-            self.__logger.debug(f"Package loss detected: {self.__num_package_loss}")
-        self.__last_idx = new_idx
+    def _check_package_loss(self, head_cmd: int, new_idx: int) -> None:
+        """Checking the (8-bit, wrapping) packet index of one stream for missing packets"""
+        last_idx = self.__last_idx.get(head_cmd)
+        if last_idx is not None:
+            num_lost = (new_idx - last_idx - 1) % 256
+            if num_lost:
+                self.__num_package_loss += num_lost
+                self.__logger.debug(f"Package loss detected on stream 0x{head_cmd:02X}: {self.__num_package_loss}")
+        self.__last_idx[head_cmd] = new_idx
 
     def _check_crc(self, packet: bytes, received_crc: int) -> bool:
         """Verify CRC of a received packet. If failed program will be stopped"""
@@ -317,81 +323,111 @@ class DeviceAPI:
             is_signed=bool(frame["signed"]),
         )
 
-    @property
-    def _package_daq_sample(self) -> np.dtype:
+    @staticmethod
+    def _build_package_dtype(config: DataAcquisitionConfig) -> np.dtype:
+        """Building the numpy datatype of one DAQ packet (sample or batch mode)"""
+        num_values = config.num_channels * config.num_samples
         return np.dtype(
             [
                 ("head", "u1"),
                 ("index", "u1"),
-                ("timestamp", "<u8"),
-                ("data", self.__daq_config.dtype_sample, self.__daq_config.data_shape),
-                ("crc", "<u2"),
+                ("timestamp", "<u8", (2,) if config.send_batch else (1,)),
+                ("data", config.dtype_sample, (num_values,)),
+                ("crc", "<u2", (1,) if config.has_crc else (0,)),
                 ("tail", "u1"),
             ]
         )
 
-    def _thread_read_frame(self) -> tuple[list, float]:
-        try:
-            buffer = self.__device.read(self.__daq_config.num_bytes_total)
-            if not buffer:
-                raise Exception
-            frames = np.frombuffer(buffer, dtype=self._package_daq_sample)[0]
-            mask = (frames["head"], frames["tail"]) == (
-                self.__daq_config.head_cmd,
-                self.__daq_config.tail_cmd,
-            )
-            if mask:
-                self._check_package_loss(int(frames["index"]))
-                if self.__daq_config.has_crc:
-                    self._check_crc(buffer, int(frames["crc"]))
-                timestamps = 1e-6 * float(frames["timestamp"])
-                data = frames["data"].tolist()
-                return data, timestamps
-            else:
-                raise Exception
-        except Exception:
-            return [], None
-
-    @property
-    def _package_daq_batch(self) -> np.dtype:
-        return np.dtype(
-            [
-                ("head", "u1"),
-                ("index", "u1"),
-                ("timestamp", "<u8", (2,)),
-                ("data", self.__daq_config.dtype_sample, self.__daq_config.data_shape),
-                ("crc", "<u2"),
-                ("tail", "u1"),
-            ]
-        )
-
-    def _thread_read_batch(self) -> tuple[list[list], list[float]]:
-        try:
-            buffer = self.__device.read(self.__daq_config.num_bytes_total)
-            if not buffer:
-                raise Exception
-            frames = np.frombuffer(buffer, dtype=self._package_daq_batch)[0]
-            mask = (frames["head"], frames["tail"]) == (
-                self.__daq_config.head_cmd,
-                self.__daq_config.tail_cmd,
-            )
-            if mask:
-                self._check_package_loss(int(frames["index"]))
-                if self.__daq_config.has_crc:
-                    self._check_crc(buffer, int(frames["crc"]))
-                dt = (frames["timestamp"][1] - frames["timestamp"][0]) / (
-                    self.__daq_config.num_samples - 1
+    def _register_daq_streams(self, configs: list[DataAcquisitionConfig]) -> None:
+        """Registering all DAQ streams, which can be received on the device interface (identified by head byte)"""
+        self.__daq_streams = dict()
+        self.__daq_dtypes = dict()
+        for config in configs:
+            if config.head_cmd in self.__daq_streams:
+                raise ValueError(f"DAQ streams must have unique head bytes (0x{config.head_cmd:02X} is used twice)")
+            dtype = self._build_package_dtype(config)
+            if dtype.itemsize != config.num_bytes_total:
+                raise ValueError(
+                    f"DAQ stream 0x{config.head_cmd:02X}: packet layout ({dtype.itemsize} bytes) does not "
+                    f"match reported size ({config.num_bytes_total} bytes)"
                 )
-                timestamps = [
-                    float(1e-6 * (frames["timestamp"][0] + dt * idx))
-                    for idx in range(self.__daq_config.num_samples)
-                ]
-                data = frames["data"].tolist()
-                return data, timestamps
+            self.__daq_streams[config.head_cmd] = config
+            self.__daq_dtypes[config.head_cmd] = dtype
+        self.__rx_buffer = bytearray()
+        self.__last_idx = dict()
+        self.__num_skipped_bytes = 0
+
+    def _fill_rx_buffer(self, num_bytes: int) -> bool:
+        """Reading from the device until the RX buffer contains at least num_bytes (False on timeout)"""
+        while len(self.__rx_buffer) < num_bytes:
+            chunk = self.__device.read(num_bytes - len(self.__rx_buffer))
+            if not chunk:
+                return False
+            self.__rx_buffer += chunk
+        return True
+
+    def _is_valid_packet(self, config: DataAcquisitionConfig, packet: bytes) -> bool:
+        if packet[-1] != config.tail_cmd:
+            return False
+        if config.has_crc:
+            received_crc = int.from_bytes(packet[-3:-1], byteorder="little")
+            return build_crc_excluding_endframe(packet) == received_crc
+        return True
+
+    def _read_next_packet(self) -> tuple[DataAcquisitionConfig, bytes] | None:
+        """Reading the next valid packet of any registered DAQ stream from the device.
+        Packets of different streams can arrive in any order and have different lengths. The head byte selects
+        the stream config (and thus the length), tail byte + CRC validate the candidate. On a mismatch, only a
+        single byte is dropped, so the parser re-synchronises on the next real packet start.
+        :return:    Tuple with (stream config, raw packet bytes) or None on timeout
+        """
+        buffer = self.__rx_buffer
+        max_packet_size = max(config.num_bytes_total for config in self.__daq_streams.values())
+        num_skipped = 0
+        while num_skipped <= 2 * max_packet_size:
+            if not self._fill_rx_buffer(1):
+                return None
+            config = self.__daq_streams.get(buffer[0])
+            if config is not None:
+                if not self._fill_rx_buffer(config.num_bytes_total):
+                    return None
+                packet = bytes(buffer[: config.num_bytes_total])
+                if self._is_valid_packet(config, packet):
+                    del buffer[: config.num_bytes_total]
+                    return config, packet
+            # Unknown head or corrupt packet: drop one byte and search for the next packet start
+            del buffer[0]
+            num_skipped += 1
+            self.__num_skipped_bytes += 1
+        # Give the LSL thread the chance to check its stop event
+        return None
+
+    def _thread_read_packet(self) -> tuple[int | None, list, float | list[float] | None]:
+        """Reading and decoding the next DAQ packet of any registered stream
+        :return:    Tuple with (head_cmd, data, timestamp). Sample mode: data=list[channels], timestamp=float.
+                    Batch mode: data=list[samples][channels], timestamp=list[float]. (None, [], None) if no data.
+        """
+        try:
+            ret = self._read_next_packet()
+            if ret is None:
+                return None, [], None
+            config, packet = ret
+            frame = np.frombuffer(packet, dtype=self.__daq_dtypes[config.head_cmd])[0]
+            # print("Got data:", frame)
+            self._check_package_loss(config.head_cmd, int(frame["index"]))
+
+            if config.send_batch:
+                # Firmware pushes all channels of one sample consecutively -> sample-major layout
+                data = frame["data"].reshape(config.num_samples, config.num_channels).tolist()
+                t_first, t_last = (int(val) for val in frame["timestamp"])
+                dt = (t_last - t_first) / max(config.num_samples - 1, 1)
+                timestamps = [1e-6 * (t_first + dt * idx) for idx in range(config.num_samples)]
+                return config.head_cmd, data, timestamps
             else:
-                raise Exception
-        except Exception:
-            return [], None
+                return config.head_cmd, frame["data"].tolist(), 1e-6 * float(frame["timestamp"][0])
+        except Exception as e:
+            self.__logger.debug(f"Failed to read DAQ packet: {e}")
+            return None, [], None
 
     def start_daq(
         self,
@@ -401,27 +437,48 @@ class DeviceAPI:
         do_record: bool = True,
         do_process: bool = True,
         folder_name: str = "runs",
+        stream_names: list[str] | None = None,
     ) -> None:
         """Changing the state of the DAQ with starting it
         :param sampling_rate:   Float with sampling rate [Hz]
         :param do_plot:         True to plot the data in real-time
         :param do_record:       True to record the LSL stream to a HDF5 file
-        :param do_process:      True to publish the processed LSL stream
+        :param do_process:      True to publish the processed LSL stream (of the first DAQ stream)
         :param window_sec:      Floating value with window length [in seconds] for live plotting
         :param folder_name:     String with folder name to save data in project folder
+        :param stream_names:    List with LSL names for each DAQ stream of the device (in firmware order).
+                                Default: ["data", "data1", "data2", ...]
         :return:                None
         """
         self.__num_package_loss = 0
         self._update_daq_sampling_rate(sampling_rate)
-        num_daq_task = self._get_number_daq_tasks()
-        self.__daq_config = self.get_daq_characteristics(num_daq_task-1)
-        if not self.__layout_labels:
-            self.__layout_labels = [f"CH{idx}" for idx in range(self.__daq_config.num_channels)]
-            self.__layout_channels = [[idx] for idx in range(self.__daq_config.num_channels)]
-            self.__layout_units = ["LSB" for _ in range(self.__daq_config.num_channels)]
+        num_daq_tasks = self._get_number_daq_tasks()
+        if num_daq_tasks < 1:
+            raise RuntimeError("Device does not report any DAQ stream")
+        daq_configs = [self.get_daq_characteristics(idx) for idx in range(num_daq_tasks)]
+        self._register_daq_streams(daq_configs)
+        self.__daq_config = daq_configs[0]
+
+        if stream_names is None:
+            stream_names = ["data"] + [f"data{idx}" for idx in range(1, num_daq_tasks)]
+        if len(stream_names) != num_daq_tasks or len(set(stream_names)) != num_daq_tasks:
+            raise ValueError(f"stream_names needs {num_daq_tasks} unique names, got {stream_names}")
+        streams = [
+            DaqStreamDescription(
+                name=name,
+                head_cmd=config.head_cmd,
+                sampling_rate=config.sampling_rate,
+                channel_labels=[f"CH{idx}" for idx in range(config.num_channels)],
+                channel_units=["LSB" for _ in range(config.num_channels)],
+                channel_layout=[[idx] for idx in range(config.num_channels)],
+                is_batch=config.send_batch,
+            )
+            for name, config in zip(stream_names, daq_configs)
+        ]
+        self.__logger.debug(f"DAQ streams: {streams}")
 
         stream_idx = 0
-        source_stream = "data"
+        source_stream = stream_names[0]
         output_stream = source_stream
 
         if do_record:
@@ -433,12 +490,8 @@ class DeviceAPI:
             func=self.__threads.lsl_stream_system,
             args=(
                 stream_idx,
-                source_stream,
-                self._thread_read_batch if self.__daq_config.send_batch else self._thread_read_frame,
-                self.__daq_config.sampling_rate,
-                self.__layout_labels,
-                self.__layout_units,
-                self.__layout_channels
+                streams,
+                self._thread_read_packet,
             ),
             kwargs={"require_consumers": require_system_consumers},
         )
@@ -465,11 +518,11 @@ class DeviceAPI:
             path2data = get_path_to_project(new_folder=folder_name)
             self.__threads.register(
                 func=self.__threads.lsl_record_stream,
-                args=(stream_idx, [output_stream, "util"], path2data),
+                args=(stream_idx, [output_stream, *stream_names[1:], "util"], path2data),
             )
             stream_idx += 1
 
-        self.__device.timeout = 2 / self.__daq_config.sampling_rate
+        self.__device.timeout = 2 / min(config.sampling_rate for config in daq_configs)
         self.__threads.start()
         self._write_without_feedback(Commands.START_DAQ)
 
@@ -494,6 +547,8 @@ class DeviceAPI:
         self.__device.empty_buffer()
         if self.__num_package_loss > 0:
             self.__logger.info(f"Number of package losses: {self.__num_package_loss}")
+        if self.__num_skipped_bytes > 0:
+            self.__logger.info(f"Number of skipped bytes (re-sync): {self.__num_skipped_bytes}")
         sleep(1.0)
 
     def wait_daq(self, time_sec: float) -> None:
@@ -525,6 +580,14 @@ class DeviceAPI:
             curve_color='b',
             position=(1, 1),
             stream_channel_idx=1
+        )
+        self.add_plot_channel(
+            lsl_stream_name="data1",
+            channel_name="CH1.1 Raw",
+            channel_unit="LSB",
+            curve_color='b',
+            position=(0, 0),
+            stream_channel_idx=0
         )
         if do_process:
             self.add_plot_channel(

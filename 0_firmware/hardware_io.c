@@ -1,5 +1,5 @@
 #include "hardware_io.h"
-
+#include "stdlib.h"
 
 system_state_t system_state = STATE_ERROR;
 // ==================== I2C DEFINITION =====================
@@ -55,7 +55,7 @@ daq_data_t daq_config_raw = {
     .runtime_last = 0,
     .is_signed = false,
     .element_size = sizeof(uint16_t),
-    .num_channels = 2,
+    .num_channels = 8,
     .num_samples = 16,
     .send_mode = DAQ_MODE_SAMPLE,
     .new_data = false,
@@ -63,15 +63,47 @@ daq_data_t daq_config_raw = {
     .data1 = &b
 };
 
+fifo_t c = {};
+fifo_t d = {};
+daq_data_t daq_config_sample2 = {
+    .packet_id = 0xFA,
+    .packet_tail = 0xBC,
+    .iteration = 0,
+    .runtime_first = 0,
+    .runtime_last = 0,
+    .is_signed = false,
+    .element_size = sizeof(uint16_t),
+    .num_channels = 4,
+    .num_samples = 16,
+    .send_mode = DAQ_MODE_SAMPLE,
+    .new_data = false,
+    .data0 = &c,
+    .data1 = &d
+};
+
+// --- Registry of all DAQ streams (order = index used by GET_CHARAC_DAQ)
+daq_data_t* const daq_streams[] = {&daq_config_raw, &daq_config_sample2};
+const uint8_t daq_num_streams = sizeof(daq_streams) / sizeof(daq_streams[0]);
+
 
 uint16_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+uint16_t data2[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 bool irq_tmr_daq0(repeating_timer_t *rt){
     data[0] += 16;
     data[1] = rp2_adc_read_raw(&adc_temp);
     for (uint8_t ch = 2; ch < 8; ch++){
         data[ch] = data[0] + ch;   // placeholder data
     }
-    return daq_irq_process(&daq_config_raw, data);
+
+    data2[0] -= 16;
+    data2[1] = rand();
+    for (uint8_t ch = 2; ch < 8; ch++){
+        data2[ch] = data2[0] + ch;   // placeholder data
+    }
+
+    daq_irq_process(&daq_config_raw, data);
+    daq_irq_process(&daq_config_sample2, data2);
+    return true;
 };
 repeating_timer_t tmr_daq0;
 tmr_repeat_irq_t tmr_daq0_hndl = {
