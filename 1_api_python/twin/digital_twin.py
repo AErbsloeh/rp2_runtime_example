@@ -109,13 +109,20 @@ class DigitalTwin:
         """
         self._threads.wait_for_seconds(time_sec)
 
-    def plot(self, window_sec: float = 10.0, source_unit: str = "LSB", twin_unit: str = "LSB") -> None:
-        """Open the live plot with the source stream in the first row and the processed stream in the second row (one column per channel). This call blocks until the plot window is closed
+    def plot(
+        self,
+        window_sec: float = 10.0,
+        source_unit: str = "LSB",
+        twin_unit: str = "LSB",
+        extra_streams: list[tuple[str, str, str]] | None = None,
+    ) -> None:
+        """Open the live plot with the source stream in the first row and the processed stream in the last row (one column per channel). This call blocks until the plot window is closed
 
         Args:
             window_sec (float, optional): Window length in seconds. Defaults to 10.0
             source_unit (str, optional): Unit of the source data. Defaults to "LSB"
             twin_unit (str, optional): Unit of the processed data. Defaults to "LSB"
+            extra_streams (list, optional): Further LSL streams with the same channels (e.g. data returned from the device) as rows between source and twin, each entry is (LSL stream name, label of the row, unit). Defaults to None
         """
         streams = resolve_bypred(predicate=f"name='{self.source_stream_name}'", minimum=1, timeout=10.0)
         if not streams:
@@ -123,6 +130,7 @@ class DigitalTwin:
         plot_config = build_comparison_plot_config(
             rows=[
                 (self.source_stream_name, "Input", source_unit),
+                *(extra_streams or []),
                 (self.output_stream_name, "Twin", twin_unit),
             ],
             num_channels=streams[0].channel_count(),

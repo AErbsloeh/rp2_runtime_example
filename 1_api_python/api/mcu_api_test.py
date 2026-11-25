@@ -38,6 +38,19 @@ def test_check_echo(dut: DeviceAPI):
 
 
 @pytest.mark.hardware
+def test_check_echo_value(dut: DeviceAPI):
+    for value in (0, 1, -1, 32768, -8388608, 8388607):
+        assert dut.echo_value(value) == value
+
+
+@pytest.mark.hardware
+def test_check_process_data_template(dut: DeviceAPI):
+    # template of the firmware: run_sequential returns the data unchanged
+    for value in (0, 1, -1, 32768, -8388608, 8388607):
+        assert dut.process_data(value) == value
+
+
+@pytest.mark.hardware
 def test_bytes_int_conversion(dut: DeviceAPI):
     input = [randint(a=0, b=65535) for _ in range(100)]
     rslt = []

@@ -201,6 +201,22 @@ def test_plot_uses_channels_of_source_and_twin_stream(tmp_path, monkeypatch):
     ]
 
 
+def test_plot_adds_extra_streams_between_source_and_twin(tmp_path, monkeypatch):
+    twin = _make_twin(tmp_path)
+    monkeypatch.setattr("twin.digital_twin.resolve_bypred", lambda **kwargs: [FakeInfo(1, 1000.0)])
+    plot = MagicMock()
+    monkeypatch.setattr(ThreadLSL, "lsl_plot_stream", plot)
+
+    twin.plot(extra_streams=[("McuEcho", "MCU", "LSB")])
+
+    config = plot.call_args.kwargs["plot_config"]
+    assert [(ch.lsl_stream_name, ch.position) for ch in config.channel_configs] == [
+        ("Source", (0, 0)),
+        ("McuEcho", (1, 0)),
+        (TWIN_OUTPUT_STREAM, (2, 0)),
+    ]
+
+
 def test_plot_raises_if_source_stream_is_missing(tmp_path, monkeypatch):
     twin = _make_twin(tmp_path)
     monkeypatch.setattr("twin.digital_twin.resolve_bypred", lambda **kwargs: [])

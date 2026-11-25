@@ -51,7 +51,9 @@ Further scripts are listed in [Examples](#examples).
 dut = DeviceAPI()                                                       # USB (com_name="AUTOCOM" searches the port)
 dut = DeviceAPI(transport="wifi", host="172.20.10.5", port=4242)       # WiFi (TCP), needs the WiFi transport in the firmware
 
-dut.echo("hello")        # communication test
+dut.echo("hello")        # communication test with a string
+dut.echo_value(-1234)    # loopback of one signed 24 bit integer (returns the value from the device)
+dut.process_data(-1234)  # sends one signed 24 bit integer to `run_sequential` of the firmware, returns the result (None without response)
 dut.get_state()          # system state and active pins
 dut.toggle_led()         # also enable_led(), disable_led()
 dut.do_reset()           # restart of the firmware
@@ -143,10 +145,16 @@ twin.stop()
 - **Pipeline**: Each function gets the chunk of the previous one as NumPy array `[samples, channels]`. The last function must be annotated with a NumPy return type (e.g. `-> np.ndarray[np.float32]`), which defines the data type of the output stream. The pipeline must not change the number of channels.
 - **Output stream**: `DigitalTwinOutput` (`output_stream_name`) has the channels, metadata, sampling rate and timestamps of the input.
 - **Recording**: With `save_h5=True` the output is recorded in `path2save` (default: `runs`) in the format of the DeviceAPI, so the `DataAPI` reads it. The attribute `process_pipeline` lists the pipeline functions.
-- **Plot**: `plot()` shows the input in the first row and the output of the twin in the second row, each channel in own column.
+- **Plot**: `plot()` shows the input in the first row and the output of the twin in the last row, each channel in own column. Further LSL streams with the same channels (e.g. data returned from the device) are added as rows in between with `plot(extra_streams=[("StreamName", "Label", "unit")])`.
 - **Latency**: `num_samples` is the chunk size of one processing step, the latency is about `num_samples / sampling rate`.
 
-For a running device, start the DAQ without own plot (`start_daq(..., do_plot=False)`) and start the twin in the same or in a second process. `examples/run_twin.py` works without hardware, the hardware models of the example are in `examples/hardware_specific_functions.py` (AD5765, AD7779, OPA1637, ...). Replace them by the models of your own hardware.
+For a running device, start the DAQ without own plot (`start_daq(..., do_plot=False)`) and start the twin in the same or in a second process.
+
+`examples/run_twin.py` is the short example without a running DAQ. It needs two helpers of the package `twin`:
+- `LslGenerator(name, sampling_rate, func)` publishes test data as LSL stream, `func` maps the time in seconds to the values.
+- `DeviceLoopback(process, name_in, name_out)` sends the samples of an LSL stream one by one to the device and publishes the returned values as new stream (e.g. `process=DeviceAPI().process_data`, so the data are processed by `run_sequential(in, out)` in `0_firmware/callbacks/rpc_callbacks.c`, template: echo). The device answers only if the function returns `true`. Each sample is one round trip, so the sampling rate is limited (the loopback logs the measured round trip time when it is stopped). Show the returned stream in the plot with `plot(extra_streams=[(name_out, "MCU", "LSB")])`.
+
+With `USE_MCU = False` the example works without hardware. The hardware models of the example are in `examples/hardware_specific_functions.py` (AD5765, AD7779, OPA1637, ...). Replace them by the models of your own hardware.
 
 ## Development Environment
 The `devenv.nix` provides Python 3.13, `uv`, `ruff` and tasks (`devenv tasks run <name>`):

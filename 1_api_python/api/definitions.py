@@ -14,6 +14,7 @@ class Commands(IntEnum):
     STOP_DAQ = 0x09
     SET_PERIOD_DAQ = 0x0A
     SET_BATCH_DAQ = 0x0B
+    PROCESS_DATA = 0x0C
 
 
 class CommandsFPGA(IntEnum):

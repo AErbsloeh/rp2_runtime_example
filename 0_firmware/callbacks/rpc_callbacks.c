@@ -123,6 +123,27 @@ void set_batch_daq(char* buffer, size_t length){
 }
 
 
+bool run_sequential(const uint8_t *in, uint8_t *out){
+    // Template: the data are returned unchanged (echo), replace it with the processing of your application
+    for(size_t idx = 0; idx < PROCESS_DATA_NUM_BYTES; idx++){
+        out[idx] = in[idx];
+    }
+    return true;
+}
+
+
+void process_data(char* buffer, size_t length){
+    // Frame: buffer[0] = PROCESS_DATA, buffer[1 ... length-1] = data bytes. Frames with another size are ignored
+    if(length != (1 + PROCESS_DATA_NUM_BYTES)){
+        return;
+    }
+    char buffer_send[1 + PROCESS_DATA_NUM_BYTES] = {PROCESS_DATA};
+    if(run_sequential((const uint8_t*)&buffer[1], (uint8_t*)&buffer_send[1])){
+        transport_write(buffer_send, sizeof(buffer_send));
+    }
+}
+
+
 // ======================== CALLABLE FUNCS ==========================
 bool apply_rpc_callback(transport_rx_buffer_t *data){    
     bool valid_state = true;
@@ -141,6 +162,7 @@ bool apply_rpc_callback(transport_rx_buffer_t *data){
             case STOP_DAQ:              stop_daq();                                 break;
             case SET_PERIOD_DAQ:        update_period_daq(buffer, data->length);    break;
             case SET_BATCH_DAQ:         set_batch_daq(buffer, data->length);        break;
+            case PROCESS_DATA:          process_data(buffer, data->length);         break;
             default:                    valid_state = false;                        break;        
         }  
         data->ready = false;

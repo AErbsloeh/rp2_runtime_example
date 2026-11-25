@@ -185,6 +185,32 @@ class DeviceAPI:
         val = b"".join(self._write_with_feedback(Commands.ECHO, chunk) for chunk in chunks)
         return self.__device.deserialize_string(val, raw_len)
 
+    def echo_value(self, value: int) -> int:
+        """Sending one signed integer to the device and returning the echoed value (loopback test with numbers)
+        The value must fit into the data bytes of one transmission (signed 24 bit: -8388608 ... 8388607)
+        :param value:   Integer value to be sent
+        :return:        Integer value returned from the device
+        """
+        num_bytes = self._num_bytes_data
+        raw = int(value).to_bytes(num_bytes, byteorder="big", signed=True)
+        ret = self._write_with_feedback(Commands.ECHO, int.from_bytes(raw, byteorder="big"))
+        return int.from_bytes(ret[:num_bytes], byteorder="big", signed=True)
+
+    def process_data(self, value: int) -> int | None:
+        """Sending one signed integer to the processing function of the device (`run_sequential` in the firmware)
+        The value must fit into the data bytes of one transmission (signed 24 bit: -8388608 ... 8388607)
+        :param value:   Integer value to be processed by the device
+        :return:        Integer value with the result from the device or None if the device sends no response
+        """
+        num_bytes = self._num_bytes_data
+        raw = int(value).to_bytes(num_bytes, byteorder="big", signed=True)
+        answer = self.__device.write_wfb(data=self.__device.convert(Commands.PROCESS_DATA, int.from_bytes(raw, byteorder="big")))
+        if len(answer) == 0:
+            return None
+        if len(answer) != self.total_num_bytes or answer[0] != Commands.PROCESS_DATA:
+            raise ValueError(f"Get: {answer.hex(' ')}")
+        return int.from_bytes(answer[1:], byteorder="big", signed=True)
+
     @property
     def _package_system_state(self) -> np.dtype:
         return np.dtype(

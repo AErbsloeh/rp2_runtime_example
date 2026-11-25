@@ -204,3 +204,64 @@ def test_start_daq_applies_plot_definition_to_each_of_multiple_streams():
         [[0, 1]],
     )
     assert device.timeout == 2 / 250.0
+
+
+def test_echo_value_sends_and_decodes_signed_values():
+    dut = DeviceAPI.__new__(DeviceAPI)
+    sent = []
+
+    def fake_write_with_feedback(head, data=0, size=0):
+        sent.append((head, data))
+        return data.to_bytes(3, byteorder="big")  # the device returns the data bytes unchanged
+
+    dut._write_with_feedback = fake_write_with_feedback
+
+    for value in (0, 1, -1, 42000, -8388608, 8388607):
+        assert dut.echo_value(value) == value
+    assert all(head == Commands.ECHO for head, _ in sent)
+    assert sent[2][1] == 0xFFFFFF  # -1 as 24 bit pattern
+
+
+def test_echo_value_rejects_values_outside_the_data_bytes():
+    dut = DeviceAPI.__new__(DeviceAPI)
+    dut._write_with_feedback = lambda head, data=0, size=0: data.to_bytes(3, byteorder="big")
+    with pytest.raises(OverflowError):
+        dut.echo_value(8388608)
+
+
+def _make_process_dut(answer_func):
+    dut = DeviceAPI.__new__(DeviceAPI)
+
+    class Device:
+        sent = []
+
+        def convert(self, head, data):
+            return data.to_bytes(3, byteorder="little") + head.to_bytes(1, byteorder="little")
+
+        def write_wfb(self, data, size=0):
+            self.sent.append(data)
+            return answer_func(data)
+
+        total_num_bytes = 4
+
+    dut._DeviceAPI__device = Device()
+    return dut
+
+
+def test_process_data_returns_result_of_the_device():
+    # the device answers with the head and the data bytes (MSB first), here: the echo of the template firmware
+    dut = _make_process_dut(lambda data: bytes([Commands.PROCESS_DATA]) + bytes(reversed(data[:3])))
+    for value in (0, 1, -1, 42000, -8388608, 8388607):
+        assert dut.process_data(value) == value
+
+
+def test_process_data_returns_none_without_response():
+    dut = _make_process_dut(lambda data: b"")
+    assert dut.process_data(5) is None
+
+
+def test_process_data_rejects_wrong_response():
+    dut = _make_process_dut(lambda data: bytes([Commands.ECHO, 0, 0, 1]))
+    with pytest.raises(ValueError):
+        dut.process_data(1)
+
