@@ -102,7 +102,9 @@ class FakeClick:
 
 
 class FakeDrag:
-    def __init__(self, x_down: float, x_now: float, finish: bool, button=QtCore.Qt.MouseButton.LeftButton) -> None:
+    def __init__(
+        self, x_down: float, x_now: float, finish: bool, button=QtCore.Qt.MouseButton.LeftButton
+    ) -> None:
         self._down = QtCore.QPointF(x_down, 10.0)
         self._now = QtCore.QPointF(x_now, 10.0)
         self._finish = finish

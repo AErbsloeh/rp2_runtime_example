@@ -32,7 +32,7 @@ If you create a new repo and you want to use the functionalities of this Python 
 ```
 uv add "git+https://github.com/AErbsloeh/rp2_runtime_example.git"
 ```
-The packages `api` and `twin` are installed. The tools for the FPGA design templates (`elasticai-hw-measurements`) belong to the dev dependencies and are not part of this installation, add them to your project if you need them.
+The packages `api` and `twin` are installed. The tools for the FPGA design templates (`elasticai-hw-measurements`) are in the dependency group `fpga`, which is not part of the default groups, because it installs PyTorch. Install it with `uv sync --group fpga` if you need the FPGA workflow, in your own project add the package `elasticai-hw-measurements` yourself.
 
 ## Quick Start
 Flash the firmware of `0_firmware` on the RP2xxx and run:

@@ -105,7 +105,7 @@ class DeviceAPI:
     def _write_with_feedback(self, head: Commands, data: int = 0, size: int = 0) -> bytes:
         data = self.__device.write_wfb(data=self.__device.convert(head, data), size=size)
         if data[0] != head:
-            raise ValueError(f"Get: {data.hex(" ")}")
+            raise ValueError(f"Get: {data.hex(' ')}")
         return data[1:]
 
     def _write_without_feedback(self, head: Commands, data: int = 0) -> None:
@@ -154,7 +154,7 @@ class DeviceAPI:
         if isinstance(self.__device, InterfaceSerial):
             self._wait_for_usb_device()
         else:
-            sleep(2.)
+            sleep(2.0)
 
     def _is_usb_device_available(self) -> bool:
         try:
@@ -204,7 +204,9 @@ class DeviceAPI:
         """
         num_bytes = self._num_bytes_data
         raw = int(value).to_bytes(num_bytes, byteorder="big", signed=True)
-        answer = self.__device.write_wfb(data=self.__device.convert(Commands.PROCESS_DATA, int.from_bytes(raw, byteorder="big")))
+        answer = self.__device.write_wfb(
+            data=self.__device.convert(Commands.PROCESS_DATA, int.from_bytes(raw, byteorder="big"))
+        )
         if len(answer) == 0:
             return None
         if len(answer) != self.total_num_bytes or answer[0] != Commands.PROCESS_DATA:
@@ -258,26 +260,22 @@ class DeviceAPI:
         """
         self._write_without_feedback(Commands.TOGGLE_LED)
 
-    def setup_live_plotter(self, plot_titles: list[list[str|None]]) -> None:
+    def setup_live_plotter(self, plot_titles: list[list[str | None]]) -> None:
         """initialize the live plotter ( row * col).
         channels can be added afterwards with add_plot_channel()
         """
-        self.__plot_config = LivePlotterChannelConfig(
-            plot_title=plot_titles,
-            channel_configs=[]
-        )
+        self.__plot_config = LivePlotterChannelConfig(plot_title=plot_titles, channel_configs=[])
 
     def add_plot_channel(
-            self,
-            lsl_stream_name: str,
-            channel_name: str,
-            channel_unit: str,
-            curve_color: str,
-            position: tuple[int, int],
-            stream_channel_idx: int = 0,
+        self,
+        lsl_stream_name: str,
+        channel_name: str,
+        channel_unit: str,
+        curve_color: str,
+        position: tuple[int, int],
+        stream_channel_idx: int = 0,
     ) -> None:
-        """add a channel to the live plotter
-        """
+        """add a channel to the live plotter"""
         if self.__plot_config is None:
             raise RuntimeError("please set up setup_live_plotter(plot_titles=..) first!")
 
@@ -346,7 +344,9 @@ class DeviceAPI:
             num_lost = (new_idx - last_idx - 1) % 256
             if num_lost:
                 self.__num_package_loss += num_lost
-                self.__logger.debug(f"Package loss detected on stream 0x{head_cmd:02X}: {self.__num_package_loss}")
+                self.__logger.debug(
+                    f"Package loss detected on stream 0x{head_cmd:02X}: {self.__num_package_loss}"
+                )
         self.__last_idx[head_cmd] = new_idx
 
     def _check_crc(self, packet: bytes, received_crc: int) -> bool:
@@ -378,7 +378,7 @@ class DeviceAPI:
             ]
         )
 
-    def get_daq_characteristics(self, sel_daq_tasks: int=0) -> DataAcquisitionConfig:
+    def get_daq_characteristics(self, sel_daq_tasks: int = 0) -> DataAcquisitionConfig:
         """Get number of channels for acquiring data
         :param sel_daq_tasks:   Integer with number of task config to acquire
         :return:                Integer with number of DAQ channels
@@ -420,7 +420,9 @@ class DeviceAPI:
         self.__daq_dtypes = dict()
         for config in configs:
             if config.head_cmd in self.__daq_streams:
-                raise ValueError(f"DAQ streams must have unique head bytes (0x{config.head_cmd:02X} is used twice)")
+                raise ValueError(
+                    f"DAQ streams must have unique head bytes (0x{config.head_cmd:02X} is used twice)"
+                )
             dtype = self._build_package_dtype(config)
             if dtype.itemsize != config.num_bytes_total:
                 raise ValueError(
@@ -561,7 +563,10 @@ class DeviceAPI:
                     zip(
                         ("channel_labels", "channel_units", "channel_layout"),
                         self._get_stream_metadata(
-                            stream.name, stream.channel_labels, stream.channel_units, stream.channel_layout
+                            stream.name,
+                            stream.channel_labels,
+                            stream.channel_units,
+                            stream.channel_layout,
                         ),
                     )
                 ),
@@ -627,10 +632,7 @@ class DeviceAPI:
         if do_plot:
             if self.__plot_config is None or not self.__plot_config.channel_configs:
                 raise RuntimeError("LivePlotter is not configured!")
-            self.__threads.lsl_plot_stream(
-                plot_config=self.__plot_config,
-                window_length=window_sec
-            )
+            self.__threads.lsl_plot_stream(plot_config=self.__plot_config, window_length=window_sec)
 
     def stop_daq(self) -> None:
         """Changing the state of the DAQ with stopping it
@@ -664,32 +666,30 @@ class DeviceAPI:
         self.__threads.wait_for_seconds(time_sec)
 
     def set_liveplotter_config_manually(self, do_process: bool = True) -> None:
-        self.setup_live_plotter(
-            plot_titles=[["plot1", "plot2"], [None, "plot3"]]
-        )
+        self.setup_live_plotter(plot_titles=[["plot1", "plot2"], [None, "plot3"]])
         self.add_plot_channel(
             lsl_stream_name="data0",
             channel_name="CH0 Raw",
             channel_unit="LSB",
-            curve_color='r',
+            curve_color="r",
             position=(0, 0),
-            stream_channel_idx=0
+            stream_channel_idx=0,
         )
         self.add_plot_channel(
             lsl_stream_name="data0",
             channel_name="CH0 Temp",
             channel_unit="LSB",
-            curve_color='b',
+            curve_color="b",
             position=(1, 1),
-            stream_channel_idx=1
+            stream_channel_idx=1,
         )
         self.add_plot_channel(
             lsl_stream_name="data1",
             channel_name="CH1 Raw",
             channel_unit="LSB",
-            curve_color='g',
+            curve_color="g",
             position=(0, 1),
-            stream_channel_idx=0
+            stream_channel_idx=0,
         )
         if do_process:
             self.add_plot_channel(
@@ -698,7 +698,7 @@ class DeviceAPI:
                 channel_unit="LSB",
                 curve_color="g",
                 position=(0, 0),
-                stream_channel_idx=0
+                stream_channel_idx=0,
             )
 
     def __process_stream_init(self, sampling_rate: float) -> None:
@@ -707,10 +707,7 @@ class DeviceAPI:
     def __process_stream_func(self, data_in: list) -> list:
         data_out = list()
         for data in data_in:
-            dat = [
-                (65535 - data[0]),
-                data[1]
-            ]
+            dat = [(65535 - data[0]), data[1]]
             data_out.append(dat)
         return data_out
 
@@ -743,8 +740,8 @@ class DeviceAPI:
         self.__logger.info(f"Loaded plot configurations from {path}")
 
     def save_plotconfigs_to_json(
-            self,
-            file_path: str | Path,
+        self,
+        file_path: str | Path,
     ) -> None:
         """Saving current plot and channel layout configurations to a JSON file
         :param file_path:       Path to the target JSON configuration file
@@ -754,5 +751,7 @@ class DeviceAPI:
         path = Path(_helper.get_path_to_project(), file_path)
 
         with open(path, "w", encoding="utf-8") as json_file:
-            json.dump(self.__plot_config, json_file, default=lambda o: o.__dict__, indent=4, ensure_ascii=False)
+            json.dump(
+                self.__plot_config, json_file, default=lambda o: o.__dict__, indent=4, ensure_ascii=False
+            )
         self.__logger.info(f"Saved plot configurations to {path}")

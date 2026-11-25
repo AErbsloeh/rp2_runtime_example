@@ -8,7 +8,9 @@ from twin.streams import DeviceLoopback, LslGenerator
 
 
 class FakeInfo:
-    def __init__(self, name="", type="data", channel_count=1, nominal_srate=0.0, channel_format=0, source_id="") -> None:
+    def __init__(
+        self, name="", type="data", channel_count=1, nominal_srate=0.0, channel_format=0, source_id=""
+    ) -> None:
         self.name = name
         self.type_ = type
         self.num_channels = channel_count
@@ -80,7 +82,12 @@ def fake_lsl(monkeypatch):
 def test_generator_pushes_the_function_values_of_consecutive_samples():
     generator = LslGenerator("Gen", 1000.0, lambda t: 1000 * t, label="DAC", unit="V")
     outlet = generator._outlet
-    assert (outlet.info.name, outlet.info.srate, outlet.info.labels, outlet.info.units) == ("Gen", 1000.0, ["DAC"], ["V"])
+    assert (outlet.info.name, outlet.info.srate, outlet.info.labels, outlet.info.units) == (
+        "Gen",
+        1000.0,
+        ["DAC"],
+        ["V"],
+    )
 
     generator.start()
     _wait_until(lambda: sum(len(chunk) for chunk in outlet.chunks) >= 20)
@@ -97,14 +104,20 @@ def test_generator_supports_several_channels():
 
 
 def test_loopback_returns_results_with_timestamps_and_skips_missing_responses(monkeypatch):
-    monkeypatch.setattr(streams, "resolve_byprop", lambda *args, **kwargs: [FakeInfo("In", "data", 1, 500.0)])
+    monkeypatch.setattr(
+        streams, "resolve_byprop", lambda *args, **kwargs: [FakeInfo("In", "data", 1, 500.0)]
+    )
     FakeInlet.chunks = [([[10], [20], [30]], [1.0, 2.0, 3.0])]
 
     def process(value: int):
         return None if value == 20 else value + 1
 
     loopback = DeviceLoopback(process, "In", name_out="Out", label="MCU", unit="V")
-    assert (loopback._outlet.info.name, loopback._outlet.info.srate, loopback._outlet.info.labels) == ("Out", 500.0, ["MCU"])
+    assert (loopback._outlet.info.name, loopback._outlet.info.srate, loopback._outlet.info.labels) == (
+        "Out",
+        500.0,
+        ["MCU"],
+    )
 
     loopback.start()
     _wait_until(lambda: loopback._outlet.chunks)
@@ -122,6 +135,8 @@ def test_loopback_raises_if_source_stream_is_missing(monkeypatch):
 
 
 def test_loopback_rejects_streams_with_several_channels(monkeypatch):
-    monkeypatch.setattr(streams, "resolve_byprop", lambda *args, **kwargs: [FakeInfo("In", "data", 2, 500.0)])
+    monkeypatch.setattr(
+        streams, "resolve_byprop", lambda *args, **kwargs: [FakeInfo("In", "data", 2, 500.0)]
+    )
     with pytest.raises(ValueError):
         DeviceLoopback(lambda value: value, "In")

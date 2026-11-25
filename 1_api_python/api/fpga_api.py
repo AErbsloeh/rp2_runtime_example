@@ -21,7 +21,9 @@ class FlashFPGA(DeviceAPI):
         :param timeout:     Floating value with timeout for the communication [Default, not during DAQ]
         """
         if not DeviceAPI.has_fpga:
-            raise RuntimeError("No FPGA is declared: set has_fpga = True in DeviceAPI if an FPGA is connected")
+            raise RuntimeError(
+                "No FPGA is declared: set has_fpga = True in DeviceAPI if an FPGA is connected"
+            )
         super().__init__(com_name, timeout)
         self.__logger = getLogger(__name__)
         self.extend_pins_list([])
@@ -144,8 +146,8 @@ class FlashFPGA(DeviceAPI):
 
         n = self._num_bytes_data
         rest = len(data) % n
-        full = data[:len(data) - rest]
-        tail = data[len(data) - rest:]
+        full = data[: len(data) - rest]
+        tail = data[len(data) - rest :]
 
         out = bytearray()
         out.extend(upper.to_bytes(2, "little") + bytes(n - 2))
@@ -155,7 +157,7 @@ class FlashFPGA(DeviceAPI):
         out.extend(
             x
             for i in range(0, len(full), n)
-            for x in (*reversed(full[i:i + n]), Commands.FLASH_WRITE_BUFFER)
+            for x in (*reversed(full[i : i + n]), Commands.FLASH_WRITE_BUFFER)
         )
         if tail:
             out.extend(b"\x00" * (n - len(tail)))
@@ -169,7 +171,9 @@ class FlashFPGA(DeviceAPI):
         if do_check:
             data_check = bytes(self._read_page_from_flash(page, bytes_page))
             if data != data_check:
-                raise ValueError(f"Data are unequal!\nwrite: {data.hex(" ")}\n read: {data_check.hex(" ")}")
+                raise ValueError(
+                    f"Data are unequal!\nwrite: {data.hex(' ')}\n read: {data_check.hex(' ')}"
+                )
 
     @staticmethod
     def _split_stream_into_pages(bitstream: bytes, pagesize: int) -> list[bytes]:
@@ -281,7 +285,11 @@ class FlashFPGA(DeviceAPI):
         :return:        Integer with the complete frame
         """
         bits_cmd, bits_adr, bits_data = self._num_spi_middleware
-        for name, val, width in (("cmd", cmd, bits_cmd), ("adr", adr, bits_adr), ("data", data, bits_data)):
+        for name, val, width in (
+            ("cmd", cmd, bits_cmd),
+            ("adr", adr, bits_adr),
+            ("data", data, bits_data),
+        ):
             if not 0 <= val < 2**width:
                 raise ValueError(f"{name} must be in [0, {2**width}) ({width} bit)")
         return (cmd << (bits_adr + bits_data)) | (adr << bits_data) | data
@@ -310,5 +318,5 @@ class FlashFPGA(DeviceAPI):
         return self._write_with_feedback(
             head=Commands.FPGA_RXTX_DATA,
             data=int.from_bytes(bytes=data, byteorder="big", signed=False),
-            size=1 + num_bytes_frame
+            size=1 + num_bytes_frame,
         )

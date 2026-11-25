@@ -105,7 +105,7 @@ class InterfaceSerial:
         n = self.__BYTES_DATA
         raw = data.encode("utf-8")
         raw += b" " * ((-len(raw)) % n)
-        return [int.from_bytes(raw[i:i + n], "big") for i in range(0, len(raw), n)]
+        return [int.from_bytes(raw[i : i + n], "big") for i in range(0, len(raw), n)]
 
     @staticmethod
     def deserialize_string(data: bytes, length: int) -> str:

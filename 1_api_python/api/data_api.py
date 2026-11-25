@@ -20,6 +20,7 @@ class StreamRecording:
         label:          List with string name / label of each channel
         layout:         Layout information with where is each electrode device
     """
+
     sampling_rate: float
     num_channels: int
     time: np.ndarray
@@ -32,7 +33,7 @@ class StreamRecording:
 
     @property
     def get_sampling_rate(self) -> float:
-        return float(1/np.mean(np.diff(self.time)))
+        return float(1 / np.mean(np.diff(self.time)))
 
     @property
     def get_period_std(self) -> float:
@@ -51,7 +52,9 @@ class DataAPI:
         """
         path = Path(path2data) if type(path2data) == str else path2data
         self.__logger = getLogger(__name__)
-        self.__overview = sorted((file.absolute() for file in path.glob("*.h5")), key=lambda file: file.name)
+        self.__overview = sorted(
+            (file.absolute() for file in path.glob("*.h5")), key=lambda file: file.name
+        )
 
     @property
     def get_overview_files(self) -> list[Path]:
@@ -131,4 +134,4 @@ class DataAPI:
         """Reading utilization content from file
         :return:        Class RawRecording with information, timestamps and raw data
         """
-        return self.get_data('util')
+        return self.get_data("util")

@@ -7,7 +7,9 @@ import numpy as np
 from pylsl import StreamInfo, StreamInlet, StreamOutlet, cf_int32, resolve_byprop
 
 
-def _create_outlet(name: str, sampling_rate: float, num_channels: int, label: str, unit: str, stream_type: str):
+def _create_outlet(
+    name: str, sampling_rate: float, num_channels: int, label: str, unit: str, stream_type: str
+):
     info = StreamInfo(
         name=name,
         type=stream_type,
@@ -16,7 +18,9 @@ def _create_outlet(name: str, sampling_rate: float, num_channels: int, label: st
         channel_format=cf_int32,
         source_id=f"{name}_uid",
     )
-    info.set_channel_labels([f"{label}{idx}" if num_channels > 1 else label for idx in range(num_channels)])
+    info.set_channel_labels(
+        [f"{label}{idx}" if num_channels > 1 else label for idx in range(num_channels)]
+    )
     info.set_channel_units([unit] * num_channels)
     info.set_channel_types([stream_type] * num_channels)
     return StreamOutlet(info)
@@ -34,7 +38,12 @@ class LslGenerator:
     """
 
     def __init__(
-        self, name: str, sampling_rate: float, func: Callable[[np.ndarray], np.ndarray], label: str = "data", unit: str = "LSB"
+        self,
+        name: str,
+        sampling_rate: float,
+        func: Callable[[np.ndarray], np.ndarray],
+        label: str = "data",
+        unit: str = "LSB",
     ) -> None:
         self._fs = sampling_rate
         self._func = func
@@ -63,7 +72,9 @@ class LslGenerator:
         while not self._stop.is_set():
             num_due = int((monotonic() - t_start) * self._fs) - num_sent
             if num_due > 0:
-                values = np.asarray(self._func((num_sent + np.arange(num_due)) / self._fs)).astype(np.int32)
+                values = np.asarray(self._func((num_sent + np.arange(num_due)) / self._fs)).astype(
+                    np.int32
+                )
                 self._outlet.push_chunk(values.reshape(num_due, -1).tolist())
                 num_sent += num_due
             sleep(0.005)

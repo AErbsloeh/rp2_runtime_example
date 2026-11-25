@@ -22,8 +22,9 @@ class ChannelConfig:
 
 @dataclass
 class LivePlotterChannelConfig:
-    plot_title: list[list[str|None]] #[row][col]
+    plot_title: list[list[str | None]]  # [row][col]
     channel_configs: list[ChannelConfig]
+
 
 CURVE_COLORS = ("r", "b", "g", "m", "c", "y")
 
@@ -63,7 +64,11 @@ def build_comparison_plot_config(
 def get_time_ticks(window_sec: float, max_intervals: int = 6) -> list[tuple[float, str]]:
     """Ticks for the time axis (time relative to now) incl. start (-window_sec) and end (0) of the window"""
     magnitude = 10 ** math.floor(math.log10(window_sec / max_intervals))
-    step = next(factor * magnitude for factor in (1, 2, 5, 10) if window_sec / (factor * magnitude) <= max_intervals)
+    step = next(
+        factor * magnitude
+        for factor in (1, 2, 5, 10)
+        if window_sec / (factor * magnitude) <= max_intervals
+    )
     values = [idx * step for idx in range(int(window_sec / step + 1e-9) + 1)]
     if len(values) > 1 and window_sec - values[-1] <= 0.5 * step:
         values.pop()
@@ -79,7 +84,7 @@ class RingBuffer:
         self._filled = 0
 
     def extend(self, values: np.ndarray) -> None:
-        values = np.asarray(values)[-self._size:]
+        values = np.asarray(values)[-self._size :]
         n = len(values)
         idx = (self._ptr + np.arange(n)) % self._size
         self._data[idx] = values
@@ -89,8 +94,8 @@ class RingBuffer:
 
     def get(self) -> np.ndarray:
         if self._filled < self._size:
-            return self._data[:self._filled]
-        return self._data[self._ptr:self._ptr + self._size]
+            return self._data[: self._filled]
+        return self._data[self._ptr : self._ptr + self._size]
 
     def __len__(self) -> int:
         return self._filled
@@ -131,18 +136,22 @@ class LivePlotter:
     LINE_WIDTH: int = 2
     X_PADDING: float = 0.04
 
-    def __init__(self, channel_config: LivePlotterChannelConfig, window_width_sec: float| int):
+    def __init__(self, channel_config: LivePlotterChannelConfig, window_width_sec: float | int):
         self.channel_config = channel_config
         self._window_width_sec = window_width_sec
         self.channels = channel_config.channel_configs
         self.inlets = self._connect_lsl_streams()
-        self.inlet_by_name = {
-            inlet.info().name(): inlet for inlet in self.inlets
-        }
+        self.inlet_by_name = {inlet.info().name(): inlet for inlet in self.inlets}
 
-        self.max_samples = max(1, int(round(max(inlet.info().nominal_srate()*self._window_width_sec for inlet in self.inlets))))
+        self.max_samples = max(
+            1,
+            int(
+                round(max(inlet.info().nominal_srate() * self._window_width_sec for inlet in self.inlets))
+            ),
+        )
         self._sample_period_sec = {
-            inlet.info().name(): self._get_sample_period(inlet.info().nominal_srate()) for inlet in self.inlets
+            inlet.info().name(): self._get_sample_period(inlet.info().nominal_srate())
+            for inlet in self.inlets
         }
         self.data_buffers = [RingBuffer(self.max_samples) for _ in self.channels]
         self._time_buffer = RingBuffer(self.max_samples)
@@ -173,7 +182,7 @@ class LivePlotter:
             processing_flags=proc_threadsafe,
         )
 
-    def _connect_lsl_streams(self) -> list[StreamInlet|Any]:
+    def _connect_lsl_streams(self) -> list[StreamInlet | Any]:
         seen_names = set()
         inlets = []
 
@@ -227,13 +236,13 @@ class LivePlotter:
             if plot_item.legend is None:
                 plot_item.addLegend()
 
-            #Labeling of each plot by channelgroups
+            # Labeling of each plot by channelgroups
             group = channels_by_pos[(row, col)]
             combined_label = " / ".join(c.channel_name for c in group)
             unique_units = list(dict.fromkeys(c.channel_unit for c in group if c.channel_unit))
             combined_unit = " / ".join(unique_units)
 
-            plot_item.setLabel('left', combined_label, units=combined_unit)
+            plot_item.setLabel("left", combined_label, units=combined_unit)
 
             pen = pg.mkPen(color=ch.curve_color, width=self.LINE_WIDTH)
             curve = plot_item.plot(pen=pen, name=ch.channel_name)

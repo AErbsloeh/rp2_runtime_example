@@ -263,4 +263,3 @@ def test_process_data_rejects_wrong_response():
     dut = _make_process_dut(lambda data: bytes([Commands.ECHO, 0, 0, 1]))
     with pytest.raises(ValueError):
         dut.process_data(1)
-

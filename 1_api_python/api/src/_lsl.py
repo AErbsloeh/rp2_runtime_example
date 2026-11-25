@@ -707,9 +707,15 @@ class ThreadLSL:
                 stream_data.append(
                     f.create_dataset(f"{name}_data", (0, channel), maxshape=(None, channel), dtype=format)
                 )
-                stream_data[idx].attrs["unit"] = self._to_str_list(inlet.info().get_channel_units(), channel)
-                stream_data[idx].attrs["label"] = self._to_str_list(inlet.info().get_channel_labels(), channel)
-                stream_data[idx].attrs["layout"] = self._to_str_list(inlet.info().get_channel_types(), channel)
+                stream_data[idx].attrs["unit"] = self._to_str_list(
+                    inlet.info().get_channel_units(), channel
+                )
+                stream_data[idx].attrs["label"] = self._to_str_list(
+                    inlet.info().get_channel_labels(), channel
+                )
+                stream_data[idx].attrs["layout"] = self._to_str_list(
+                    inlet.info().get_channel_types(), channel
+                )
                 stream_data[idx].attrs["sampling_rate"] = inlet.info().nominal_srate()
                 stream_data[idx].attrs["channel_count"] = inlet.info().channel_count()
                 stream_data[idx].attrs["type"] = inlet.info().type()
@@ -741,9 +747,9 @@ class ThreadLSL:
                 self._thread_active[stim_idx] = False
 
     def lsl_plot_stream(
-            self,
-            plot_config: LivePlotterChannelConfig,
-            window_length: float = 10.0,
+        self,
+        plot_config: LivePlotterChannelConfig,
+        window_length: float = 10.0,
     ) -> None:
         """Function for LSL to enable live plotting using LivePlotter (PyQtGraph)
         receiving a pre-built LivePlotterChannelConfig object.
