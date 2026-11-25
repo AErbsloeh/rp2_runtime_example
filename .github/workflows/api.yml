@@ -1,6 +1,8 @@
 name: api
 
 on:
+  release:
+    types: [published]
   push:
     branches: [main]
     paths:
@@ -21,6 +23,8 @@ env:
 jobs:
   test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -43,3 +47,7 @@ jobs:
         with:
           name: api-wheel
           path: 2_api/dist/*.whl
+      - if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: 2_api/dist/*.whl

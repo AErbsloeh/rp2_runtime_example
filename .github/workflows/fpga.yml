@@ -1,6 +1,8 @@
 name: fpga
 
 on:
+  release:
+    types: [published]
   push:
     branches: [main]
     paths:
@@ -33,6 +35,8 @@ jobs:
 
   bitstream:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - run: sudo apt-get update && sudo apt-get install -y yosys nextpnr-ice40 fpga-icestorm
@@ -67,3 +71,11 @@ jobs:
             1_fpga/build/TOP_MODULE.bin
             1_fpga/build/TOP_MODULE_util_impl.rpt
             1_fpga/build/TOP_MODULE_timing.rpt
+      - if: github.event_name == 'release'
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: cp build/TOP_MODULE.bin "build/bitstream-up5k-${TAG}.bin"
+      - if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: 1_fpga/build/bitstream-up5k-${{ github.event.release.tag_name }}.bin

@@ -1,6 +1,8 @@
 name: firmware
 
 on:
+  release:
+    types: [published]
   push:
     branches: [main]
     paths:
@@ -17,6 +19,8 @@ env:
 jobs:
   build:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - run: >
@@ -43,3 +47,11 @@ jobs:
         with:
           name: firmware-pico2
           path: build/main.uf2
+      - if: github.event_name == 'release'
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: cp build/main.uf2 "build/firmware-pico2-${TAG}.uf2"
+      - if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/firmware-pico2-${{ github.event.release.tag_name }}.uf2
