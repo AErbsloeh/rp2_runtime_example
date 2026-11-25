@@ -8,7 +8,7 @@
   pkgs-rosetta = pkgs.pkgsx86_64Darwin;
   pkgs-unstable = import inputs.nixpkgs-unstable {system = pkgs.stdenv.system;};
   uv_bin = "${pkgs-unstable.uv}/bin/uv";
-  uv_run = "${uv_bin} run --active";
+  uv_run = "${uv_bin} run";
   alej_run = "${pkgs.alejandra}/bin/alejandra";
   tombi_run = "${pkgs.tombi}/bin/tombi";
 
@@ -36,6 +36,14 @@ in {
     pkgs.gzip
   ];
   cachix.enable = false;
+
+  env.UV_PROJECT_ENVIRONMENT = lib.mkForce "${config.devenv.root}/.venv";
+  enterShell = ''
+    if [ -f "$DEVENV_ROOT/.venv/bin/activate" ]; then
+      source "$DEVENV_ROOT/.venv/bin/activate"
+    fi
+  '';
+
   languages = {
     c = {
       enable = false;
@@ -75,7 +83,7 @@ in {
   };
 
   tasks = let
-    uv_run = "${pkgs-unstable.uv}/bin/uv run --active";
+    uv_run = "${pkgs-unstable.uv}/bin/uv run";
     uv_build = "${pkgs-unstable.uv}/bin/uv build";
   in {
     "project:sync" = {

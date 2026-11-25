@@ -11,37 +11,34 @@ dependencies = [
   "pyqt6>=6.11.0",
   "pyqtgraph>=0.14.0",
   "pyserial>=3.5",
-  "scipy>=1.13.0",
   "tqdm>=4.67.1",
 ]
 # dynamic = ["version"]
 
 [dependency-groups]
 dev = [
-  "build",
   "coverage>=7.11.3",
-  "elasticai-hw-measurements",
-  "hatch",
   "hatch-vcs",
   "matplotlib>=3.10.7",
   "pip-audit>=2.10.1",
   "ruff>=0.15.14",
-  "snakeviz>=2.2.2",
-  "tach>=0.23.0",
+  "scipy>=1.13.0",
   "tombi>=1.1.1",
   "ty>=0.0.38",
 ]
+fpga = [
+  "elasticai-hw-measurements",
+]
 lint = [
   "ruff>=0.15.14",
-  "tach>=0.23.0",
   "tombi>=1.1.1",
   "ty>=0.0.38",
 ]
 test = [
   "pytest>=9.0.3",
+  "pytest-order>=1.5.0",
   "pytest-rerunfailures>=16.3",
   "pytest-testmon>=2.2.0",
-  "pytest-order>=1.5.0",
 ]
 
 [build-system]
@@ -77,12 +74,12 @@ source = "vcs"
 [tool.pytest]
 addopts = ["--import-mode=importlib"]
 markers = [
-  "hardware: a test needs hardware with mcu and firmware",
   "fpga: a test needs an FPGA connected to the mcu (DeviceAPI.has_fpga = True)",
-  "unstable: a test which takes time and may fail",
+  "hardware: a test needs hardware with mcu and firmware",
+  "plot: a test which opens a plot",
   "simulation: a test which runs a simulation",
   "slow: a test which takes a long time",
-  "plot: a test which opens a plot",
+  "unstable: a test which takes time and may fail",
 ]
 minversion = "9.0"
 python_files = ["*_test.py"]
@@ -170,4 +167,4 @@ exclude = [
 default-groups = ["dev", "lint", "test"]
 
 [tool.uv.sources]
-elasticai-hw-measurements = { git = "https://github.com/es-ude/elastic-ai.hw-measurements.git", branch="main" }
+elasticai-hw-measurements = { git = "https://github.com/es-ude/elastic-ai.hw-measurements.git", branch = "main" }
