@@ -1,0 +1,45 @@
+name: api
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "2_api/**"
+      - ".github/workflows/api.yml"
+  pull_request:
+    paths:
+      - "2_api/**"
+      - ".github/workflows/api.yml"
+
+defaults:
+  run:
+    working-directory: 2_api
+
+env:
+  QT_QPA_PLATFORM: offscreen
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libdbus-1-3 libfontconfig1
+        working-directory: .
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+          cache-dependency-glob: 2_api/uv.lock
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run pytest -m 'not (simulation or hardware or fpga)' --reruns 3
+      - run: uv build --wheel
+      - uses: actions/upload-artifact@v4
+        with:
+          name: api-wheel
+          path: 2_api/dist/*.whl

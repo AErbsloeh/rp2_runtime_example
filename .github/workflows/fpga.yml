@@ -1,0 +1,69 @@
+name: fpga
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "1_fpga/**"
+      - ".github/workflows/fpga.yml"
+  pull_request:
+    paths:
+      - "1_fpga/**"
+      - ".github/workflows/fpga.yml"
+
+defaults:
+  run:
+    working-directory: 1_fpga
+
+jobs:
+  simulation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y iverilog
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+          enable-cache: true
+          cache-dependency-glob: 1_fpga/uv.lock
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run pytest -m simulation
+
+  bitstream:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y yosys nextpnr-ice40 fpga-icestorm
+        working-directory: .
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+          enable-cache: true
+          cache-dependency-glob: 1_fpga/uv.lock
+      - run: uv sync --frozen
+      - name: Generate scripts and design from the template
+        run: |
+          uv run python - <<'PY'
+          from pathlib import Path
+          from shutil import copyfile
+
+          import elasticai.fpga_testing as fpga_testing
+          from elasticai.fpga_testing import copy_design, init_project_folder
+
+          init_project_folder()
+          copy_design.copy_design_env6mini_files()
+          template = Path(fpga_testing.__file__).parent / "template" / "oss_cad"
+          for file in template.glob("*.mk"):
+              copyfile(file, Path("scripts") / file.name)
+          PY
+          cp ci/test_dut.v designs/test_dut.v
+      - run: make bitstream
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bitstream-up5k
+          path: |
+            1_fpga/build/TOP_MODULE.bin
+            1_fpga/build/TOP_MODULE_util_impl.rpt
+            1_fpga/build/TOP_MODULE_timing.rpt
