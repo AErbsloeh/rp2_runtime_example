@@ -4,7 +4,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pyqtgraph as pg
 import pytest
-from pyqtgraph.Qt import QtWidgets
+from pyqtgraph.Qt import QtCore, QtWidgets
 
 from api.src._live_visualize import (
     CURVE_COLORS,
@@ -83,6 +83,153 @@ def test_plots_use_seconds_on_x_axis_with_one_label_below(app, monkeypatch):
     assert isinstance(label, pg.LabelItem)
     assert label.text == "Time [s]"
     assert dut._win.ci.layout.itemAt(1, 0) is label
+
+
+class FakeClick:
+    def __init__(self, button, double: bool = False) -> None:
+        self._button = button
+        self._double = double
+        self.accepted = False
+
+    def button(self):
+        return self._button
+
+    def double(self) -> bool:
+        return self._double
+
+    def accept(self) -> None:
+        self.accepted = True
+
+
+class FakeDrag:
+    def __init__(self, x_down: float, x_now: float, finish: bool, button=QtCore.Qt.MouseButton.LeftButton) -> None:
+        self._down = QtCore.QPointF(x_down, 10.0)
+        self._now = QtCore.QPointF(x_now, 10.0)
+        self._finish = finish
+        self._button = button
+
+    def button(self):
+        return self._button
+
+    def buttonDownPos(self):
+        return self._down
+
+    def pos(self):
+        return self._now
+
+    def isFinish(self) -> bool:
+        return self._finish
+
+    def accept(self) -> None:
+        pass
+
+
+def _make_two_plots(app, monkeypatch) -> LivePlotter:
+    monkeypatch.setattr(LivePlotter, "_connect_lsl_streams", lambda self: [FakeInlet(samples=50)])
+    config = LivePlotterChannelConfig(
+        plot_title=[["plot1"], ["plot2"]],
+        channel_configs=[
+            ChannelConfig("data", "CH0", "LSB", "r", (0, 0), 0),
+            ChannelConfig("data", "CH1", "LSB", "b", (1, 0), 1),
+        ],
+    )
+    dut = LivePlotter(config, window_width_sec=2.0)
+    app.processEvents()
+    return dut
+
+
+def _select_range(dut: LivePlotter, start: float, stop: float) -> None:
+    """Drag with the left mouse button over the given fractions of the width of the first plot"""
+    vb = dut.plots["CH0"].getViewBox()
+    width = vb.width()
+    vb.mouseDragEvent(FakeDrag(start * width, stop * width, finish=False))
+    vb.mouseDragEvent(FakeDrag(start * width, stop * width, finish=True))
+
+
+def test_selected_time_range_is_shown_in_all_plots_and_freezes(app, monkeypatch):
+    dut = _make_two_plots(app, monkeypatch)
+    full_start, full_stop = dut.plots["CH0"].viewRange()[0]
+
+    _select_range(dut, 0.25, 0.5)
+
+    for name in ("CH0", "CH1"):
+        start, stop = dut.plots[name].viewRange()[0]
+        assert (stop - start) == pytest.approx(0.25 * (full_stop - full_start), rel=0.05)
+        assert full_start < start < stop < full_stop
+    assert dut.plots["CH0"].viewRange()[0] == pytest.approx(dut.plots["CH1"].viewRange()[0])
+    assert dut.is_frozen
+
+
+def test_too_small_selection_is_ignored(app, monkeypatch):
+    dut = _make_two_plots(app, monkeypatch)
+    before = dut.plots["CH0"].viewRange()[0]
+
+    _select_range(dut, 0.5, 0.5 + 2 / dut.plots["CH0"].getViewBox().width())
+
+    assert dut.plots["CH0"].viewRange()[0] == pytest.approx(before)
+    assert not dut.is_frozen
+
+
+def test_double_click_resets_zoom_and_continues_live(app, monkeypatch):
+    dut = _make_two_plots(app, monkeypatch)
+    full_range = dut.plots["CH0"].viewRange()[0]
+    _select_range(dut, 0.25, 0.5)
+    assert dut.is_frozen
+
+    click = FakeClick(QtCore.Qt.MouseButton.LeftButton, double=True)
+    dut._win.scene().sigMouseClicked.emit(click)
+
+    assert click.accepted
+    assert not dut.is_frozen
+    for name in ("CH0", "CH1"):
+        assert dut.plots[name].viewRange()[0] == pytest.approx(full_range)
+
+
+def test_single_left_click_does_nothing(app, monkeypatch):
+    dut = _make_two_plots(app, monkeypatch)
+    click = FakeClick(QtCore.Qt.MouseButton.LeftButton, double=False)
+    dut._win.scene().sigMouseClicked.emit(click)
+    assert not click.accepted
+    assert not dut.is_frozen
+
+
+def test_mouse_changes_only_the_time_axis(app, monkeypatch):
+    dut = _make_two_plots(app, monkeypatch)
+    assert dut.plots["CH0"].getViewBox().state["mouseEnabled"] == [True, False]
+
+
+def test_right_click_freezes_all_plots_and_second_click_continues(app, monkeypatch):
+    inlet = FakeInlet(samples=10)
+    monkeypatch.setattr(LivePlotter, "_connect_lsl_streams", lambda self: [inlet])
+    config = LivePlotterChannelConfig(
+        plot_title=[["plot1"]],
+        channel_configs=[ChannelConfig("data", "CH0", "LSB", "r", (0, 0), 0)],
+    )
+    dut = LivePlotter(config, window_width_sec=2.0)
+    dut._update_plots()
+    assert len(dut.curves["CH0"].getData()[0]) == 10
+
+    left_click = FakeClick(QtCore.Qt.MouseButton.LeftButton)
+    dut._win.scene().sigMouseClicked.emit(left_click)
+    assert not dut.is_frozen
+    assert not left_click.accepted
+
+    right_click = FakeClick(QtCore.Qt.MouseButton.RightButton)
+    dut._win.scene().sigMouseClicked.emit(right_click)
+    assert dut.is_frozen
+    assert right_click.accepted
+    assert "FROZEN" in dut._win.windowTitle()
+
+    inlet._samples = 5
+    dut._update_plots()
+    assert len(dut.curves["CH0"].getData()[0]) == 10
+    assert len(dut.data_buffers[0]) == 15
+
+    dut._win.scene().sigMouseClicked.emit(FakeClick(QtCore.Qt.MouseButton.RightButton))
+    assert not dut.is_frozen
+    assert "FROZEN" not in dut._win.windowTitle()
+    dut._update_plots()
+    assert len(dut.curves["CH0"].getData()[0]) == 15
 
 
 @pytest.mark.parametrize(

@@ -594,7 +594,6 @@ class ThreadLSL:
         sampling_rate = info_in.nominal_srate()
         num_channels = info_in.channel_count()
 
-        # Streams without channel description (e.g. from other LSL sources) give None for labels, units and types
         if channel_labels is None:
             channel_labels = info_in.get_channel_labels() or [f"CH{idx}" for idx in range(num_channels)]
         if channel_units is None:

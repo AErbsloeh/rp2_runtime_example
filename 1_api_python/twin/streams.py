@@ -95,7 +95,6 @@ class DeviceLoopback:
         self._logger = getLogger(__name__)
         self._round_trip_sec: list[float] = []
         self._num_no_response = 0
-        # Inlet and outlet are created here, so that both streams exist when the plot searches for them
         streams = resolve_byprop("name", name_in, timeout=10.0)
         if not streams:
             raise ValueError(f"LSL stream with {name_in} not found")

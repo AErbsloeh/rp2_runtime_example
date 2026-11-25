@@ -87,7 +87,7 @@ def test_generator_pushes_the_function_values_of_consecutive_samples():
     generator.stop()
 
     values = np.array([sample[0] for chunk in outlet.chunks for sample in chunk])
-    assert np.array_equal(values, np.arange(len(values)))  # 1000 * t at 1 kHz = sample index
+    assert np.array_equal(values, np.arange(len(values)))
 
 
 def test_generator_supports_several_channels():

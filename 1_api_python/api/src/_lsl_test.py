@@ -273,7 +273,7 @@ def test_process_stream_without_channel_description(monkeypatch):
 
     def fake_outlet(**kwargs):
         created.update(kwargs)
-        dut._event.clear()  # leave the processing loop after the setup
+        dut._event.clear()
         return object()
 
     monkeypatch.setattr(dut, "_establish_lsl_outlet", fake_outlet)

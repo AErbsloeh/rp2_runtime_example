@@ -11,7 +11,7 @@ from api.src._helper import get_path_to_project
 from api.src._live_visualize import build_comparison_plot_config
 from api.src._lsl import ThreadLSL, numpy_to_lsl_format
 
-TWIN_OUTPUT_STREAM = "DigitalTwinOutput"  # Default name of the LSL stream with the processed data
+TWIN_OUTPUT_STREAM = "DigitalTwinOutput"
 
 
 @dataclass

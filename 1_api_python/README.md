@@ -76,6 +76,13 @@ dut.add_plot_channel("filt", "CH0 Filtered", "LSB", "b", (0, 1), 0)
 dut.save_plotconfigs_to_json("config.json")                             # and load_plotconfigs_from_json(...)
 ```
 Names, units and positions of the plot channels are also written into the metadata of the LSL streams and of the recording.
+Mouse control of the plot window (all plots share the time axis):
+- **Left mouse button, drag**: select a time range, all plots zoom into it. The plots are frozen, so the range does not move away.
+- **Mouse wheel / middle mouse button**: zoom or move the time axis. The y-axis always fits the visible data.
+- **Right click**: freeze all plots or continue with the live data (the data are still received and recorded while frozen).
+- **Double click**: back to the whole time window with live data.
+
+The context menu of PyQtGraph is disabled for this.
 
 ## Recording and Analysis
 With `do_record=True` all streams (and the utilisation `util` of the host) are written into one HDF5 file in the folder `runs` of the project (`folder_name`). The `DataAPI` reads the files:

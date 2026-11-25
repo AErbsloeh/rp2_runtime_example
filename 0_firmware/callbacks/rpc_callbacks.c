@@ -124,7 +124,6 @@ void set_batch_daq(char* buffer, size_t length){
 
 
 bool run_sequential(const uint8_t *in, uint8_t *out){
-    // Template: the data are returned unchanged (echo), replace it with the processing of your application
     for(size_t idx = 0; idx < PROCESS_DATA_NUM_BYTES; idx++){
         out[idx] = in[idx];
     }
@@ -133,7 +132,6 @@ bool run_sequential(const uint8_t *in, uint8_t *out){
 
 
 void process_data(char* buffer, size_t length){
-    // Frame: buffer[0] = PROCESS_DATA, buffer[1 ... length-1] = data bytes. Frames with another size are ignored
     if(length != (1 + PROCESS_DATA_NUM_BYTES)){
         return;
     }

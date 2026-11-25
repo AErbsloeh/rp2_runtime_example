@@ -212,14 +212,14 @@ def test_echo_value_sends_and_decodes_signed_values():
 
     def fake_write_with_feedback(head, data=0, size=0):
         sent.append((head, data))
-        return data.to_bytes(3, byteorder="big")  # the device returns the data bytes unchanged
+        return data.to_bytes(3, byteorder="big")
 
     dut._write_with_feedback = fake_write_with_feedback
 
     for value in (0, 1, -1, 42000, -8388608, 8388607):
         assert dut.echo_value(value) == value
     assert all(head == Commands.ECHO for head, _ in sent)
-    assert sent[2][1] == 0xFFFFFF  # -1 as 24 bit pattern
+    assert sent[2][1] == 0xFFFFFF
 
 
 def test_echo_value_rejects_values_outside_the_data_bytes():
@@ -249,7 +249,6 @@ def _make_process_dut(answer_func):
 
 
 def test_process_data_returns_result_of_the_device():
-    # the device answers with the head and the data bytes (MSB first), here: the echo of the template firmware
     dut = _make_process_dut(lambda data: bytes([Commands.PROCESS_DATA]) + bytes(reversed(data[:3])))
     for value in (0, 1, -1, 42000, -8388608, 8388607):
         assert dut.process_data(value) == value

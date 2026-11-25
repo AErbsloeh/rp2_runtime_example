@@ -6,6 +6,7 @@ from typing import Any
 import numpy as np
 import pyqtgraph as pg
 from pylsl import StreamInlet, proc_threadsafe, resolve_bypred
+from pyqtgraph import Point
 from pyqtgraph.Qt import QtCore
 
 
@@ -95,9 +96,40 @@ class RingBuffer:
         return self._filled
 
 
+class XZoomViewBox(pg.ViewBox):
+    """ViewBox where the left mouse button selects a time range (full height) and zooms into it, the wheel zooms and the
+    middle mouse button pans only the x-axis. Each manual change of the range emits sigRangeChangedManually"""
+
+    MIN_SELECTION_PIXEL: int = 5
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.setMouseEnabled(x=True, y=False)
+
+    def mouseDragEvent(self, ev, axis=None) -> None:
+        if ev.button() != QtCore.Qt.MouseButton.LeftButton or axis is not None:
+            super().mouseDragEvent(ev, axis)
+            return
+        ev.accept()
+        x_down = ev.buttonDownPos().x()
+        x_now = ev.pos().x()
+        if not ev.isFinish():
+            height = self.boundingRect().height()
+            self.updateScaleBox(Point(x_down, 0.0), Point(x_now, height))
+            return
+        self.rbScaleBox.hide()
+        if abs(x_now - x_down) < self.MIN_SELECTION_PIXEL:
+            return
+        x_start = self.childGroup.mapFromParent(Point(min(x_down, x_now), 0.0)).x()
+        x_stop = self.childGroup.mapFromParent(Point(max(x_down, x_now), 0.0)).x()
+        self.setXRange(x_start, x_stop, padding=0.0)
+        self.sigRangeChangedManually.emit(self.state["mouseEnabled"])
+
+
 class LivePlotter:
     UPDATE_INTERVAL_MS: int = 33
     LINE_WIDTH: int = 2
+    X_PADDING: float = 0.04
 
     def __init__(self, channel_config: LivePlotterChannelConfig, window_width_sec: float| int):
         self.channel_config = channel_config
@@ -116,6 +148,9 @@ class LivePlotter:
         self._time_buffer = RingBuffer(self.max_samples)
         self._start_time = time.monotonic()
         self._last_runtime_sec = -1
+        self._runtime_text = "00:00:00"
+        self._frozen = False
+        self._x_master: pg.PlotItem | None = None
 
         self._init_ui()
         self.timer = self._init_timer()
@@ -167,10 +202,19 @@ class LivePlotter:
                 if plot_title is None or (row, col) not in channels_by_pos:
                     self._win.addViewBox(row=row, col=col)
                 else:
-                    plot_item = self._win.addPlot(row=row, col=col)
+                    plot_item = self._win.addPlot(row=row, col=col, viewBox=XZoomViewBox())
                     plot_item.showGrid(x=True, y=True, alpha=0.3)
-                    plot_item.setXRange(-self._window_width_sec, 0, padding=0.04)
+                    plot_item.setXRange(-self._window_width_sec, 0, padding=self.X_PADDING)
                     plot_item.getAxis("bottom").setTicks([get_time_ticks(self._window_width_sec)])
+                    plot_item.setMenuEnabled(False)
+                    plot_item.getViewBox().setAutoVisible(y=True)
+                    plot_item.getViewBox().sigRangeChangedManually.connect(self._on_zoomed)
+                    if self._x_master is None:
+                        self._x_master = plot_item
+                    else:
+                        plot_item.setXLink(self._x_master)
+
+        self._win.scene().sigMouseClicked.connect(self._on_mouse_clicked)
 
         num_rows = len(self.channel_config.plot_title)
         num_cols = max(len(row) for row in self.channel_config.plot_title)
@@ -197,6 +241,45 @@ class LivePlotter:
             self.plots[ch.channel_name] = plot_item
             self.curves[ch.channel_name] = curve
 
+    @property
+    def is_frozen(self) -> bool:
+        """Boolean if the plots are frozen (the data are still received, but the curves are not updated)"""
+        return self._frozen
+
+    def toggle_freeze(self) -> None:
+        """Freeze all plots or let them continue with the live data"""
+        self._frozen = not self._frozen
+        self._update_title()
+
+    def _on_mouse_clicked(self, ev) -> None:
+        if ev.button() == QtCore.Qt.MouseButton.RightButton:
+            self.toggle_freeze()
+            ev.accept()
+        elif ev.button() == QtCore.Qt.MouseButton.LeftButton and ev.double():
+            self.reset_zoom()
+            ev.accept()
+
+    def _on_zoomed(self, *_) -> None:
+        """Zoom or pan by the user: the plots are frozen, so the selected range does not move away, and the time axis gets automatic ticks"""
+        if not self._frozen:
+            self._frozen = True
+            self._update_title()
+        for plot_item in self.plots.values():
+            plot_item.getAxis("bottom").setTicks(None)
+
+    def reset_zoom(self) -> None:
+        """Show the whole time window again and continue with the live data"""
+        if self._x_master is not None:
+            self._x_master.setXRange(-self._window_width_sec, 0, padding=self.X_PADDING)
+        for plot_item in self.plots.values():
+            plot_item.getAxis("bottom").setTicks([get_time_ticks(self._window_width_sec)])
+        self._frozen = False
+        self._update_title()
+
+    def _update_title(self) -> None:
+        suffix = "\t FROZEN (right click: continue, double click: reset zoom)" if self._frozen else ""
+        self._win.setWindowTitle(f"LSL Live Plot\t Runtime: {self._runtime_text}{suffix}")
+
     def _init_timer(self) -> QtCore.QTimer:
         timer = QtCore.QTimer()
         timer.timeout.connect(self._update)
@@ -214,7 +297,8 @@ class LivePlotter:
         self._last_runtime_sec = elapsed
         hours, remainder = divmod(elapsed, 3600)
         minutes, seconds = divmod(remainder, 60)
-        self._win.setWindowTitle(f"LSL Live Plot\t Runtime: {hours:02d}:{minutes:02d}:{seconds:02d}")
+        self._runtime_text = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+        self._update_title()
 
     def _update_plots(self) -> None:
         chunks_by_stream = {}
@@ -235,6 +319,9 @@ class LivePlotter:
                     values = data[:, 0] if data.ndim > 1 else data
 
                 self.data_buffers[idx].extend(values)
+
+            if self._frozen:
+                continue
 
             y_data = self.data_buffers[idx].get()
             if len(y_data) > 0:

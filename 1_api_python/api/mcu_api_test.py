@@ -45,7 +45,6 @@ def test_check_echo_value(dut: DeviceAPI):
 
 @pytest.mark.hardware
 def test_check_process_data_template(dut: DeviceAPI):
-    # template of the firmware: run_sequential returns the data unchanged
     for value in (0, 1, -1, 32768, -8388608, 8388607):
         assert dut.process_data(value) == value
 
