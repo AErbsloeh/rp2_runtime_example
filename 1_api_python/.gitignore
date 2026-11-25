@@ -7,4 +7,4 @@
 .venv
 .python-version
 *.out
-temp_data
+temp_test

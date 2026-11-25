@@ -1,27 +1,16 @@
 from logging import DEBUG, basicConfig
 from pathlib import Path
-from shutil import rmtree
 from time import sleep
 
 import numpy as np
 import pylsl
 import pytest
 
-from api import get_path_to_project
 from api.src._lsl import RingBuffer, ThreadLSL, numpy_to_lsl_format
 
 RUN_SECONDS = 3.0
 CHECK_STEPS = 4
 CHECK_SLEEP = 0.25
-
-
-@pytest.fixture(scope="session", autouse=True)
-def path():
-    path = Path(get_path_to_project("temp_data"))
-    rmtree(path, ignore_errors=True)
-    path.mkdir(parents=True, exist_ok=True)
-    yield path
-    # rmtree(path, ignore_errors=True)
 
 
 def test_lsl_format():

@@ -1,19 +1,9 @@
 from pathlib import Path
-from shutil import rmtree
 
 import numpy as np
 import pytest
 
-from api import DataAPI, DeviceAPI, StreamRecording, get_path_to_project
-
-
-@pytest.fixture(scope="session", autouse=True)
-def path():
-    path = Path(get_path_to_project("temp_data"))
-    rmtree(path, ignore_errors=True)
-    path.mkdir(parents=True, exist_ok=True)
-    yield path
-    rmtree(path, ignore_errors=True)
+from api import DataAPI, DeviceAPI, StreamRecording
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -27,7 +17,7 @@ def dut():
 
 @pytest.fixture(scope="session", autouse=True)
 def period():
-    period = 3.
+    period = 3.0
     yield period
 
 
@@ -41,8 +31,8 @@ def stop_daq_after_test(dut: DeviceAPI):
 @pytest.mark.hardware
 def test_record_samples(path: Path, dut: DeviceAPI, period: float):
     dut.start_daq(
-        folder_name="temp_data",
-        sampling_rate=100.,
+        folder_name=str(path),
+        sampling_rate=100.0,
         window_sec=0.1,
         do_plot=False,
         do_record=True,
@@ -53,11 +43,11 @@ def test_record_samples(path: Path, dut: DeviceAPI, period: float):
     reader = DataAPI(path)
     reader.select_file(-1)
 
-    assert 'filt' in reader.get_file_name()
+    assert "filt" in reader.get_file_name()
     assert str(path) in reader.get_path2file()
-    assert 'filt' in reader.get_overview_datatypes()
+    assert "filt" in reader.get_overview_datatypes()
 
-    data = reader.get_data('filt')
+    data = reader.get_data("filt")
     assert type(data) == StreamRecording
     assert data.file == reader.get_path2file()
     assert data.num_channels == dut.get_daq_characteristics().num_channels
@@ -84,8 +74,8 @@ def test_record_samples(path: Path, dut: DeviceAPI, period: float):
 @pytest.mark.hardware
 def test_record_batch(path: Path, dut: DeviceAPI, period: float):
     dut.start_daq(
-        folder_name="temp_data",
-        sampling_rate=100.,
+        folder_name=str(path),
+        sampling_rate=100.0,
         window_sec=0.1,
         do_plot=False,
         do_record=True,
@@ -96,11 +86,11 @@ def test_record_batch(path: Path, dut: DeviceAPI, period: float):
     reader = DataAPI(path)
     reader.select_file(-1)
 
-    assert 'filt' in reader.get_file_name()
+    assert "filt" in reader.get_file_name()
     assert str(path) in reader.get_path2file()
-    assert 'filt' in reader.get_overview_datatypes()
+    assert "filt" in reader.get_overview_datatypes()
 
-    data = reader.get_data('filt')
+    data = reader.get_data("filt")
     assert type(data) == StreamRecording
     assert data.file == reader.get_path2file()
     assert data.num_channels == dut.get_daq_characteristics().num_channels
@@ -127,8 +117,8 @@ def test_record_batch(path: Path, dut: DeviceAPI, period: float):
 @pytest.mark.hardware
 def test_record_batch_with_layout(path: Path, dut: DeviceAPI, period: float):
     dut.start_daq(
-        folder_name="temp_data",
-        sampling_rate=100.,
+        folder_name=str(path),
+        sampling_rate=100.0,
         window_sec=0.1,
         do_plot=False,
         do_record=True,
@@ -139,8 +129,8 @@ def test_record_batch_with_layout(path: Path, dut: DeviceAPI, period: float):
     reader = DataAPI(path)
     reader.select_file(-1)
 
-    data = reader.get_data('filt')
-    assert np.array_equal(data.label, np.asarray(['CH0', 'CH1']))
+    data = reader.get_data("filt")
+    assert np.array_equal(data.label, np.asarray(["CH0", "CH1"]))
 
 
 if __name__ == "__main__":

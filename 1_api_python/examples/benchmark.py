@@ -15,8 +15,7 @@ def run_experiment(sampling_rate: float, use_double_buffer: bool, run_trial_sec:
         dut.start_daq(
             sampling_rate=sampling_rate,
             do_plot=False,
-            do_process=False,  # __process_stream_func() in mcu_api.py hardcodes 2 channels;
-                                # our DAQ has 8, so skip it and record the raw 'data' stream.
+            do_process=False,
             window_sec=10.,
             folder_name=folder_name
         )
@@ -65,12 +64,6 @@ def plot_results(sampling_rate: np.ndarray, samp_rate: list, dt_data: list) -> N
 
 if __name__ == "__main__":
     basicConfig(level=INFO)
-    # --- Experiment definition
-    # Same total point count as before (8), but reallocated: 3 coarse points
-    # for the low/flat region (10 Hz - 3 kHz, nothing interesting expected),
-    # 5 points from 3 kHz up to the 9.5 kHz client-side limit in mcu_api.py's
-    # _update_daq_sampling_rate() - that's where a break, if there is one, is
-    # most likely to be, so it gets more of the (fixed) point budget.
     sampling_rate_range = np.concatenate([
         np.logspace(start=1, stop=np.log10(3000), num=3, endpoint=False),
         np.linspace(start=3000, stop=9500, num=5),
@@ -78,7 +71,6 @@ if __name__ == "__main__":
     num_repetitions = 1
     only_extract = False
 
-    # Buffer modes to compare: folder suffix -> use_double_buffer
     modes = {
         "single_buffer": False,
         "double_buffer": True,

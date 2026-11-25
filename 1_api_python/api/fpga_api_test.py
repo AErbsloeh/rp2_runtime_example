@@ -1,10 +1,9 @@
 from logging import DEBUG, basicConfig
 from random import randint
-from shutil import rmtree
 
 import pytest
 
-from api import DeviceAPI, get_path_to_project
+from api import DeviceAPI
 from api.fpga_api import FlashFPGA
 
 pytestmark = [
@@ -20,8 +19,6 @@ def dut():
     mcu_api.open()
     yield mcu_api
     mcu_api.do_reset()
-    path = get_path_to_project("temp_data")
-    rmtree(path, ignore_errors=True)
 
 
 @pytest.mark.hardware

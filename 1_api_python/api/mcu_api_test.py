@@ -1,11 +1,11 @@
 from logging import DEBUG, basicConfig
+from pathlib import Path
 from random import randint
-from shutil import rmtree
 from time import sleep
 
 import pytest
 
-from api.mcu_api import DeviceAPI, convert_pin_state, convert_system_state, get_path_to_project
+from api.mcu_api import DeviceAPI, convert_pin_state, convert_system_state
 from api.src._helper import build_crc16_ccitt
 
 
@@ -15,8 +15,6 @@ def dut():
     mcu_api = DeviceAPI(com_name="AUTOCOM")
     mcu_api.open()
     yield mcu_api
-    path = get_path_to_project("temp_data")
-    rmtree(path, ignore_errors=True)
 
 
 @pytest.mark.hardware
@@ -109,26 +107,26 @@ def test_toggle_led(dut: DeviceAPI):
 
 @pytest.mark.hardware
 @pytest.mark.order(-2)
-def test_run_daq_sample(dut: DeviceAPI):
+def test_run_daq_sample(dut: DeviceAPI, path: Path):
     DeviceAPI().do_reset()
     dut = DeviceAPI()
     assert dut.get_state().system == "IDLE"
 
     dut._enable_batch_daq(False)
-    dut.start_daq(sampling_rate=100.0, folder_name="temp_data", do_plot=False)
+    dut.start_daq(sampling_rate=100.0, folder_name=str(path), do_plot=False)
     sleep(1.0)
     dut.stop_daq()
 
 
 @pytest.mark.hardware
 @pytest.mark.order(-1)
-def test_run_daq_batch(dut: DeviceAPI):
+def test_run_daq_batch(dut: DeviceAPI, path: Path):
     DeviceAPI().do_reset()
     dut = DeviceAPI()
     assert dut.get_state().system == "IDLE"
 
     dut._enable_batch_daq(True)
-    dut.start_daq(sampling_rate=500.0, folder_name="temp_data", do_plot=False)
+    dut.start_daq(sampling_rate=500.0, folder_name=str(path), do_plot=False)
     sleep(1.0)
     assert dut.is_daq_running
     dut.stop_daq()
