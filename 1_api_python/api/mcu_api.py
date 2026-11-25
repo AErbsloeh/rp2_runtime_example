@@ -496,8 +496,8 @@ class DeviceAPI:
         :param do_process:      True to publish the processed LSL stream (of the first DAQ stream)
         :param window_sec:      Floating value with window length [in seconds] for live plotting
         :param folder_name:     String with folder name to save data in project folder
-        :param stream_names:    List with LSL names for each DAQ stream of the device (in firmware order).
-                                Default: ["data", "data1", "data2", ...]
+        :param stream_names:    List with LSL names for each DAQ stream of the device (in firmware order)
+                                Default: ["data0", "data1", "data2", ...]
         :return:                None
         """
         self.__num_package_loss = 0
@@ -525,12 +525,9 @@ class DeviceAPI:
             )
             for name, config in zip(stream_names, daq_configs)
         ]
-
-        # The processed stream inherits the default metadata of the first DAQ stream
         filt_labels, filt_units, filt_layout = self._get_stream_metadata(
             "filt", streams[0].channel_labels, streams[0].channel_units, streams[0].channel_layout
         )
-        # Channels defined in the plot configuration override the default labels / units / layout of each stream
         streams = [
             replace(
                 stream,
