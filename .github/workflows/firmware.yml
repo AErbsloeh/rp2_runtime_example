@@ -1,0 +1,45 @@
+name: firmware
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "0_firmware/**"
+      - ".github/workflows/firmware.yml"
+  pull_request:
+    paths:
+      - "0_firmware/**"
+      - ".github/workflows/firmware.yml"
+
+env:
+  PICO_SDK_VERSION: "2.1.1"
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: >
+          sudo apt-get update && sudo apt-get install -y
+          cmake ninja-build build-essential gcc-arm-none-eabi
+          libnewlib-arm-none-eabi libstdc++-arm-none-eabi-newlib
+      - uses: actions/cache@v4
+        id: sdk-cache
+        with:
+          path: ~/pico-sdk
+          key: pico-sdk-${{ env.PICO_SDK_VERSION }}
+      - if: steps.sdk-cache.outputs.cache-hit != 'true'
+        run: >
+          git clone --depth 1 --branch ${{ env.PICO_SDK_VERSION }}
+          --recurse-submodules --shallow-submodules
+          https://github.com/raspberrypi/pico-sdk ~/pico-sdk
+      - run: echo "PICO_SDK_PATH=$HOME/pico-sdk" >> "$GITHUB_ENV"
+      - run: >
+          cmake -S 0_firmware -B build -G Ninja
+          -DPICO_BOARD=pico2
+          -DTRANSPORT_BACKEND=usb
+      - run: cmake --build build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firmware-pico2
+          path: build/main.uf2

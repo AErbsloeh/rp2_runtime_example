@@ -52,6 +52,12 @@ pico_set_program_version(main "${PROGRAM_VERSION}")
 configure_file(version.h.in version.h @ONLY)
 target_include_directories(main PRIVATE ${CMAKE_BINARY_DIR})
 
+if(TRANSPORT_BACKEND STREQUAL "wifi")
+    set(PICO_WIFI_TCP_ENABLED ON CACHE BOOL "Enable Wifi TCP HAL library" FORCE)
+else()
+    set(PICO_WIFI_TCP_ENABLED OFF CACHE BOOL "Disable Wifi TCP HAL library" FORCE)
+endif()
+
 if(USE_LOCAL_RUNTIME_LIBRARY)
     add_subdirectory(
         ${CMAKE_CURRENT_LIST_DIR}/../../rp2_runtime_library
@@ -74,12 +80,6 @@ elseif(TRANSPORT_BACKEND STREQUAL "wifi")
     target_link_libraries(main hal_transport_wifi)
 else()
     message(FATAL_ERROR "Unsupported TRANSPORT_BACKEND: ${TRANSPORT_BACKEND}")
-endif()
-
-if(TRANSPORT_BACKEND STREQUAL "wifi")
-    set(PICO_WIFI_TCP_ENABLED ON CACHE BOOL "Enable Wifi TCP HAL library" FORCE)
-else()
-    set(PICO_WIFI_TCP_ENABLED OFF CACHE BOOL "Disable Wifi TCP HAL library" FORCE)
 endif()
 
 
