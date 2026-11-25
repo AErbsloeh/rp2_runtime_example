@@ -1,0 +1,74 @@
+[project]
+name = "rp2_runtime_fpga"
+version = "0.0.1"
+description = "FPGA design framework"
+requires-python = ">=3.13,<3.15"
+dependencies = [
+  "elasticai-hw-measurements",
+]
+
+[dependency-groups]
+dev = [
+  "pip-audit>=2.10.1",
+]
+lint = [
+  "ruff>=0.15.14",
+  "tombi>=1.1.1",
+  "ty>=0.0.38",
+]
+test = [
+  "pytest>=9.0.3",
+  "pytest-order>=1.5.0",
+  "pytest-rerunfailures>=16.3",
+  "pytest-testmon>=2.2.0",
+]
+
+[tool.pytest]
+addopts = ["--import-mode=importlib"]
+markers = [
+  "hardware: a test needs hardware with fpga and mcu",
+  "simulation: a cocotb simulation of the design (needs iverilog or ghdl of the oss-cad-suite)",
+  "slow: a test which takes a long time",
+]
+minversion = "9.0"
+python_files = ["*_test.py"]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+include = [
+  "pyproject.toml",
+  "**/*.py",
+]
+exclude = [
+  ".git",
+  ".pytest_cache",
+  ".ruff_cache",
+  ".venv",
+  ".devenv",
+  "build",
+  "build_test",
+  "build_sim",
+  "dist",
+]
+line-length = 106
+indent-width = 4
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
+ignore = ["E741", "E721", "E722"]
+fixable = ["ALL"]
+unfixable = []
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.uv]
+default-groups = ["dev", "lint", "test"]
+
+[tool.uv.sources]
+elasticai-hw-measurements = { git = "https://github.com/es-ude/elastic-ai.hw-measurements.git", branch = "main" }

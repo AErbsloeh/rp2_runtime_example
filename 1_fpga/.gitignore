@@ -1,0 +1,10 @@
+.devenv
+.venv
+.python-version
+.DS_Store
+build_test
+build_sim
+__pycache__
+.pytest_cache
+.ruff_cache
+scripts

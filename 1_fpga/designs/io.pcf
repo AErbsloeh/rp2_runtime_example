@@ -1,0 +1,80 @@
+# Syntax:
+# NET "<pin-name>" Loc = "<pin-location>" | <opt.-constraints>;
+#
+# Backward compatible legacy syntax:
+# <pin-direction> "<pin-name>" Loc = "<pin-location>" | <opt.-constraints>;
+#
+# Additional constraints can be appended using the pipe symbol.
+# Files are read line by line. Text after the hash symbol is ignored.
+#
+# Available legacy pin directions:
+#
+# Pin_in
+#   defines an input pin
+# Pin_out
+#   defines an output pin
+# Pin_triout
+#   defines a tristate output pin
+# Pin_inout
+#   defines a bidirectional pin
+#
+# Available pin constraints:
+#
+# SCHMITT_TRIGGER={true,false}
+#   enables or disables schmitt trigger (hysteresis) option
+# PULLUP={true,false}
+#   enables or disables I/O pullup resistor of nominal 50kOhm
+# PULLDOWN={true,false}
+#   enables or disables I/O pulldown resistor of nominal 50kOhm
+# KEEPER={true,false}
+#   enables or disables I/O keeper option
+# SLEW={slow,fast}
+#   sets slew rate to slow or fast
+# DRIVE={3,6,9,12}
+#   sets output drive strength to 3mA..12mA
+# DELAY_OBF={0..15}
+#   adds an additional delay of n * nominal 50ps to output signal
+# DELAY_IBF={0..15}
+#   adds an additional delay of n * nominal 50ps to input signal
+# FF_IBF={true,false}
+#   enables or disables placing of FF in input buffer, if possible
+# FF_OBF={true,false}
+#   enables or disables placing of FF in output buffer, if possible
+# LVDS_BOOST={true,false}
+#   enables increased LVDS output current of 6.4mA (default: 3.2mA)
+# LVDS_RTERM={true,false}
+#   enables on-chip LVDS termination resistor of nominal 100Ohm, in input mode only
+#
+# Global IO constraints can be set with the default_GPIO statement. It can be
+# overwritten by individual settings for specific GPIOs, e.g.:
+#   default_GPIO | DRIVE=3; # sets all output strengths to 3mA, unless overwritten
+#
+# --- Global Clock and Reset
+set_io CLK_SYS_EXT      9
+set_io RSTN             10
+
+# --- General Purpose I/O
+set_io LED              48
+set_io FPGA_GPIO        11
+set_io FPGA_BUSY        12
+set_io TRGG_EXT         45
+
+# --- PMOD Header
+set_io PMOD[0]          37
+set_io PMOD[1]          38
+set_io PMOD[2]          39
+set_io PMOD[3]          40
+set_io PMOD[4]          41
+set_io PMOD[5]          42
+set_io PMOD[6]          44
+set_io PMOD[7]          43
+
+# --- SPI Interface from MCU
+set_io SPI_MOSI         14
+set_io SPI_SCLK         15
+set_io SPI_MISO         17
+set_io SPI_CSN          20
+
+# --- I2C Interface from MCU
+#set_io I2C_SDA          36
+#set_io I2C_SCL          35
