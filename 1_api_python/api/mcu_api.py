@@ -516,6 +516,7 @@ class DeviceAPI:
         do_process: bool = True,
         folder_name: str = "runs",
         stream_names: list[str] | None = None,
+        use_c_reader: bool = False,
     ) -> None:
         """Changing the state of the DAQ with starting it
         :param sampling_rate:   Float with sampling rate [Hz]
@@ -526,9 +527,12 @@ class DeviceAPI:
         :param folder_name:     String with folder name to save data in project folder
         :param stream_names:    List with LSL names for each DAQ stream of the device (in firmware order)
                                 Default: ["data0", "data1", "data2", ...]
+        :param use_c_reader:    True to read the device, decode the packets and push them into LSL with the C reader
+                                (c_reader, POSIX only, compiled on first use) instead of the Python reader thread
         :return:                None
         """
         self.__num_package_loss = 0
+        self.__num_skipped_bytes = 0
         self._update_daq_sampling_rate(sampling_rate)
         num_daq_tasks = self._get_number_daq_tasks()
         if num_daq_tasks < 1:
@@ -584,15 +588,25 @@ class DeviceAPI:
             stream_idx += 1
 
         require_system_consumers = do_process or do_record or do_plot
-        self.__threads.register(
-            func=self.__threads.lsl_stream_system,
-            args=(
-                stream_idx,
-                streams,
-                self._thread_read_packet,
-            ),
-            kwargs={"require_consumers": require_system_consumers},
-        )
+        if use_c_reader:
+            self.__threads.register(
+                func=self.__threads.lsl_stream_system_c,
+                args=(stream_idx, streams, daq_configs, self.__device.fileno()),
+                kwargs={
+                    "require_consumers": require_system_consumers,
+                    "on_finished": self._store_c_reader_stats,
+                },
+            )
+        else:
+            self.__threads.register(
+                func=self.__threads.lsl_stream_system,
+                args=(
+                    stream_idx,
+                    streams,
+                    self._thread_read_packet,
+                ),
+                kwargs={"require_consumers": require_system_consumers},
+            )
         stream_idx += 1
 
         if do_process:
@@ -633,6 +647,12 @@ class DeviceAPI:
             if self.__plot_config is None or not self.__plot_config.channel_configs:
                 raise RuntimeError("LivePlotter is not configured!")
             self.__threads.lsl_plot_stream(plot_config=self.__plot_config, window_length=window_sec)
+
+    def _store_c_reader_stats(self, stats) -> None:
+        self.__num_package_loss = stats.num_lost_packets
+        self.__num_skipped_bytes = stats.num_skipped_bytes
+        if stats.num_push_errors > 0:
+            self.__logger.warning(f"Number of failed LSL pushes in the C reader: {stats.num_push_errors}")
 
     def stop_daq(self) -> None:
         """Changing the state of the DAQ with stopping it

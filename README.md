@@ -11,6 +11,3 @@ This template provides a basic structure with timer IRQ, USB handling, and state
 
 ## Template of a Python-API
 This Python-API is usable for communicating with RP2xxx MCU using the firmware template.
-
-## Template of C-API 
-This C-API is usable for data acquisition using the firmware template (future feature). 

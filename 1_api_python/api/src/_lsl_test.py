@@ -1,3 +1,8 @@
+import binascii
+import os
+import pty
+import shutil
+import tty
 from logging import DEBUG, basicConfig
 from pathlib import Path
 from time import sleep
@@ -5,7 +10,11 @@ from time import sleep
 import numpy as np
 import pylsl
 import pytest
+from pylsl import StreamInlet, resolve_bypred
 
+from api.src import _c_reader
+from api.src._c_reader import build_library
+from api.src._helper import DaqStreamDescription, DataAcquisitionConfig
 from api.src._lsl import RingBuffer, ThreadLSL, numpy_to_lsl_format
 
 RUN_SECONDS = 3.0
@@ -326,3 +335,76 @@ def test_numpy_to_lsl_format_rejects_unknown_types():
         numpy_to_lsl_format(np.bool_)
     with pytest.raises(ValueError):
         numpy_to_lsl_format(np.dtype("U4"))
+
+
+@pytest.mark.skipif(
+    os.name != "posix" or not any(shutil.which(cc) for cc in ("cc", "gcc", "clang")),
+    reason="C reader needs a POSIX system and a C compiler",
+)
+def test_stream_system_c_pushes_packets_of_two_streams_into_lsl(tmp_path, monkeypatch):
+    path_lib = build_library(tmp_path / "libdaq_reader.so")
+    monkeypatch.setattr(_c_reader, "_library", None)
+    monkeypatch.setenv(_c_reader.ENV_LIBRARY_PATH, str(path_lib))
+    config_sample = DataAcquisitionConfig(False, 100.0, 2, 1, 0xA0, 0xFF, 3 + 8 + 4 + 2, 2, True)
+    config_batch = DataAcquisitionConfig(True, 100.0, 1, 4, 0xB0, 0xFF, 3 + 16 + 4 * 2 + 2, 2, False)
+    suffix = str(os.getpid())
+    streams = [
+        DaqStreamDescription(
+            f"c_sample_{suffix}", 0xA0, 100.0, ["A", "B"], ["LSB", "LSB"], [[0], [1]], False
+        ),
+        DaqStreamDescription(f"c_batch_{suffix}", 0xB0, 100.0, ["C"], ["LSB"], [[0]], True),
+    ]
+
+    def packet(config, index, timestamps, values):
+        data = bytes([config.head_cmd, index])
+        for timestamp in timestamps:
+            data += timestamp.to_bytes(8, "little")
+        for value in values:
+            data += value.to_bytes(config.bytes_sample, "little", signed=config.is_signed)
+        return data + binascii.crc_hqx(data, 0xFFFF).to_bytes(2, "little") + bytes([config.tail_cmd])
+
+    master, slave = pty.openpty()
+    tty.setraw(slave)
+    finished = []
+    dut = ThreadLSL()
+    dut.register(
+        dut.lsl_stream_system_c,
+        args=(0, streams, [config_sample, config_batch], slave),
+        kwargs={"on_finished": finished.append, "consumer_timeout": 5.0},
+    )
+    dut.start()
+    try:
+        inlets = []
+        for stream in streams:
+            info = resolve_bypred(f"name='{stream.name}'", timeout=5.0)
+            assert len(info) == 1
+            inlets.append(StreamInlet(info[0]))
+            inlets[-1].open_stream(timeout=5.0)
+        sleep(0.5)
+
+        os.write(master, packet(config_sample, 0, [1_000_000], [-5, 7]))
+        os.write(master, packet(config_batch, 0, [2_000_000, 2_030_000], [1, 2, 3, 65535]))
+        os.write(master, packet(config_sample, 2, [1_010_000], [9, -9]))
+
+        samples, stamps_sample = inlets[0].pull_chunk(timeout=3.0, max_samples=2)
+        for _ in range(20):
+            if len(samples) == 2:
+                break
+            more, more_stamps = inlets[0].pull_chunk(timeout=0.25, max_samples=2)
+            samples += more
+            stamps_sample += more_stamps
+        chunk, stamps_batch = inlets[1].pull_chunk(timeout=3.0, max_samples=4)
+        assert dut.is_running
+    finally:
+        dut.stop()
+        os.close(master)
+        os.close(slave)
+
+    assert samples == [[-5, 7], [9, -9]]
+    assert stamps_sample[1] - stamps_sample[0] == pytest.approx(0.01, abs=1e-3)
+    assert chunk == [[1], [2], [3], [65535]]
+    assert stamps_batch[-1] - stamps_batch[0] == pytest.approx(0.03, abs=1e-3)
+    assert len(finished) == 1
+    assert finished[0].num_packets == 3
+    assert finished[0].num_lost_packets == 1
+    assert not finished[0].running

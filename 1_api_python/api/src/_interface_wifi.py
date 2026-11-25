@@ -78,6 +78,10 @@ class InterfaceWifi:
         transmit += head.to_bytes(self.__BYTES_HEAD, byteorder="little")
         return transmit
 
+    def fileno(self) -> int:
+        """File descriptor of the opened socket (for the C reader)"""
+        return self._get_device().fileno()
+
     def _get_device(self) -> socket:
         if self.__device is None:
             raise ConnectionError("WiFi socket is not open")

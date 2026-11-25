@@ -58,6 +58,10 @@ class InterfaceSerial:
             timeout=timeout,
         )
 
+    def fileno(self) -> int:
+        """File descriptor of the opened serial port (for the C reader)"""
+        return self.__device.fileno()
+
     @property
     def is_open(self) -> bool:
         """Return True if the device is open, False otherwise"""

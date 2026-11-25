@@ -6,6 +6,7 @@ from api.mcu_api import (
     Commands,
     DeviceAPI,
 )
+from api.src._c_reader import DaqReaderStats
 from api.src._helper import DataAcquisitionConfig
 
 
@@ -14,6 +15,9 @@ class FakeDevice:
 
     def __init__(self) -> None:
         self.timeout = 0.0
+
+    def fileno(self) -> int:
+        return 42
 
 
 class FakeThreads:
@@ -31,6 +35,9 @@ class FakeThreads:
         pass
 
     def lsl_stream_system(self) -> None:
+        pass
+
+    def lsl_stream_system_c(self) -> None:
         pass
 
     def lsl_process_stream(self) -> None:
@@ -98,6 +105,35 @@ def test_start_daq_can_publish_processed_lsl_without_internal_recording():
     assert threads.started is True
     assert device.timeout == 2 / 500.0
     assert calls[-1] == ("write", Commands.START_DAQ, 0)
+
+
+def test_start_daq_with_c_reader_registers_the_c_stream_thread():
+    dut, threads, device, calls = _make_device_api()
+    dut._DeviceAPI__num_skipped_bytes = 0
+
+    dut.start_daq(
+        sampling_rate=500.0, do_record=False, do_plot=False, do_process=False, use_c_reader=True
+    )
+
+    assert [name for name, _, _ in threads.registered] == ["lsl_stream_system_c"]
+    args, kwargs = threads.registered[0][1], threads.registered[0][2]
+    assert args[0] == 0
+    assert [stream.name for stream in args[1]] == ["data0"]
+    assert args[2] == [_make_daq_config()]
+    assert args[3] == 42
+    assert kwargs["require_consumers"] is False
+    assert kwargs["on_finished"] == dut._store_c_reader_stats
+    assert calls[-1] == ("write", Commands.START_DAQ, 0)
+
+
+def test_c_reader_statistics_are_stored_for_stop_daq():
+    dut, *_ = _make_device_api()
+    dut._DeviceAPI__num_skipped_bytes = 0
+
+    dut._store_c_reader_stats(DaqReaderStats(10, 3, 7, 0, 0, False))
+
+    assert dut._DeviceAPI__num_package_loss == 3
+    assert dut._DeviceAPI__num_skipped_bytes == 7
 
 
 @pytest.mark.hardware

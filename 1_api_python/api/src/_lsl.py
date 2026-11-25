@@ -15,7 +15,8 @@ from pyqtgraph.Qt import QtWidgets
 from tqdm import tqdm
 
 from api.data_api import DataAPI, StreamRecording
-from api.src._helper import DaqStreamDescription
+from api.src._c_reader import CDaqReader
+from api.src._helper import DaqStreamDescription, DataAcquisitionConfig
 from api.src._live_visualize import LivePlotter, LivePlotterChannelConfig
 
 
@@ -480,6 +481,78 @@ class ThreadLSL:
                     self._exception.put(e)
         with self._lock:
             self._thread_active[stim_idx] = False
+
+    def lsl_stream_system_c(
+        self,
+        stim_idx: int,
+        streams: list[DaqStreamDescription],
+        configs: list[DataAcquisitionConfig],
+        fd: int,
+        require_consumers: bool = True,
+        consumer_timeout: float = 10.0,
+        on_finished=None,
+        poll_interval: float = 0.1,
+    ) -> None:
+        """Process for starting a Lab Streaming Layer (LSL) to process the data streams from DAQ system with the
+        C reader: reading the device, decoding the packets and pushing into the LSL outlets (format int32) is done
+        by a C thread (c_reader), this Python thread only creates the outlets and supervises the C reader.
+        :param stim_idx:        Integer with array index to write into heartbeat feedback array
+        :param streams:         List with descriptions of each DAQ stream / LSL outlet
+        :param configs:         List with the DAQ configuration of each stream (same order as streams)
+        :param fd:              File descriptor of the opened device interface (serial port or socket)
+        :param require_consumers:Boolean for requiring at least one consumer on any of the outlets
+        :param consumer_timeout:Floating value with timeout [s] for waiting for consumers
+        :param on_finished:     Optional function called with the final DaqReaderStats after stopping the reader
+        :param poll_interval:   Floating value with interval [s] for supervising the C reader
+        :return:                None
+        """
+        outlets = [
+            self._establish_lsl_outlet(
+                idx=stim_idx,
+                lsl_name=stream.name,
+                lsl_type="stream_daq",
+                sampling_rate=stream.sampling_rate,
+                channel_num=len(stream.channel_labels),
+                channel_labels=stream.channel_labels,
+                channel_units=stream.channel_units,
+                channel_layout=stream.channel_layout,
+                channel_type=pylsl.cf_int32,
+                check_for_consumers=False,
+            )
+            for stream in streams
+        ]
+
+        def has_consumers() -> bool:
+            return any(outlet.have_consumers() for outlet in outlets)
+
+        reader: CDaqReader | None = None
+        try:
+            reader = CDaqReader.from_pylsl(configs, outlets)
+            if require_consumers:
+                deadline = monotonic() + consumer_timeout
+                while not has_consumers():
+                    if monotonic() > deadline:
+                        raise ConnectionError("no consumers available")
+                    sleep(0.05)
+            reader.start(fd)
+            while self._event.is_set() and self._is_active:
+                stats = reader.stats()
+                if not stats.running:
+                    raise ConnectionError(f"C reader stopped with error code {stats.error}")
+                with self._lock:
+                    self._thread_active[stim_idx] = (not require_consumers) or has_consumers()
+                sleep(poll_interval)
+        except Exception as e:
+            with self._lock:
+                self._exception.put(e)
+        finally:
+            if reader is not None:
+                reader.stop()
+                if on_finished is not None:
+                    on_finished(reader.stats())
+                reader.close()
+            with self._lock:
+                self._thread_active[stim_idx] = False
 
     def lsl_stream_util(self, stim_idx: int, name: str, sampling_rate: float = 2.0) -> None:
         """Process for starting a Lab Streaming Layer (LSL) to process the utilization of the host computer

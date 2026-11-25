@@ -7,6 +7,7 @@ Host side of the RP2xxx runtime template. It talks to the firmware in `0_firmwar
 | Device control         | USB or WiFi (TCP) connection, reset, state and pin readout, LED control, echo test                                                                        | `DeviceAPI`                                                         |
 | Data acquisition       | Several DAQ streams of the firmware at once, sample or batch transfer, CRC check, package-loss detection, re-synchronisation, sampling rates below 10 kHz | `DeviceAPI.start_daq`                                               |
 | Live streaming         | Each DAQ stream is published as LSL stream (`data0`, `data1`, ...), optionally a processed stream `filt`                                                  | `DeviceAPI.start_daq`                                               |
+| C reader (optional)    | Reading, decoding and pushing the DAQ packets into LSL in a C thread (`api/c_reader`), for high data rates                                                      | `DeviceAPI.start_daq(use_c_reader=True)`                            |
 | Live plot              | PyQtGraph plot with freely arranged channels, configured in code or by a JSON file                                                                        | `setup_live_plotter`, `add_plot_channel`, `save/load_plotconfigs_*` |
 | Recording and analysis | HDF5 recording incl. CPU/RAM utilisation of the host, reading and evaluating the files                                                                    | `DataAPI`, `examples/plot_data.py`                                  |
 | FPGA (optional)        | Design templates, flashing of bitstreams, power/program/reset control, LED and data exchange over an SPI middleware                                       | `FlashFPGA`, `elasticai.fpga_testing`                               |
@@ -61,10 +62,11 @@ dut.do_reset()           # restart of the firmware
 Names of pins and states of your own firmware are added with `extend_pins_list` and `extend_states_list`. The commands are defined in `api/definitions.py` and correspond to the callbacks of the firmware (`0_firmware/callbacks`).
 
 ## Data Acquisition
-`start_daq(sampling_rate, window_sec, do_plot, do_record, do_process, folder_name, stream_names)` reads the DAQ streams of the firmware and starts the acquisition.
+`start_daq(sampling_rate, window_sec, do_plot, do_record, do_process, folder_name, stream_names, use_c_reader)` reads the DAQ streams of the firmware and starts the acquisition.
 - **Several streams**: The firmware can provide multiple DAQ streams with own packet ids, channels and transfer modes (sample or batch). Each one is published as own LSL stream: `data0`, `data1`, ... or the names in `stream_names`.
 - **Robust transfer**: Packets of different streams may arrive in any order. The API checks tail byte and CRC, detects lost packets and re-synchronises after corrupt data. `stop_daq()` reports the number of losses.
 - **Processing**: With `do_process=True` the first stream is processed and published as LSL stream `filt`. The function is an example in `mcu_api.py` and has to be adapted to your project.
+- **C reader**: With `use_c_reader=True` the C thread of `api/c_reader` reads the interface, decodes the packets and pushes them into the LSL streams (format `int32`) without the Python interpreter. The library is built with the system C compiler on first use (POSIX only, see `api/c_reader/README.md`); the processing, recording and plot work as before. `stop_daq()` reports losses and skipped bytes of the C reader.
 - **Waiting**: `wait_daq(seconds)` waits and raises errors of the threads (e.g. missing consumers or lost device). Without plot, the call of `start_daq` returns directly.
 
 ## Live Plot
