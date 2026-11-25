@@ -217,7 +217,6 @@ def test_lost_packets_are_counted_including_wrap_of_the_index(library, port):
     wait_for(lambda: len(sink.samples) == 7)
     reader.stop()
 
-    # 1 -> 4: two lost, 4 -> 254: 249 lost, 0 -> 3: two lost
     assert reader.stats().num_lost_packets == 2 + 249 + 2
 
 
@@ -248,9 +247,7 @@ def test_invalid_configurations_are_rejected(library):
     sink = Sink({1: 3, 2: 3})
     config = make_config(0xA0)
     with pytest.raises(ValueError):
-        CDaqReader(
-            [config, config], [1, 2], sink.push_sample, sink.push_chunk, library
-        )  # head byte twice
+        CDaqReader([config, config], [1, 2], sink.push_sample, sink.push_chunk, library)
     wrong_size = make_config(0xA0)
     object.__setattr__(wrong_size, "num_bytes_total", wrong_size.num_bytes_total + 1)
     with pytest.raises(ValueError):

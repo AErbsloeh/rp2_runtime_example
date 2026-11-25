@@ -48,6 +48,8 @@ dut.stop_daq()
 Further scripts are listed in [Examples](#examples).
 
 ## Device Control
+The API has two layers: `BasicAPI` (`api/src/_basic_api.py`) is generic and does not need changes: connection via USB or WiFi, RPC protocol, system state, LED, reading and decoding of the DAQ packets, preparation of the DAQ and LSL stream descriptions, `stop_daq`/`wait_daq`/`do_reset` and the plot definitions (also from JSON). `DeviceAPI` (`api/mcu_api.py`) is the application-specific part which you adapt: `start_daq` with the LSL threads that run during the DAQ (processing, recording, plot), the example plot definition and the data processing.
+
 ```python
 dut = DeviceAPI()                                                       # USB (com_name="AUTOCOM" searches the port)
 dut = DeviceAPI(transport="wifi", host="172.20.10.5", port=4242)       # WiFi (TCP), needs the WiFi transport in the firmware

@@ -70,11 +70,11 @@ def _make_device_api():
     device = FakeDevice()
     calls = []
 
-    dut._DeviceAPI__threads = threads
-    dut._DeviceAPI__device = device
-    dut._DeviceAPI__logger = getLogger(__name__)
-    dut._DeviceAPI__plot_config = None
-    dut._DeviceAPI__num_package_loss = 0
+    dut._threads = threads
+    dut._device = device
+    dut._logger = getLogger(__name__)
+    dut._plot_config = None
+    dut._num_package_loss = 0
 
     dut._enable_batch_daq = lambda use_batches: calls.append(("batch", use_batches))
     dut._update_daq_sampling_rate = lambda sampling_rate: calls.append(("rate", sampling_rate))
@@ -109,7 +109,7 @@ def test_start_daq_can_publish_processed_lsl_without_internal_recording():
 
 def test_start_daq_with_c_reader_registers_the_c_stream_thread():
     dut, threads, device, calls = _make_device_api()
-    dut._DeviceAPI__num_skipped_bytes = 0
+    dut._num_skipped_bytes = 0
 
     dut.start_daq(
         sampling_rate=500.0, do_record=False, do_plot=False, do_process=False, use_c_reader=True
@@ -128,12 +128,12 @@ def test_start_daq_with_c_reader_registers_the_c_stream_thread():
 
 def test_c_reader_statistics_are_stored_for_stop_daq():
     dut, *_ = _make_device_api()
-    dut._DeviceAPI__num_skipped_bytes = 0
+    dut._num_skipped_bytes = 0
 
     dut._store_c_reader_stats(DaqReaderStats(10, 3, 7, 0, 0, False))
 
-    assert dut._DeviceAPI__num_package_loss == 3
-    assert dut._DeviceAPI__num_skipped_bytes == 7
+    assert dut._num_package_loss == 3
+    assert dut._num_skipped_bytes == 7
 
 
 @pytest.mark.hardware
@@ -242,29 +242,6 @@ def test_start_daq_applies_plot_definition_to_each_of_multiple_streams():
     assert device.timeout == 2 / 250.0
 
 
-def test_echo_value_sends_and_decodes_signed_values():
-    dut = DeviceAPI.__new__(DeviceAPI)
-    sent = []
-
-    def fake_write_with_feedback(head, data=0, size=0):
-        sent.append((head, data))
-        return data.to_bytes(3, byteorder="big")
-
-    dut._write_with_feedback = fake_write_with_feedback
-
-    for value in (0, 1, -1, 42000, -8388608, 8388607):
-        assert dut.echo_value(value) == value
-    assert all(head == Commands.ECHO for head, _ in sent)
-    assert sent[2][1] == 0xFFFFFF
-
-
-def test_echo_value_rejects_values_outside_the_data_bytes():
-    dut = DeviceAPI.__new__(DeviceAPI)
-    dut._write_with_feedback = lambda head, data=0, size=0: data.to_bytes(3, byteorder="big")
-    with pytest.raises(OverflowError):
-        dut.echo_value(8388608)
-
-
 def _make_process_dut(answer_func):
     dut = DeviceAPI.__new__(DeviceAPI)
 
@@ -280,7 +257,7 @@ def _make_process_dut(answer_func):
 
         total_num_bytes = 4
 
-    dut._DeviceAPI__device = Device()
+    dut._device = Device()
     return dut
 
 

@@ -5,8 +5,8 @@ from time import sleep
 
 import pytest
 
-from api.mcu_api import DeviceAPI, convert_pin_state, convert_system_state
-from api.src._helper import build_crc16_ccitt
+from api.mcu_api import DeviceAPI
+from api.src._helper import build_crc16_ccitt, convert_pin_state, convert_system_state
 
 
 @pytest.fixture(scope="session", autouse=True)
