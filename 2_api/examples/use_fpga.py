@@ -11,7 +11,7 @@ if __name__ == "__main__":
 
     dut = FlashFPGA()
     if do_flash:
-        path2stream = Path(get_path_to_project()).parent / "1_fpga" / "file"
+        path2stream = Path(get_path_to_project()).parent / "1_fpga" / "build"
         if not path2stream.exists():
             raise FileNotFoundError()
 
