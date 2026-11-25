@@ -125,7 +125,7 @@ def test_run_daq_batch(dut: DeviceAPI):
 @pytest.mark.hardware
 def test_get_number_daq_tasks(dut: DeviceAPI):
     num = dut._get_number_daq_tasks()
-    assert num == 1
+    assert num == 2
 
 
 @pytest.mark.hardware
@@ -156,14 +156,14 @@ def test_config_daq_batch_10hz(dut: DeviceAPI):
 
     rslt = dut.get_daq_characteristics()
     assert rslt.num_channels == 2
-    assert rslt.num_samples == 16
+    assert rslt.num_samples == 32
     assert rslt.bytes_sample == 2
     assert rslt.sampling_rate == 10.0
     assert rslt.send_batch
-    assert rslt.num_bytes_total == 85
+    assert rslt.num_bytes_total == 149
     assert rslt.tail_cmd == 255
     assert rslt.head_cmd == 160
-    assert rslt.data_shape == (2, 16)
+    assert rslt.data_shape == (2, 32)
     assert rslt.dtype_sample == "<u2"
     assert not rslt.is_signed
     assert rslt.has_crc
