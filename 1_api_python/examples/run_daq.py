@@ -9,7 +9,7 @@ if __name__ == "__main__":
     dut = DeviceAPI()
     do_plot = True
     do_record = True
-    do_process = False
+    do_process = True
     do_LoadPlotConfigFromJson = False
     do_SavePlotConfig = False
 

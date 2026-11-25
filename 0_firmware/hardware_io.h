@@ -35,8 +35,8 @@ extern rp2_adc_t adc_temp;
 extern transport_rx_buffer_t rx_buffer;
 
 // --- DAQ Sampling
-extern daq_data_t daq_config_raw;
-extern daq_data_t daq_config_sample2;
+extern daq_data_t daq_config0;
+extern daq_data_t daq_config1;
 extern daq_data_t* const daq_streams[];
 extern const uint8_t daq_num_streams;
 extern tmr_repeat_irq_t tmr_daq0_hndl;

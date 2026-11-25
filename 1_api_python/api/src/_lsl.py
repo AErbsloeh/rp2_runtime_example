@@ -553,6 +553,7 @@ class ThreadLSL:
             channel_layout=inlet.info().get_channel_types(),
             channel_type=inlet.info().channel_format() if lsl_format == 0 else lsl_format,
             check_for_consumers=False,
+            channel_units=inlet.info().get_channel_units()
         )
         func_init_daq(sampling_rate)
 

@@ -460,7 +460,7 @@ class DeviceAPI:
         self.__daq_config = daq_configs[0]
 
         if stream_names is None:
-            stream_names = ["data"] + [f"data{idx}" for idx in range(1, num_daq_tasks)]
+            stream_names = ["data0"] + [f"data{idx}" for idx in range(1, num_daq_tasks)]
         if len(stream_names) != num_daq_tasks or len(set(stream_names)) != num_daq_tasks:
             raise ValueError(f"stream_names needs {num_daq_tasks} unique names, got {stream_names}")
         streams = [
@@ -564,9 +564,8 @@ class DeviceAPI:
         self.setup_live_plotter(
             plot_titles=[["plot1", "plot2"], [None, "plot3"]]
         )
-
         self.add_plot_channel(
-            lsl_stream_name="data",
+            lsl_stream_name="data0",
             channel_name="CH0 Raw",
             channel_unit="LSB",
             curve_color='r',
@@ -574,8 +573,8 @@ class DeviceAPI:
             stream_channel_idx=0
         )
         self.add_plot_channel(
-            lsl_stream_name="data",
-            channel_name="CH1 Raw",
+            lsl_stream_name="data0",
+            channel_name="CH0 Temp",
             channel_unit="LSB",
             curve_color='b',
             position=(1, 1),
@@ -583,7 +582,7 @@ class DeviceAPI:
         )
         self.add_plot_channel(
             lsl_stream_name="data1",
-            channel_name="CH1.1 Raw",
+            channel_name="CH1 Raw",
             channel_unit="LSB",
             curve_color='g',
             position=(0, 1),
@@ -594,8 +593,8 @@ class DeviceAPI:
                 lsl_stream_name="filt",
                 channel_name="CH0 Filtered",
                 channel_unit="LSB",
-                curve_color="#FF0000",
-                position=(0, 1),
+                curve_color="g",
+                position=(0, 0),
                 stream_channel_idx=0
             )
     def __process_stream_init(self, sampling_rate: float) -> None:
@@ -604,7 +603,10 @@ class DeviceAPI:
     def __process_stream_func(self, data_in: list) -> list:
         data_out = list()
         for data in data_in:
-            dat = [data[0] - 32768, data[1]]
+            dat = [
+                (65535 - data[0]),
+                data[1]
+            ]
             data_out.append(dat)
         return data_out
 

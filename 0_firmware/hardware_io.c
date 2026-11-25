@@ -44,10 +44,11 @@ transport_rx_buffer_t rx_buffer = {
     .data = NULL
 };  
 
-// --- DAQ Sampling
+// =============== Registry of all DAQ streams (order = index used by GET_CHARAC_DAQ) ===============
+// --- DAQ Sampling Processes
 fifo_t a = {};
 fifo_t b = {};
-daq_data_t daq_config_raw = {
+daq_data_t daq_config0 = {
     .packet_id = 0xA0,
     .packet_tail = 0xFF,
     .iteration = 0,
@@ -55,8 +56,8 @@ daq_data_t daq_config_raw = {
     .runtime_last = 0,
     .is_signed = false,
     .element_size = sizeof(uint16_t),
-    .num_channels = 8,
-    .num_samples = 16,
+    .num_channels = 2,
+    .num_samples = 32,
     .send_mode = DAQ_MODE_SAMPLE,
     .new_data = false,
     .data0 = &a,
@@ -65,7 +66,7 @@ daq_data_t daq_config_raw = {
 
 fifo_t c = {};
 fifo_t d = {};
-daq_data_t daq_config_sample2 = {
+daq_data_t daq_config1 = {
     .packet_id = 0xFA,
     .packet_tail = 0xBC,
     .iteration = 0,
@@ -73,36 +74,28 @@ daq_data_t daq_config_sample2 = {
     .runtime_last = 0,
     .is_signed = false,
     .element_size = sizeof(uint16_t),
-    .num_channels = 4,
-    .num_samples = 16,
-    .send_mode = DAQ_MODE_SAMPLE,
+    .num_channels = 1,
+    .num_samples = 1024,
+    .send_mode = DAQ_MODE_BUFFER_SINGLE,
     .new_data = false,
     .data0 = &c,
     .data1 = &d
 };
 
-// --- Registry of all DAQ streams (order = index used by GET_CHARAC_DAQ)
-daq_data_t* const daq_streams[] = {&daq_config_raw, &daq_config_sample2};
+daq_data_t* const daq_streams[] = {&daq_config0, &daq_config1};
 const uint8_t daq_num_streams = sizeof(daq_streams) / sizeof(daq_streams[0]);
 
-
-uint16_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
-uint16_t data2[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+// --- IRQ Routine for DAQ sampling
+uint16_t data_raw0[2] = {0, 0};
+uint16_t data_raw1[1] = {0};
 bool irq_tmr_daq0(repeating_timer_t *rt){
-    data[0] += 16;
-    data[1] = rp2_adc_read_raw(&adc_temp);
-    for (uint8_t ch = 2; ch < 8; ch++){
-        data[ch] = data[0] + ch;   // placeholder data
-    }
+    data_raw0[0] += 16;
+    data_raw0[1] = rp2_adc_read_raw(&adc_temp);
 
-    data2[0] -= 16;
-    data2[1] = rand();
-    for (uint8_t ch = 2; ch < 8; ch++){
-        data2[ch] = data2[0] + ch;   // placeholder data
-    }
+    data_raw1[0] -= 64;
 
-    daq_irq_process(&daq_config_raw, data);
-    daq_irq_process(&daq_config_sample2, data2);
+    daq_irq_process(&daq_config0, data_raw0);
+    daq_irq_process(&daq_config1, data_raw1);
     return true;
 };
 repeating_timer_t tmr_daq0;

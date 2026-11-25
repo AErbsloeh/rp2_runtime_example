@@ -51,7 +51,6 @@ void get_charac_daq(char* buffer){
     char buffer_send[20] = {GET_CHARAC_DAQ};
     uint8_t sel_stream = (uint8_t)buffer[2];
     if(sel_stream >= daq_num_streams){
-        // Invalid index: answer with an all-zero description (keeps RPC framing intact)
         transport_write(buffer_send, sizeof(buffer_send));
         return;
     }
