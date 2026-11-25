@@ -24,6 +24,41 @@ class LivePlotterChannelConfig:
     plot_title: list[list[str|None]] #[row][col]
     channel_configs: list[ChannelConfig]
 
+CURVE_COLORS = ("r", "b", "g", "m", "c", "y")
+
+
+def build_comparison_plot_config(
+    rows: list[tuple[str, str, str]], num_channels: int
+) -> LivePlotterChannelConfig:
+    """Plot configuration for comparing LSL streams with the same channels: one row per stream, one column per channel
+    :param rows:            List with tuples (LSL stream name, label of the row, unit) for each row
+    :param num_channels:    Integer with number of channels to show for each stream (stream channels 0 ... N-1)
+    :return:                Configuration for the LivePlotter
+    """
+    if not rows:
+        raise ValueError("At least one stream is needed for plotting")
+    if num_channels < 1:
+        raise ValueError("At least one channel is needed for plotting")
+    labels = [label for _, label, _ in rows]
+    if len(set(labels)) != len(labels):
+        raise ValueError("Labels of the rows must differ, because curves are identified by their name")
+
+    plot_title = [[f"{label} CH{idx}" for idx in range(num_channels)] for label in labels]
+    channel_configs = [
+        ChannelConfig(
+            lsl_stream_name=stream,
+            channel_name=f"{label} CH{idx}",
+            channel_unit=unit,
+            curve_color=CURVE_COLORS[idx % len(CURVE_COLORS)],
+            position=(row, idx),
+            stream_channel_idx=idx,
+        )
+        for row, (stream, label, unit) in enumerate(rows)
+        for idx in range(num_channels)
+    ]
+    return LivePlotterChannelConfig(plot_title=plot_title, channel_configs=channel_configs)
+
+
 def get_time_ticks(window_sec: float, max_intervals: int = 6) -> list[tuple[float, str]]:
     """Ticks for the time axis (time relative to now) incl. start (-window_sec) and end (0) of the window"""
     magnitude = 10 ** math.floor(math.log10(window_sec / max_intervals))

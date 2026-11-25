@@ -11,6 +11,7 @@ dependencies = [
   "pyqt6>=6.11.0",
   "pyqtgraph>=0.14.0",
   "pyserial>=3.5",
+  "scipy>=1.13.0",
   "tqdm>=4.67.1",
 ]
 # dynamic = ["version"]
@@ -48,7 +49,7 @@ requires = ["hatchling", "wheel"]
 build-backend = "hatchling.build"
 
 [tool.coverage.run]
-source = ["api"]
+source = ["api", "twin"]
 relative_files = true
 omit = ["**/*_test.py"]
 
@@ -62,11 +63,11 @@ exclude_lines = [
 ]
 
 [tool.hatch.build.targets.sdist]
-include = ["api"]
+include = ["api", "twin"]
 exclude = ["scripts", "test_data", "data", "docs", "**/*_test.py"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["api"]
+packages = ["api", "twin"]
 exclude = ["scripts", "test_data", "data", "docs", "**/*_test.py"]
 only-packages = true
 
@@ -88,12 +89,14 @@ python_files = ["*_test.py"]
 pythonpath = ["."]
 testpaths = [
   "api",
+  "twin",
 ]
 
 [tool.ruff]
 include = [
   "pyproject.toml",
   "api/**/*.py",
+  "twin/**/*.py",
 ]
 
 # Exclude a variety of commonly ignored directories.

@@ -91,7 +91,7 @@ if __name__ == "__main__":
 
     dut = DataAPI(path2data)
     dut.select_file(use_case)
-    data = dut.get_data('data')
+    data = dut.get_data('data0')
 
     if read_util and dut.is_utilization_available:
         util = dut.get_utilization()

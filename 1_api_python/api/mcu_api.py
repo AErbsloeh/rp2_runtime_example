@@ -637,9 +637,7 @@ class DeviceAPI:
         """
         self.__threads.wait_for_seconds(time_sec)
 
-    def set_liveplotter_config_manually(
-        self,
-        do_process: bool = True,):
+    def set_liveplotter_config_manually(self, do_process: bool = True) -> None:
         self.setup_live_plotter(
             plot_titles=[["plot1", "plot2"], [None, "plot3"]]
         )
@@ -676,6 +674,7 @@ class DeviceAPI:
                 position=(0, 0),
                 stream_channel_idx=0
             )
+
     def __process_stream_init(self, sampling_rate: float) -> None:
         pass
 

@@ -1,6 +1,6 @@
 from api import FlashFPGA, get_path_to_project
 from pathlib import Path
-from elasticai.fpga_testing.scripts_build.bin_build import read_bitstream_file_amd
+from elasticai.fpga_testing.bin_build import read_bitstream_file_amd
 from time import sleep
 
 

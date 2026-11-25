@@ -19,6 +19,26 @@ from api.src._helper import DaqStreamDescription
 from api.src._live_visualize import LivePlotter, LivePlotterChannelConfig
 
 
+def numpy_to_lsl_format(dtype: type | np.dtype) -> int:
+    """Getting the LSL channel format (cf_*) that fits to a NumPy data type
+    :param dtype:   NumPy data type (e.g. np.float32 or np.dtype("int16"))
+    :return:        Integer with LSL datatype format cf_*
+    """
+    if np.issubdtype(dtype, np.float32):
+        return pylsl.cf_float32
+    if np.issubdtype(dtype, np.floating):
+        return pylsl.cf_double64
+    if np.issubdtype(dtype, np.int8):
+        return pylsl.cf_int8
+    if np.issubdtype(dtype, np.int16):
+        return pylsl.cf_int16
+    if np.issubdtype(dtype, np.int32):
+        return pylsl.cf_int32
+    if np.issubdtype(dtype, np.integer):
+        return pylsl.cf_int64
+    raise ValueError(f"No LSL datatype format available for {dtype}")
+
+
 class RingBuffer:
     def __init__(self, size) -> None:
         self._size = size
@@ -570,17 +590,27 @@ class ThreadLSL:
         :return:                None
         """
         inlet = self._establish_lsl_inlet(name_in)
-        sampling_rate = inlet.info().nominal_srate()
+        info_in = inlet.info()
+        sampling_rate = info_in.nominal_srate()
+        num_channels = info_in.channel_count()
+
+        # Streams without channel description (e.g. from other LSL sources) give None for labels, units and types
+        if channel_labels is None:
+            channel_labels = info_in.get_channel_labels() or [f"CH{idx}" for idx in range(num_channels)]
+        if channel_units is None:
+            channel_units = info_in.get_channel_units() or [""] * num_channels
+        if channel_layout is None:
+            channel_layout = info_in.get_channel_types() or [""] * num_channels
 
         outlet = self._establish_lsl_outlet(
             idx=stim_idx,
             lsl_name=name_out,
-            lsl_type=inlet.info().type(),
+            lsl_type=info_in.type(),
             sampling_rate=sampling_rate,
-            channel_units=channel_units if channel_units is not None else inlet.info().get_channel_units(),
-            channel_num=inlet.info().channel_count(),
-            channel_labels=channel_labels if channel_labels is not None else inlet.info().get_channel_labels(),
-            channel_layout=channel_layout if channel_layout is not None else inlet.info().get_channel_types(),
+            channel_units=channel_units,
+            channel_num=num_channels,
+            channel_labels=channel_labels,
+            channel_layout=channel_layout,
             channel_type=inlet.info().channel_format() if lsl_format == 0 else lsl_format,
             check_for_consumers=False,
         )
@@ -634,11 +664,18 @@ class ThreadLSL:
                 assert data[0] == val
                 assert time[0] == ts
 
-    def lsl_record_stream(self, stim_idx: int, names: list[str], path2save: Path | str) -> None:
+    def lsl_record_stream(
+        self,
+        stim_idx: int,
+        names: list[str],
+        path2save: Path | str,
+        extra_attrs: dict[str, str | int | float] | None = None,
+    ) -> None:
         """Function for recording and saving the data pushed on LSL stream
         :param stim_idx:            Integer with array index to write into heartbeat feedback array
         :param names:               List with names of the LSL inlet for catching data (0: sensor stream, 1...N: additional infos)
         :param path2save:           Path to save the data (if it is a string, it will be auto-converted)
+        :param extra_attrs:         Optional dictionary with additional attributes to write into the file (e.g. processing info)
         :return: None
         """
         if type(names) is not list:
@@ -659,6 +696,8 @@ class ThreadLSL:
         with File(path2file.as_posix(), "w") as f:
             f.attrs["creation_date"] = datetime.today().strftime("%Y-%m-%d")
             f.attrs["data_format"] = data_format
+            for key, value in (extra_attrs or {}).items():
+                f.attrs[key] = value
 
             for idx, (name, inlet) in enumerate(zip(names, inlets)):
                 stream_time.append(f.create_dataset(f"{name}_time", (0,), maxshape=(None,), dtype=float))

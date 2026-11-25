@@ -8,7 +8,7 @@ import pylsl
 import pytest
 
 from api import get_path_to_project
-from api.src._lsl import RingBuffer, ThreadLSL
+from api.src._lsl import RingBuffer, ThreadLSL, numpy_to_lsl_format
 
 RUN_SECONDS = 3.0
 CHECK_STEPS = 4
@@ -235,6 +235,58 @@ def test_thread_process_stream():
     assert not dut.is_running
 
 
+def test_process_stream_without_channel_description(monkeypatch):
+    """Streams of other LSL sources have no labels, units and types (pylsl returns None), the output needs defaults"""
+    created = {}
+
+    class FakeInfo:
+        def nominal_srate(self):
+            return 100.0
+
+        def channel_count(self):
+            return 2
+
+        def type(self):
+            return "data"
+
+        def channel_format(self):
+            return pylsl.cf_int32
+
+        def get_channel_labels(self):
+            return None
+
+        def get_channel_units(self):
+            return None
+
+        def get_channel_types(self):
+            return None
+
+    class FakeInlet:
+        def info(self):
+            return FakeInfo()
+
+        def pull_chunk(self, max_samples, timeout):
+            return [], None
+
+    dut = ThreadLSL()
+    monkeypatch.setattr(dut, "_establish_lsl_inlet", lambda name: FakeInlet())
+
+    def fake_outlet(**kwargs):
+        created.update(kwargs)
+        dut._event.clear()  # leave the processing loop after the setup
+        return object()
+
+    monkeypatch.setattr(dut, "_establish_lsl_outlet", fake_outlet)
+    dut._thread_active = [True]
+    dut._event.set()
+    dut.lsl_process_stream(0, "in", "out", 4, lambda srate: None, lambda data: data)
+
+    assert created["channel_labels"] == ["CH0", "CH1"]
+    assert created["channel_units"] == ["", ""]
+    assert created["channel_layout"] == ["", ""]
+    assert created["channel_num"] == 2
+
+
 if __name__ == "__main__":
     pytest.main([__file__])
 
@@ -261,3 +313,27 @@ def test_plot_stream_keeps_plotter_alive_while_event_loop_is_running(monkeypatch
 
     assert state == {"config": "config", "window": 4.0, "alive": True}
     assert dut._plotter is None
+
+
+@pytest.mark.parametrize(
+    "dtype, expected",
+    [
+        (np.float32, pylsl.cf_float32),
+        (np.float64, pylsl.cf_double64),
+        (np.dtype("float16"), pylsl.cf_double64),
+        (np.int8, pylsl.cf_int8),
+        (np.int16, pylsl.cf_int16),
+        (np.int32, pylsl.cf_int32),
+        (np.int64, pylsl.cf_int64),
+        (np.uint16, pylsl.cf_int64),
+    ],
+)
+def test_numpy_to_lsl_format(dtype, expected):
+    assert numpy_to_lsl_format(dtype) == expected
+
+
+def test_numpy_to_lsl_format_rejects_unknown_types():
+    with pytest.raises(ValueError):
+        numpy_to_lsl_format(np.bool_)
+    with pytest.raises(ValueError):
+        numpy_to_lsl_format(np.dtype("U4"))

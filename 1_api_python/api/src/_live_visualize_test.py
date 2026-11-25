@@ -6,7 +6,14 @@ import pyqtgraph as pg
 import pytest
 from pyqtgraph.Qt import QtWidgets
 
-from api.src._live_visualize import ChannelConfig, LivePlotter, LivePlotterChannelConfig, get_time_ticks
+from api.src._live_visualize import (
+    CURVE_COLORS,
+    ChannelConfig,
+    LivePlotter,
+    LivePlotterChannelConfig,
+    build_comparison_plot_config,
+    get_time_ticks,
+)
 
 
 class FakeInfo:
@@ -93,3 +100,37 @@ def test_time_ticks_include_start_and_end_of_window(window, labels):
     assert [label for _, label in ticks] == labels
     assert ticks[0][0] == -window
     assert ticks[-1][0] == 0.0
+
+
+def test_comparison_config_has_one_row_per_stream_and_one_column_per_channel():
+    config = build_comparison_plot_config(
+        [("data0", "Input", "LSB"), ("twin", "Twin", "V")], num_channels=2
+    )
+
+    assert config.plot_title == [["Input CH0", "Input CH1"], ["Twin CH0", "Twin CH1"]]
+    assert [
+        (ch.lsl_stream_name, ch.channel_unit, ch.position, ch.stream_channel_idx)
+        for ch in config.channel_configs
+    ] == [
+        ("data0", "LSB", (0, 0), 0),
+        ("data0", "LSB", (0, 1), 1),
+        ("twin", "V", (1, 0), 0),
+        ("twin", "V", (1, 1), 1),
+    ]
+    names = [ch.channel_name for ch in config.channel_configs]
+    assert len(set(names)) == len(names)
+
+
+def test_comparison_config_colors_repeat_for_many_channels():
+    config = build_comparison_plot_config([("data0", "Input", "LSB")], num_channels=len(CURVE_COLORS) + 1)
+
+    assert config.channel_configs[0].curve_color == config.channel_configs[-1].curve_color
+
+
+def test_comparison_config_rejects_invalid_arguments():
+    with pytest.raises(ValueError):
+        build_comparison_plot_config([], 1)
+    with pytest.raises(ValueError):
+        build_comparison_plot_config([("data0", "Input", "LSB")], 0)
+    with pytest.raises(ValueError):
+        build_comparison_plot_config([("a", "Same", "LSB"), ("b", "Same", "LSB")], 1)

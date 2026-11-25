@@ -1,14 +1,17 @@
 import numpy as np
 from scipy.signal import butter, sosfilt, sosfilt_zi
 
+
 class DACAD5765:
     @staticmethod
-    def digital_to_voltage(value: np.ndarray, v_ref: float=5.) -> np.ndarray[np.float32]:
-        """Convert digital values from the AD5765 DAC to voltage values using the reference voltage and the resolution of the DAC. The AD5765 is a 16-bit DAC, so the digital values are expected to be in the range of 0 to 65535 (2^16 - 1). The conversion formula is: voltage = v_ref * ((value / (2^15)) - 1), where value is the digital input and v_ref is the reference voltage.
+    def digital_to_voltage(value: np.ndarray, v_ref: float=5.) -> np.ndarray:
+        """Convert digital values from the AD5765 DAC to voltage values using the reference voltage and the resolution of the DAC.
+        The AD5765 is a 16-bit DAC, so the digital values are expected to be in the range of 0 to 65535 (2^16 - 1).
+        The conversion formula is: voltage = v_ref * ((value / (2^15)) - 1), where value is the digital input and v_ref is the reference voltage.
 
         Args:
             value (np.ndarray): The digital values to be converted, expected to be a NumPy array of integers in the range 0 to 65535.
-            v_ref (float, optional): The reference voltage in volts. Defaults to 5..
+            v_ref (float, optional): The reference voltage in volts. Defaults to 5.
 
         Returns:
             np.ndarray[np.float64]: The converted voltage values, returned as a NumPy array of floating point numbers.
@@ -20,7 +23,7 @@ class DACAD5765:
 
 class InstrumentationAmplifier:
     @staticmethod
-    def amplify_signal(signal: np.ndarray, gain: float= 1.2) -> np.ndarray[np.float32]:
+    def amplify_signal(signal: np.ndarray, gain: float= 1.2) -> np.ndarray:
         """Amplify the input signal by multiplying it with the specified gain factor
 
         Args:
@@ -35,7 +38,7 @@ class InstrumentationAmplifier:
 
 class ADCAD7779:
     @staticmethod
-    def two_complement_to_voltage(signal_values: np.ndarray, v_ref: float=2.5, pga_gain: float=1., g_extra: float=1.) -> np.ndarray[np.float32]:
+    def two_complement_to_voltage(signal_values: np.ndarray, v_ref: float=2.5, pga_gain: float=1., g_extra: float=1.) -> np.ndarray:
         """Convert two's complement values to voltage values
 
         Args:
@@ -58,7 +61,7 @@ class ADCAD7779:
         Args:
             signal_voltage (np.ndarray): The input voltage values to be converted, expected to be a NumPy array of floating point numbers.
             v_ref (float, optional): The reference voltage in volts. Defaults to 2.5.
-            pga_gain (float, optional): The gain of the programmable gain amplifier. Defaults to 1..
+            pga_gain (float, optional): The gain of the programmable gain amplifier. Defaults to 1.
         """
 
         max_code = 8388607 #(2^23) - 1
@@ -85,7 +88,7 @@ class OPA1637:
             self.zi.append(sosfilt_zi(self.sos))
         self._initialized = False
 
-    def bandpass_filter(self, signal: np.ndarray) -> np.ndarray[np.float32]:
+    def bandpass_filter(self, signal: np.ndarray) -> np.ndarray:
         """Apply bandpass filter while maintaining state between chunks
 
         Args:
