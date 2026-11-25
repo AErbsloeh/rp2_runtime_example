@@ -1,5 +1,5 @@
-# Firmware for RP2xxx (Raspberry Pi Pico)
-This folder contains the firmware template for the Raspberry Pi Pico. It runs a small main loop, answers the commands of the [Python API](../1_api_python/README.md) and sends measurement data (DAQ) to the computer via USB or WiFi.
+# Firmware for RP2xxx devices
+This folder contains the firmware template for the Raspberry Pi RP2xxx MCUs . It runs a small main loop, answers the commands of the [Python API](../2_api/README.md) and sends measurement data (DAQ) to the computer via USB or WiFi.
 
 ## Structure
 ![Structure of the firmware](docs/firmware_structure.svg)
@@ -29,7 +29,7 @@ The hardware drivers (LED, timer, ADC, DAQ, SPI, transport, ...) come from the [
 2. Connect the Pico to the computer via USB. If it is not in the boot mode yet, unplug it, hold the **BOOTSEL** button and plug it in again. The Pico shows up as a USB drive.
 3. Click **Run** in the status bar. The firmware is flashed and the Pico restarts. Alternatively, copy `build/main.uf2` to the USB drive of the Pico.
 
-After this, the Pico appears as a serial port and the Python API can connect to it (see `1_api_python`).
+After this, the Pico appears as a serial port and the Python API can connect to it (see `2_api`).
 
 ## USB or WiFi
 The data transfer is selected with `TRANSPORT_BACKEND` in the `CMakeLists.txt`:
@@ -42,4 +42,4 @@ After changing it, delete the folder `build` (or run *CMake: Delete Cache and Re
 - **Own sensors and drivers**: add the files to the folder `src` and to the list of source files in the `CMakeLists.txt`. Libraries of the runtime library are activated by removing the `#` in front of their name in the list `target_link_libraries`.
 - **DAQ streams**: sensor reading and packet configuration are in `hardware_io.c` (`daq_config0`, `daq_config1` and the timer interrupt `irq_tmr_daq0`).
 - **Own data processing**: write your function into `run_sequential()` in `callbacks/rpc_callbacks.c`. The Python API calls it with `process_data()`.
-- **New commands**: add them to the list `usb_cmd_t` in `callbacks/rpc_callbacks.h` and to `apply_rpc_callback()`. The list in `1_api_python/api/definitions.py` has to use the same order.
+- **New commands**: add them to the list `usb_cmd_t` in `callbacks/rpc_callbacks.h` and to `apply_rpc_callback()`. The list in `2_api/api/definitions.py` has to use the same order.

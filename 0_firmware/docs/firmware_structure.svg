@@ -10,7 +10,7 @@
   <rect x="20" y="100" width="170" height="150" rx="10" fill="#e8f1fb" stroke="#3b7dd8" stroke-width="2"/>
   <text x="105" y="150" font-size="16" font-weight="bold" fill="#1f4f8f" text-anchor="middle">Computer</text>
   <text x="105" y="175" font-size="13" fill="#333" text-anchor="middle">Python API</text>
-  <text x="105" y="195" font-size="13" fill="#333" text-anchor="middle">(1_api_python)</text>
+  <text x="105" y="195" font-size="13" fill="#333" text-anchor="middle">(2_api)</text>
 
   <rect x="300" y="60" width="630" height="525" rx="12" fill="#f7f7f7" stroke="#999" stroke-width="1.5" stroke-dasharray="6 4"/>
   <text x="320" y="86" font-size="15" font-weight="bold" fill="#555">Raspberry Pi Pico (folder 0_firmware)</text>

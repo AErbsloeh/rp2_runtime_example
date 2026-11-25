@@ -1,5 +1,5 @@
 # C Reader for the DAQ Streams
-Library `daq_reader` for reading the DAQ packets of the firmware on the host in C: a thread reads the file descriptor of the opened interface (USB serial port or TCP socket), finds and validates the packets of all streams (head, tail, CRC-16, re-synchronisation, package-loss detection) and pushes the decoded data with the device timestamps into LSL outlets. The Python API (`1_api_python`) uses it with `DeviceAPI.start_daq(..., use_c_reader=True)`, so no packet is handled in Python.
+Library `daq_reader` for reading the DAQ packets of the firmware on the host in C: a thread reads the file descriptor of the opened interface (USB serial port or TCP socket), finds and validates the packets of all streams (head, tail, CRC-16, re-synchronisation, package-loss detection) and pushes the decoded data with the device timestamps into LSL outlets. The Python API (`2_api`) uses it with `DeviceAPI.start_daq(..., use_c_reader=True)`, so no packet is handled in Python.
 
 The library needs neither the header nor the library of liblsl: the push functions (`lsl_push_sample_itp`, `lsl_push_chunk_itnp`) are given by the caller as function pointers together with the outlet handles. All channels are pushed as `int32`.
 
