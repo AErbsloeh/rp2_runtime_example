@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 600" width="960" height="600" font-family="Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#444"/>
+    </marker>
+  </defs>
+  <rect width="960" height="600" fill="#ffffff"/>
+  <text x="30" y="38" font-size="22" font-weight="bold" fill="#222">Firmware overview</text>
+
+  <rect x="20" y="100" width="170" height="150" rx="10" fill="#e8f1fb" stroke="#3b7dd8" stroke-width="2"/>
+  <text x="105" y="150" font-size="16" font-weight="bold" fill="#1f4f8f" text-anchor="middle">Computer</text>
+  <text x="105" y="175" font-size="13" fill="#333" text-anchor="middle">Python API</text>
+  <text x="105" y="195" font-size="13" fill="#333" text-anchor="middle">(1_api_python)</text>
+
+  <rect x="300" y="60" width="630" height="525" rx="12" fill="#f7f7f7" stroke="#999" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text x="320" y="86" font-size="15" font-weight="bold" fill="#555">Raspberry Pi Pico (folder 0_firmware)</text>
+
+  <rect x="320" y="100" width="590" height="150" rx="10" fill="#fff4d6" stroke="#e0a800" stroke-width="2"/>
+  <text x="335" y="126" font-size="16" font-weight="bold" fill="#7a5a00">main.c: the main loop</text>
+  <text x="895" y="126" font-size="12" fill="#7a5a00" text-anchor="end">steps 2 and 3 repeat forever</text>
+
+  <rect x="335" y="140" width="180" height="90" rx="8" fill="#ffffff" stroke="#e0a800"/>
+  <text x="425" y="165" font-size="14" font-weight="bold" fill="#333" text-anchor="middle">1  Start</text>
+  <text x="425" y="188" font-size="12" fill="#333" text-anchor="middle">init_gpio_pico()</text>
+  <text x="425" y="206" font-size="12" fill="#333" text-anchor="middle">init_system()</text>
+
+  <rect x="525" y="140" width="180" height="90" rx="8" fill="#ffffff" stroke="#e0a800"/>
+  <text x="615" y="165" font-size="14" font-weight="bold" fill="#333" text-anchor="middle">2  Listen</text>
+  <text x="615" y="188" font-size="12" fill="#333" text-anchor="middle">read command from PC</text>
+  <text x="615" y="206" font-size="12" fill="#333" text-anchor="middle">apply_rpc_callback()</text>
+
+  <rect x="715" y="140" width="180" height="90" rx="8" fill="#ffffff" stroke="#e0a800"/>
+  <text x="805" y="165" font-size="14" font-weight="bold" fill="#333" text-anchor="middle">3  Send data</text>
+  <text x="805" y="188" font-size="12" fill="#333" text-anchor="middle">daq_check_send_data()</text>
+  <text x="805" y="206" font-size="12" fill="#333" text-anchor="middle">for every DAQ stream</text>
+
+  <line x1="192" y1="175" x2="319" y2="175" stroke="#444" stroke-width="2.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <text x="245" y="160" font-size="13" fill="#333" text-anchor="middle">USB or WiFi</text>
+  <line x1="516" y1="185" x2="524" y2="185" stroke="#444" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="706" y1="185" x2="714" y2="185" stroke="#444" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <line x1="425" y1="232" x2="425" y2="288" stroke="#444" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="615" y1="232" x2="615" y2="288" stroke="#444" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="805" y1="232" x2="805" y2="288" stroke="#444" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <rect x="320" y="292" width="190" height="125" rx="8" fill="#e3f5e6" stroke="#2e9b4a" stroke-width="1.5"/>
+  <text x="415" y="316" font-size="13" font-weight="bold" fill="#1d6b32" text-anchor="middle">src/init_system.c</text>
+  <text x="415" y="340" font-size="12" fill="#333" text-anchor="middle">Start-up and system state</text>
+  <text x="415" y="362" font-size="11" fill="#333" text-anchor="middle">ERROR, RESET, INIT, IDLE,</text>
+  <text x="415" y="378" font-size="11" fill="#333" text-anchor="middle">TEST, DAQ, FLASH</text>
+
+  <rect x="520" y="292" width="190" height="125" rx="8" fill="#e3f5e6" stroke="#2e9b4a" stroke-width="1.5"/>
+  <text x="615" y="316" font-size="13" font-weight="bold" fill="#1d6b32" text-anchor="middle">callbacks/rpc_callbacks.c</text>
+  <text x="615" y="340" font-size="12" fill="#333" text-anchor="middle">Commands of the PC</text>
+  <text x="615" y="362" font-size="11" fill="#333" text-anchor="middle">echo, LED, start/stop DAQ</text>
+  <text x="615" y="378" font-size="11" fill="#333" text-anchor="middle">run_sequential(): your own</text>
+  <text x="615" y="394" font-size="11" fill="#333" text-anchor="middle">data processing</text>
+
+  <rect x="720" y="292" width="190" height="125" rx="8" fill="#e3f5e6" stroke="#2e9b4a" stroke-width="1.5"/>
+  <text x="815" y="316" font-size="13" font-weight="bold" fill="#1d6b32" text-anchor="middle">hardware_io.c / .h</text>
+  <text x="815" y="340" font-size="12" fill="#333" text-anchor="middle">Pins, sensors, DAQ streams</text>
+  <text x="815" y="362" font-size="11" fill="#333" text-anchor="middle">A timer interrupt reads the</text>
+  <text x="815" y="378" font-size="11" fill="#333" text-anchor="middle">sensors and fills the data</text>
+  <text x="815" y="394" font-size="11" fill="#333" text-anchor="middle">packets for the PC</text>
+
+  <rect x="320" y="435" width="190" height="75" rx="8" fill="#ffffff" stroke="#999"/>
+  <text x="415" y="460" font-size="13" font-weight="bold" fill="#333" text-anchor="middle">callbacks/gpio_callbacks.c</text>
+  <text x="415" y="482" font-size="11" fill="#333" text-anchor="middle">Interrupt of the user button</text>
+
+  <rect x="520" y="435" width="190" height="75" rx="8" fill="#ffffff" stroke="#999"/>
+  <text x="615" y="460" font-size="13" font-weight="bold" fill="#333" text-anchor="middle">callbacks/fpga_callbacks.c</text>
+  <text x="615" y="482" font-size="11" fill="#333" text-anchor="middle">Optional: FPGA flash and SPI</text>
+
+  <rect x="720" y="435" width="190" height="75" rx="8" fill="#ffffff" stroke="#999"/>
+  <text x="815" y="460" font-size="13" font-weight="bold" fill="#333" text-anchor="middle">CMakeLists.txt</text>
+  <text x="815" y="482" font-size="11" fill="#333" text-anchor="middle">Board, USB or WiFi, libraries</text>
+
+  <rect x="320" y="525" width="590" height="46" rx="8" fill="#ececec" stroke="#888"/>
+  <text x="615" y="545" font-size="13" font-weight="bold" fill="#333" text-anchor="middle">rp2_runtime_library (hardware abstraction)</text>
+  <text x="615" y="562" font-size="11" fill="#333" text-anchor="middle">LED, timer, ADC, DAQ, SPI, USB/WiFi transport; downloaded automatically while building</text>
+</svg>
