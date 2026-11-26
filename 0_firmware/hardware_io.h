@@ -9,9 +9,11 @@
 #include "hal/tmr/tmr.h"
 #include "hal/adc/adc.h"
 #include "hal/daq/daq.h"
+#include "hal/daq/processing.h"
 #include "hal/transport/transport.h"
 
 #include "src/init_system.h"
+#include "src/user_logic.h"
 
 extern system_state_t system_state;
 // ==================== PIN DEFINITION =====================
@@ -40,5 +42,8 @@ extern daq_data_t daq_config1;
 extern daq_data_t* const daq_streams[];
 extern const uint8_t daq_num_streams;
 extern tmr_repeat_irq_t tmr_daq0_hndl;
+
+// --- Data processing on core 1
+extern const processing_config_t processing_config;
 
 #endif

@@ -260,7 +260,7 @@ def test_process_stream_without_channel_description(monkeypatch):
             return None
 
     class FakeInlet:
-        def info(self):
+        def info(self, timeout=0.0):
             return FakeInfo()
 
         def pull_chunk(self, max_samples, timeout):

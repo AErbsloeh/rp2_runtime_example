@@ -1,6 +1,7 @@
 #include "hardware_io.h"
 #include "stdlib.h"
 
+
 system_state_t system_state = STATE_ERROR;
 // ==================== I2C DEFINITION =====================
 /*i2c_rp2_t i2c_mod = {
@@ -46,8 +47,6 @@ transport_rx_buffer_t rx_buffer = {
 
 // =============== Registry of all DAQ streams (order = index used by GET_CHARAC_DAQ) ===============
 // --- DAQ Sampling Processes
-fifo_t a = {};
-fifo_t b = {};
 daq_data_t daq_config0 = {
     .packet_id = 0xA0,
     .packet_tail = 0xFF,
@@ -56,16 +55,13 @@ daq_data_t daq_config0 = {
     .runtime_last = 0,
     .is_signed = false,
     .element_size = sizeof(uint16_t),
+    .data_type = DAQ_TYPE_SAMPLE,
     .num_channels = 2,
-    .num_samples = 32,
+    .num_samples = 1,
     .send_mode = DAQ_MODE_SAMPLE,
-    .new_data = false,
-    .data0 = &a,
-    .data1 = &b
+    .new_data = false
 };
 
-fifo_t c = {};
-fifo_t d = {};
 daq_data_t daq_config1 = {
     .packet_id = 0xFA,
     .packet_tail = 0xBC,
@@ -74,28 +70,28 @@ daq_data_t daq_config1 = {
     .runtime_last = 0,
     .is_signed = false,
     .element_size = sizeof(uint16_t),
+    .data_type = DAQ_TYPE_SAMPLE,
     .num_channels = 1,
-    .num_samples = 1024,
-    .send_mode = DAQ_MODE_BUFFER_SINGLE,
-    .new_data = false,
-    .data0 = &c,
-    .data1 = &d
+    .num_samples = 64,
+    .send_mode = DAQ_MODE_BUFFER,
+    .new_data = false
 };
 
 daq_data_t* const daq_streams[] = {&daq_config0, &daq_config1};
 const uint8_t daq_num_streams = sizeof(daq_streams) / sizeof(daq_streams[0]);
 
-// --- IRQ Routine for DAQ sampling
+/*! \brief IRQ routine of the DAQ timer: reads the sensors, writes the raw data into daq_config0 and hands all channels over to the processing on core 1 (run_sequential selects the data)
+    \param rt     Pointer to the repeating timer
+    \return       true to keep the timer running
+*/
 uint16_t data_raw0[2] = {0, 0};
-uint16_t data_raw1[1] = {0};
 bool irq_tmr_daq0(repeating_timer_t *rt){
     data_raw0[0] += 16;
     data_raw0[1] = rp2_adc_read_raw(&adc_temp);
 
-    data_raw1[0] -= 64;
-
     daq_irq_process(&daq_config0, data_raw0);
-    daq_irq_process(&daq_config1, data_raw1);
+
+    processing_push_sample((const uint8_t*)data_raw0, sizeof(data_raw0));
     return true;
 };
 repeating_timer_t tmr_daq0;
@@ -107,4 +103,22 @@ tmr_repeat_irq_t tmr_daq0_hndl = {
     .enable_state = false,
     .init_done = false,
     .func_irq = irq_tmr_daq0
+};
+
+
+// ================= DATA PROCESSING (CORE 1) ==============
+const processing_config_t processing_config = {
+    .in = {
+        .num_channels = 2,
+        .num_samples = 1,
+        .element_size = sizeof(uint16_t)
+    },
+    .out = {
+        .num_channels = 1,
+        .num_samples = 1,
+        .element_size = sizeof(uint16_t)
+    },
+    .queue_depth = 8,
+    .daq_out = &daq_config1,
+    .func = run_sequential
 };

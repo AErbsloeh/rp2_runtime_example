@@ -1,6 +1,9 @@
+#include <stdlib.h>
+#include <string.h>
 #include "callbacks/rpc_callbacks.h"
 #include "hardware_io.h"
 #include "version.h"
+#include "hal/daq/processing.h"
 #include "hal/transport/transport.h"
 
 
@@ -16,7 +19,7 @@ void system_reset(void){
 
 
 void get_charac_system(void){
-    uint64_t runtime = get_runtime_ms();
+    uint64_t runtime = get_runtime_us();
     uint16_t temp_raw = rp2_adc_read_raw(&adc_temp);
     uint16_t clk_val = (uint16_t)(clock_get_hz(clk_sys) / 10000);
 
@@ -48,7 +51,7 @@ void get_number_daq(void){
 
 
 void get_charac_daq(char* buffer, size_t length){
-    char buffer_send[20] = {GET_CHARAC_DAQ};
+    char buffer_send[21] = {GET_CHARAC_DAQ};
     uint8_t sel_stream = (uint8_t)buffer[length-1];
     if(sel_stream >= daq_num_streams){
         transport_write(buffer_send, sizeof(buffer_send));
@@ -74,8 +77,9 @@ void get_charac_daq(char* buffer, size_t length){
     buffer_send[9] = (uint8_t)(num_bytes >> 0);
     buffer_send[10] = (uint8_t)(num_bytes >> 8);
     buffer_send[11] = (uint8_t)(data->element_size);
+    buffer_send[12] = (uint8_t)(data->data_type);
     for(uint8_t idx = 0; idx < 8; idx++){
-        buffer_send[12+idx] = (uint8_t)runtime;
+        buffer_send[13+idx] = (uint8_t)runtime;
         runtime >>= 8;
     }
     transport_write(buffer_send, sizeof(buffer_send));   
@@ -115,30 +119,72 @@ void update_period_daq(char* buffer, size_t length){
     daq_update_sampling_rate(&tmr_daq0_hndl, new_rate_us);
 }
 
-void set_batch_daq(char* buffer, size_t length){
-    for(uint8_t idx = 0; idx < daq_num_streams; idx++){
-        daq_streams[idx]->send_mode = (uint8_t)(buffer[length-1] & 0x03);
-        daq_init_sampling(&tmr_daq0_hndl, daq_streams[idx]);
+
+static uint8_t *apply_block = NULL;
+static size_t apply_block_size = 0;
+
+
+static bool apply_block_prepare(const processing_config_t *config){
+    if(config == NULL){
+        return false;
     }
+    if(apply_block == NULL){
+        apply_block_size = processing_get_num_bytes(&config->in);
+        apply_block = calloc(apply_block_size, sizeof(uint8_t));
+    }
+    return (apply_block != NULL);
 }
 
 
-bool run_sequential(const uint8_t *in, uint8_t *out){
-    for(size_t idx = 0; idx < PROCESS_DATA_NUM_BYTES; idx++){
-        out[idx] = in[idx];
-    }
-    return true;
-}
-
-
-void process_data(char* buffer, size_t length){
-    if(length != (1 + PROCESS_DATA_NUM_BYTES)){
+/*! \brief RPC APPLY_DATA: writes the content of one frame into the staging block of the input of the processing
+    The first byte of the data is the counter (index of the frame), the other bytes are the content of the block at this index.
+    So a lost frame leaves only its own bytes at 0 and the other bytes stay at their position. Bytes behind the end of the block are dropped
+    \param buffer     Pointer to the received frame (command and data, first byte of the transmission at the highest index)
+    \param length     Number of bytes of the frame
+*/
+void apply_data(char* buffer, size_t length){
+    const processing_config_t *config = processing_get_config();
+    if((length < 3) || !apply_block_prepare(config)){
         return;
     }
-    char buffer_send[1 + PROCESS_DATA_NUM_BYTES] = {PROCESS_DATA};
-    if(run_sequential((const uint8_t*)&buffer[1], (uint8_t*)&buffer_send[1])){
-        transport_write(buffer_send, sizeof(buffer_send));
+    const size_t num_payload = length - 2;
+    const size_t offset = (size_t)((uint8_t)buffer[length - 1]) * num_payload;
+    for(size_t idx = 0; idx < num_payload; idx++){
+        if((offset + idx) < apply_block_size){
+            apply_block[offset + idx] = (uint8_t)buffer[length - 2 - idx];
+        }
     }
+}
+
+
+/*! \brief RPC PROCESS_DATA: hands the staging block over to core 1 and sets it back to 0, so bytes which were not applied are 0 */
+void process_data(void){
+    const processing_config_t *config = processing_get_config();
+    if(!apply_block_prepare(config)){
+        return;
+    }
+    processing_submit(PROCESSING_SOURCE_HOST, apply_block);
+    memset(apply_block, 0, apply_block_size);
+}
+
+
+/*! \brief RPC GET_CHARAC_PROCESSING: sends the layout of the input and output block (channels, samples, element size) */
+void get_charac_processing(void){
+    const processing_config_t *config = processing_get_config();
+    char buffer_send[11] = {GET_CHARAC_PROCESSING};
+    if(config != NULL){
+        buffer_send[1] = (uint8_t)(config->in.num_channels >> 0);
+        buffer_send[2] = (uint8_t)(config->in.num_channels >> 8);
+        buffer_send[3] = (uint8_t)(config->in.num_samples >> 0);
+        buffer_send[4] = (uint8_t)(config->in.num_samples >> 8);
+        buffer_send[5] = (uint8_t)(config->in.element_size);
+        buffer_send[6] = (uint8_t)(config->out.num_channels >> 0);
+        buffer_send[7] = (uint8_t)(config->out.num_channels >> 8);
+        buffer_send[8] = (uint8_t)(config->out.num_samples >> 0);
+        buffer_send[9] = (uint8_t)(config->out.num_samples >> 8);
+        buffer_send[10] = (uint8_t)(config->out.element_size);
+    }
+    transport_write(buffer_send, sizeof(buffer_send));
 }
 
 
@@ -159,8 +205,9 @@ bool apply_rpc_callback(transport_rx_buffer_t *data){
             case START_DAQ:             start_daq();                                break;
             case STOP_DAQ:              stop_daq();                                 break;
             case SET_PERIOD_DAQ:        update_period_daq(buffer, data->length);    break;
-            case SET_BATCH_DAQ:         set_batch_daq(buffer, data->length);        break;
-            case PROCESS_DATA:          process_data(buffer, data->length);         break;
+            case PROCESS_DATA:          process_data();                             break;
+            case APPLY_DATA:            apply_data(buffer, data->length);           break;
+            case GET_CHARAC_PROCESSING: get_charac_processing();                    break;
             default:                    valid_state = false;                        break;        
         }  
         data->ready = false;

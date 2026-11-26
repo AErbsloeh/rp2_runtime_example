@@ -3,7 +3,7 @@ from logging import getLogger
 
 import pytest
 
-from api.definitions import Commands
+from api.definitions import Commands, DaqDataType
 from api.src._basic_api import BasicAPI
 from api.src._helper import DataAcquisitionConfig
 
@@ -93,3 +93,99 @@ def test_read_returns_nothing_on_timeout():
 def test_register_rejects_duplicate_head_bytes():
     with pytest.raises(ValueError):
         make_reader_api([CONFIG_SAMPLE, CONFIG_SAMPLE])
+
+
+CONFIG_24BIT_SIGNED = DataAcquisitionConfig(False, 100.0, 2, 1, 0xFB, 0xBD, 3 + 8 + 6 + 2, 3, True)
+CONFIG_24BIT_BATCH = DataAcquisitionConfig(True, 100.0, 1, 3, 0xFC, 0xBE, 3 + 16 + 9 + 2, 3, False)
+
+
+def test_read_packets_with_24_bit_values():
+    dut, device = make_reader_api([CONFIG_24BIT_SIGNED, CONFIG_24BIT_BATCH])
+    device.feed += make_packet(CONFIG_24BIT_SIGNED, 0, [1_000_000], [-8388608, 8388607])
+    device.feed += make_packet(CONFIG_24BIT_SIGNED, 1, [1_010_000], [-1, 1234])
+    device.feed += make_packet(CONFIG_24BIT_BATCH, 0, [2_000_000, 2_020_000], [0, 8388608, 16777215])
+
+    head, data, timestamp = dut._thread_read_packet()
+    assert (head, data, timestamp) == (0xFB, [-8388608, 8388607], pytest.approx(1.0))
+    head, data, _ = dut._thread_read_packet()
+    assert (head, data) == (0xFB, [-1, 1234])
+    head, data, timestamps = dut._thread_read_packet()
+    assert head == 0xFC
+    assert data == [[0], [8388608], [16777215]]
+    assert timestamps == pytest.approx([2.0, 2.01, 2.02])
+
+
+def _charac_frame(data_type: int) -> bytes:
+    return (
+        bytes([Commands.GET_CHARAC_DAQ, 0xFB, 0xBD, 1, 0])
+        + (1).to_bytes(2, "little")
+        + (1).to_bytes(2, "little")
+        + (3).to_bytes(2, "little")
+        + bytes([3, data_type])
+        + (10000).to_bytes(8, "little")
+    )
+
+
+@pytest.mark.parametrize("data_type", list(DaqDataType))
+def test_get_daq_characteristics_contains_data_type(data_type):
+    dut = BasicAPI.__new__(BasicAPI)
+    dut._num_daq_tasks = 1
+    sizes = []
+
+    class Device:
+        def convert(self, head, data):
+            return bytes([head, data])
+
+        def write_wfb(self, data, size=0):
+            sizes.append(size)
+            return _charac_frame(data_type)
+
+    dut._device = Device()
+    config = dut.get_daq_characteristics(0)
+    assert sizes == [21]
+    assert config.data_type == data_type
+    assert (config.head_cmd, config.bytes_sample, config.is_signed) == (0xFB, 3, True)
+    assert config.sampling_rate == pytest.approx(100.0)
+
+
+def test_data_type_defaults_to_sample():
+    assert CONFIG_SAMPLE.data_type == DaqDataType.SAMPLE
+
+
+def test_init_stops_a_daq_that_still_runs_from_a_previous_session(monkeypatch):
+    from api.mcu_api import DeviceAPI
+
+    class FakeSerial:
+        def __init__(self, *args, **kwargs) -> None:
+            self.events = []
+            self.pending = 100
+            self.is_open = False
+
+        def open(self) -> None:
+            self.events.append("open")
+            self.is_open = True
+
+        def close(self) -> None:
+            self.is_open = False
+
+        def convert(self, head: int, data: int) -> bytes:
+            return bytes([head])
+
+        def write(self, data: bytes) -> None:
+            self.events.append(("write", data[0]))
+            if data[0] == Commands.STOP_DAQ:
+                self.pending = 0
+
+        def empty_buffer(self) -> int:
+            num, self.pending = self.pending, 0
+            self.events.append("empty")
+            return num
+
+    monkeypatch.setattr("api.src._basic_api.InterfaceSerial", FakeSerial)
+    monkeypatch.setattr("api.src._basic_api.sleep", lambda _: None)
+
+    dut = DeviceAPI(com_name="COM_TEST")
+
+    assert dut._device.events[0] == "open"
+    assert ("write", int(Commands.STOP_DAQ)) in dut._device.events
+    assert dut._device.events[-1] == "empty"

@@ -77,6 +77,17 @@ class InterfaceSerial:
         """Returning the number of data bytes in each transmission"""
         return self.__BYTES_DATA
 
+    @property
+    def timeout(self) -> float:
+        """Returning the communication timeout"""
+        return self.__device.timeout
+
+    @timeout.setter
+    def timeout(self, value: float) -> None:
+        """Setting the communication timeout"""
+        self.__device.timeout = value
+        self.__device.inter_byte_timeout = value
+
     def convert(self, head: int, data: int) -> bytes:
         """Function for converting data to bytes
         :param head:    Header information, RPC command

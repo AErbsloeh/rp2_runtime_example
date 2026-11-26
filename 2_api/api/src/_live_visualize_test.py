@@ -25,7 +25,7 @@ class FakeInfo:
 
 
 class FakeInlet:
-    def info(self) -> FakeInfo:
+    def info(self, timeout: float = 0.0) -> FakeInfo:
         return FakeInfo()
 
     def __init__(self, samples: int = 0) -> None:

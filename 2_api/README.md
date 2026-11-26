@@ -41,14 +41,13 @@ Flash the firmware of `0_firmware` on the RP2xxx and run:
 from api import DeviceAPI
 
 dut = DeviceAPI()                              # USB, the serial port is found by the VID of the RP2xxx
-dut.set_liveplotter_config_manually()          # example plot layout, see below for your own layout
 dut.start_daq(sampling_rate=1000.0, window_sec=10.0)   # blocks while the plot window is open
 dut.stop_daq()
 ```
 Further scripts are listed in [Examples](#examples).
 
 ## Device Control
-The API has two layers: `BasicAPI` (`api/src/_basic_api.py`) is generic and does not need changes: connection via USB or WiFi, RPC protocol, system state, LED, reading and decoding of the DAQ packets, preparation of the DAQ and LSL stream descriptions, `stop_daq`/`wait_daq`/`do_reset` and the plot definitions (also from JSON). `DeviceAPI` (`api/mcu_api.py`) is the application-specific part which you adapt: `start_daq` with the LSL threads that run during the DAQ (processing, recording, plot), the example plot definition and the data processing.
+The API has two layers: `BasicAPI` (`api/src/_basic_api.py`) is generic and does not need changes: connection via USB or WiFi, RPC protocol, system state, LED, reading and decoding of the DAQ packets, preparation of the DAQ and LSL stream descriptions, `stop_daq`/`wait_daq`/`do_reset` and the plot definitions (also from JSON). `DeviceAPI` (`api/mcu_api.py`) is the application-specific part which you adapt: `start_daq` with the LSL threads that run during the DAQ (processing, recording, plot) and the data processing.
 
 ```python
 dut = DeviceAPI()                                                       # USB (com_name="AUTOCOM" searches the port)
@@ -56,7 +55,9 @@ dut = DeviceAPI(transport="wifi", host="172.20.10.5", port=4242)       # WiFi (T
 
 dut.echo("hello")        # communication test with a string
 dut.echo_value(-1234)    # loopback of one signed 24 bit integer (returns the value from the device)
-dut.process_data(-1234)  # sends one signed 24 bit integer to `run_sequential` of the firmware, returns the result (None without response)
+dut.process_data(-1234)  # puts one signed 24 bit integer into the first value of the input block and starts `run_sequential` of the firmware (no response, the result is part of the DAQ stream `data1`, read it with `dut.read_processing_results()`)
+dut.apply_data(np.array([[1], [2]], dtype="<u2"))  # writes a whole input block (layout: `dut.get_processing_layout()`), each transmission has a counter
+dut.process_data()  # hands the applied block to `run_sequential`
 dut.get_state()          # system state and active pins
 dut.toggle_led()         # also enable_led(), disable_led()
 dut.do_reset()           # restart of the firmware
@@ -65,7 +66,7 @@ Names of pins and states of your own firmware are added with `extend_pins_list` 
 
 ## Data Acquisition
 `start_daq(sampling_rate, window_sec, do_plot, do_record, do_process, folder_name, stream_names, use_c_reader)` reads the DAQ streams of the firmware and starts the acquisition.
-- **Several streams**: The firmware can provide multiple DAQ streams with own packet ids, channels and transfer modes (sample or batch). Each one is published as own LSL stream: `data0`, `data1`, ... or the names in `stream_names`.
+- **Several streams**: The firmware can provide multiple DAQ streams with own packet ids, channels and transfer modes (sample or batch). The transfer mode and the buffer sizes are fixed by the firmware at initialisation and cannot be changed through the API; they are read with `get_daq_characteristics`. Each one is published as own LSL stream: `data0`, `data1`, ... or the names in `stream_names`.
 - **Robust transfer**: Packets of different streams may arrive in any order. The API checks tail byte and CRC, detects lost packets and re-synchronises after corrupt data. `stop_daq()` reports the number of losses.
 - **Processing**: With `do_process=True` the first stream is processed and published as LSL stream `filt`. The function is an example in `mcu_api.py` and has to be adapted to your project.
 - **C reader**: With `use_c_reader=True` the C thread of `api/c_reader` reads the interface, decodes the packets and pushes them into the LSL streams (format `int32`) without the Python interpreter. The library is built with the system C compiler on first use (POSIX only, see `api/c_reader/README.md`); the processing, recording and plot work as before. `stop_daq()` reports losses and skipped bytes of the C reader.
@@ -79,6 +80,7 @@ dut.add_plot_channel("data0", "CH0 Raw", "LSB", "r", (0, 0), 0)         # stream
 dut.add_plot_channel("filt", "CH0 Filtered", "LSB", "b", (0, 1), 0)
 dut.save_plotconfigs_to_json("config.json")                             # and load_plotconfigs_from_json(...)
 ```
+If no layout is defined in code, `start_daq(do_plot=True)` uses the file `plot_config.json` in the project folder (`2_api`). If the file does not exist, it is created from the internal template `_setup_default_plot_layout` in `api/mcu_api.py` (2x2 plots with `data0`, `data1` and `filt`) and applied. Change the file (names, units, colours, positions) to adapt the plot, it is used from the next start on. Delete it to get the default layout again (e.g. after the streams of the firmware changed).
 Names, units and positions of the plot channels are also written into the metadata of the LSL streams and of the recording.
 Mouse control of the plot window (all plots share the time axis):
 - **Left mouse button, drag**: select a time range, all plots zoom into it. The plots are frozen, so the range does not move away.
@@ -132,7 +134,7 @@ For a running device, start the DAQ without own plot (`start_daq(..., do_plot=Fa
 
 `examples/run_twin.py` is the short example without a running DAQ. It needs two helpers of the package `twin`:
 - `LslGenerator(name, sampling_rate, func)` publishes test data as LSL stream, `func` maps the time in seconds to the values.
-- `DeviceLoopback(process, name_in, name_out)` sends the samples of an LSL stream one by one to the device and publishes the returned values as new stream (e.g. `process=DeviceAPI().process_data`, so the data are processed by `run_sequential(in, out)` in `0_firmware/callbacks/rpc_callbacks.c`, template: echo). The device answers only if the function returns `true`. Each sample is one round trip, so the sampling rate is limited (the loopback logs the measured round trip time when it is stopped). Show the returned stream in the plot with `plot(extra_streams=[(name_out, "MCU", "LSB")])`.
+- `DeviceLoopback(process, name_in, name_out, read_results=...)` sends the samples of an LSL stream one by one to the device and publishes the returned values as new stream (e.g. `process=DeviceAPI().process_data`, so the data are processed by `run_sequential(in, out)` in `0_firmware/src/user_logic.c`, template: echo). The device sends the results with the DAQ stream of the processing output and not as response of `process_data()`. With `read_results=DeviceAPI().read_processing_results` the loopback reads this stream from the device, assigns the results in the order of sending to the timestamps of the source and publishes them delayed by one block of the stream (32 samples in the template). It needs the same `DeviceAPI` object for both functions and must not be used while `start_daq` reads the device. Without `read_results` it publishes the return value of `process` (the sample is skipped on None, each sample is one round trip and the loopback logs the measured round trip time when it is stopped). Show the returned stream in the plot with `plot(extra_streams=[(name_out, "MCU", "LSB")])`.
 
 With `USE_MCU = False` the example works without hardware. The hardware models of the example are in `examples/hardware_specific_functions.py` (AD5765, AD7779, OPA1637, ...). Replace them by the models of your own hardware.
 

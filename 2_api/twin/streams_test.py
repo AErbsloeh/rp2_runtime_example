@@ -54,7 +54,7 @@ class FakeInlet:
     def __init__(self, info, **kwargs) -> None:
         self._info = info
 
-    def info(self):
+    def info(self, timeout=0.0):
         return self._info
 
     def pull_chunk(self, max_samples, timeout):
@@ -126,6 +126,30 @@ def test_loopback_returns_results_with_timestamps_and_skips_missing_responses(mo
     assert loopback._outlet.chunks == [[[11], [31]]]
     assert loopback._outlet.timestamps == [[1.0, 3.0]]
     assert loopback._num_no_response == 1
+
+
+def test_loopback_assigns_delayed_results_to_the_timestamps_of_the_source(monkeypatch):
+    monkeypatch.setattr(
+        streams, "resolve_byprop", lambda *args, **kwargs: [FakeInfo("In", "data", 1, 500.0)]
+    )
+    FakeInlet.chunks = [([[10], [20], [30]], [1.0, 2.0, 3.0])]
+    sent = []
+    blocks = [[], [[11], [21]], [], [[31], [99]]]
+
+    def read_results():
+        return blocks.pop(0) if blocks else []
+
+    loopback = DeviceLoopback(
+        lambda value: sent.append(value), "In", name_out="Out", label="MCU", read_results=read_results
+    )
+    loopback.start()
+    _wait_until(lambda: len(loopback._outlet.chunks) >= 2)
+    loopback.stop()
+
+    assert sent == [10, 20, 30]
+    assert loopback._outlet.chunks == [[[11], [21]], [[31]]]
+    assert loopback._outlet.timestamps == [[1.0, 2.0], [3.0]]
+    assert loopback._num_unassigned == 1
 
 
 def test_loopback_raises_if_source_stream_is_missing(monkeypatch):

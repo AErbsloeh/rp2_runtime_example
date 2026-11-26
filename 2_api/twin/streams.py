@@ -1,3 +1,4 @@
+from collections import deque
 from collections.abc import Callable
 from logging import getLogger
 from threading import Event, Thread
@@ -85,7 +86,9 @@ class DeviceLoopback:
     with the timestamps of the source, so the original and the returned data can be compared (e.g. in the plot of the DigitalTwin). Only for streams with one channel
 
     Args:
-        process (Callable): Function with one integer sample as input and the result of the device as output or None for no response, e.g. `DeviceAPI.process_data`. The sample is skipped on None
+        process (Callable): Function with one integer sample as input and the result of the device as output or None for no response. The sample is skipped on None
+        read_results (Callable, optional): Function which returns the results of the device as [samples][channels] (e.g. `DeviceAPI().read_processing_results`), if the device sends them delayed and in blocks
+            and not as return value of `process`. The results are assigned to the source samples in the order of sending, so the device must return exactly one result per sample. Defaults to None
         name_in (str): Name of the LSL stream with the data to send
         name_out (str, optional): Name of the LSL stream with the returned data. Defaults to "DeviceLoopback"
         label (str, optional): Label of the returned channel. Defaults to "device"
@@ -99,8 +102,12 @@ class DeviceLoopback:
         name_out: str = "DeviceLoopback",
         label: str = "device",
         unit: str = "LSB",
+        read_results: Callable[[], list[list[int]]] | None = None,
     ) -> None:
         self._process = process
+        self._read_results = read_results
+        self._pending_timestamps: deque[float] = deque()
+        self._num_unassigned = 0
         self._stop = Event()
         self._thread: Thread | None = None
         self._logger = getLogger(__name__)
@@ -132,13 +139,16 @@ class DeviceLoopback:
             mean_sec = float(np.mean(self._round_trip_sec))
             self._logger.info(
                 f"Device loopback: {len(self._round_trip_sec)} samples, mean round trip {1e3 * mean_sec:.2f} ms "
-                f"(max. sampling rate about {1.0 / mean_sec:.0f} Hz), {self._num_no_response} without response"
+                f"(max. sampling rate about {1.0 / mean_sec:.0f} Hz), {self._num_no_response} without response, "
+                f"{self._num_unassigned} results without source sample, {len(self._pending_timestamps)} samples without result"
             )
 
     def _run(self) -> None:
         while not self._stop.is_set():
-            data, timestamps = self._inlet.pull_chunk(max_samples=16, timeout=0.1)
-            if not data:
+            data, timestamps = self._inlet.pull_chunk(
+                max_samples=16, timeout=0.02 if self._read_results is not None else 0.1
+            )
+            if not data and self._read_results is None:
                 continue
             returned = []
             returned_timestamps = []
@@ -146,10 +156,20 @@ class DeviceLoopback:
                 t_start = monotonic()
                 result = self._process(int(sample[0]))
                 self._round_trip_sec.append(monotonic() - t_start)
+                if self._read_results is not None:
+                    self._pending_timestamps.append(timestamp)
+                    continue
                 if result is None:
                     self._num_no_response += 1
                     continue
                 returned.append([result])
                 returned_timestamps.append(timestamp)
+            if self._read_results is not None:
+                for row in self._read_results():
+                    if not self._pending_timestamps:
+                        self._num_unassigned += 1
+                        continue
+                    returned.append([int(row[0])])
+                    returned_timestamps.append(self._pending_timestamps.popleft())
             if returned:
                 self._outlet.push_chunk(returned, returned_timestamps)

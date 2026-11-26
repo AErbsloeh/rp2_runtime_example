@@ -3,8 +3,10 @@ from pathlib import Path
 from random import randint
 from time import sleep
 
+import numpy as np
 import pytest
 
+from api.definitions import DaqDataType
 from api.mcu_api import DeviceAPI
 from api.src._helper import build_crc16_ccitt, convert_pin_state, convert_system_state
 
@@ -44,7 +46,25 @@ def test_check_echo_value(dut: DeviceAPI):
 @pytest.mark.hardware
 def test_check_process_data_template(dut: DeviceAPI):
     for value in (0, 1, -1, 32768, -8388608, 8388607):
-        assert dut.process_data(value) == value
+        assert dut.process_data(value) is None
+
+
+@pytest.mark.hardware
+def test_get_processing_layout(dut: DeviceAPI):
+    layout = dut.get_processing_layout()
+    assert (layout.in_channels, layout.in_samples, layout.in_bytes_value) == (2, 1, 2)
+    assert (layout.out_channels, layout.out_samples, layout.out_bytes_value) == (1, 1, 2)
+
+
+@pytest.mark.hardware
+def test_apply_data_array_and_process(dut: DeviceAPI):
+    layout = dut.get_processing_layout()
+    block = np.arange(layout.in_channels * layout.in_samples, dtype="<u2").reshape(
+        layout.in_channels, layout.in_samples
+    )
+    dut.apply_data(block)
+    assert dut.process_data() is None
+    assert dut.process_data(block) is None
 
 
 @pytest.mark.hardware
@@ -107,12 +127,11 @@ def test_toggle_led(dut: DeviceAPI):
 
 @pytest.mark.hardware
 @pytest.mark.order(-2)
-def test_run_daq_sample(dut: DeviceAPI, path: Path):
+def test_run_daq_100hz(dut: DeviceAPI, path: Path):
     DeviceAPI().do_reset()
     dut = DeviceAPI()
     assert dut.get_state().system == "IDLE"
 
-    dut._enable_batch_daq(False)
     dut.start_daq(sampling_rate=100.0, folder_name=str(path), do_plot=False)
     sleep(1.0)
     dut.stop_daq()
@@ -120,12 +139,11 @@ def test_run_daq_sample(dut: DeviceAPI, path: Path):
 
 @pytest.mark.hardware
 @pytest.mark.order(-1)
-def test_run_daq_batch(dut: DeviceAPI, path: Path):
+def test_run_daq_500hz(dut: DeviceAPI, path: Path):
     DeviceAPI().do_reset()
     dut = DeviceAPI()
     assert dut.get_state().system == "IDLE"
 
-    dut._enable_batch_daq(True)
     dut.start_daq(sampling_rate=500.0, folder_name=str(path), do_plot=False)
     sleep(1.0)
     assert dut.is_daq_running
@@ -140,10 +158,9 @@ def test_get_number_daq_tasks(dut: DeviceAPI):
 
 @pytest.mark.hardware
 def test_config_daq_sample_100hz(dut: DeviceAPI):
-    dut._enable_batch_daq(False)
     dut._update_daq_sampling_rate(100.0)
 
-    rslt = dut.get_daq_characteristics()
+    rslt = dut.get_daq_characteristics(0)
     assert rslt.num_channels == 2
     assert rslt.num_samples == 1
     assert rslt.bytes_sample == 2
@@ -157,26 +174,27 @@ def test_config_daq_sample_100hz(dut: DeviceAPI):
     assert rslt.dtype_sample == "<u2"
     assert not rslt.is_signed
     assert rslt.has_crc
+    assert rslt.data_type == DaqDataType.SAMPLE
 
 
 @pytest.mark.hardware
 def test_config_daq_batch_10hz(dut: DeviceAPI):
-    dut._enable_batch_daq(True)
     dut._update_daq_sampling_rate(10.0)
 
-    rslt = dut.get_daq_characteristics()
-    assert rslt.num_channels == 2
+    rslt = dut.get_daq_characteristics(1)
+    assert rslt.num_channels == 1
     assert rslt.num_samples == 32
     assert rslt.bytes_sample == 2
     assert rslt.sampling_rate == 10.0
     assert rslt.send_batch
-    assert rslt.num_bytes_total == 149
-    assert rslt.tail_cmd == 255
-    assert rslt.head_cmd == 160
-    assert rslt.data_shape == (2, 32)
+    assert rslt.num_bytes_total == 85
+    assert rslt.tail_cmd == 0xBC
+    assert rslt.head_cmd == 0xFA
+    assert rslt.data_shape == (1, 32)
     assert rslt.dtype_sample == "<u2"
     assert not rslt.is_signed
     assert rslt.has_crc
+    assert rslt.data_type == DaqDataType.SAMPLE
 
 
 @pytest.mark.hardware

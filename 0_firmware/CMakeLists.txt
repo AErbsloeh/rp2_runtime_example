@@ -27,9 +27,9 @@ set(PICO_BOARD pico2 CACHE STRING "Board type")
 option(USE_LOCAL_RUNTIME_LIBRARY "Use local rp2_runtime_library" OFF)
 set(PROGRAM_VERSION "0.1")
 
-# set the transport backend (either usb or wifi)
-set(TRANSPORT_BACKEND "usb" CACHE STRING "Transport backend: usb or wifi")
-set_property(CACHE TRANSPORT_BACKEND PROPERTY STRINGS usb wifi)
+# set the transport backend (either usb, wifi or bt, only one radio backend per firmware)
+set(TRANSPORT_BACKEND "usb" CACHE STRING "Transport backend: usb, wifi or bt (Bluetooth Classic SPP)")
+set_property(CACHE TRANSPORT_BACKEND PROPERTY STRINGS usb wifi bt)
 
 # Pull in Raspberry Pi Pico SDK (must be before project)
 include(pico_sdk_import.cmake)
@@ -44,6 +44,7 @@ add_executable(main
     callbacks/gpio_callbacks.c
     callbacks/rpc_callbacks.c
     src/init_system.c
+    src/user_logic.c
     hardware_io.c
 )
 
@@ -56,6 +57,12 @@ if(TRANSPORT_BACKEND STREQUAL "wifi")
     set(PICO_WIFI_TCP_ENABLED ON CACHE BOOL "Enable Wifi TCP HAL library" FORCE)
 else()
     set(PICO_WIFI_TCP_ENABLED OFF CACHE BOOL "Disable Wifi TCP HAL library" FORCE)
+endif()
+
+if(TRANSPORT_BACKEND STREQUAL "bt")
+    set(PICO_BTSTACK_ENABLED ON CACHE BOOL "Enable Bluetooth SPP HAL library" FORCE)
+else()
+    set(PICO_BTSTACK_ENABLED OFF CACHE BOOL "Disable Bluetooth SPP HAL library" FORCE)
 endif()
 
 if(USE_LOCAL_RUNTIME_LIBRARY)
@@ -78,6 +85,8 @@ if(TRANSPORT_BACKEND STREQUAL "usb")
     target_link_libraries(main hal_transport_usb)
 elseif(TRANSPORT_BACKEND STREQUAL "wifi")
     target_link_libraries(main hal_transport_wifi)
+elseif(TRANSPORT_BACKEND STREQUAL "bt")
+    target_link_libraries(main hal_transport_bt)
 else()
     message(FATAL_ERROR "Unsupported TRANSPORT_BACKEND: ${TRANSPORT_BACKEND}")
 endif()
@@ -91,6 +100,7 @@ pico_enable_stdio_usb(main true)
 target_link_libraries(main
     pico_stdlib
     pico_bootsel_via_double_reset
+    pico_multicore
     hardware_watchdog
     hardware_clocks
     hardware_gpio
@@ -143,11 +153,11 @@ target_link_libraries(main
 get_target_property(LINK_LIBS main LINK_LIBRARIES)
 
 # Define definition and set flags if used (necessary for external file handling)
-if(PICO_BOARD MATCHES "_w" AND NOT (TRANSPORT_BACKEND STREQUAL "wifi"))
+if(PICO_BOARD MATCHES "_w" AND NOT (TRANSPORT_BACKEND STREQUAL "wifi" OR TRANSPORT_BACKEND STREQUAL "bt"))
     target_compile_definitions(main PUBLIC ADD_CYW43_SUPPORT)
 endif()
 
-if("hal_btspp" IN_LIST LINK_LIBS)
+if(TRANSPORT_BACKEND STREQUAL "bt" OR "hal_btspp" IN_LIST LINK_LIBS OR "hal_transport_bt" IN_LIST LINK_LIBS)
     set(PICO_BTSTACK_ENABLED ON CACHE BOOL "Enable Bluetooth SPP HAL library" FORCE)
 else()
     set(PICO_BTSTACK_ENABLED OFF CACHE BOOL "Disable Bluetooth SPP HAL library" FORCE)

@@ -54,7 +54,7 @@ class FakeInlet:
         self._chunks = Queue()
         self.num_pulled = 0
 
-    def info(self) -> FakeInfo:
+    def info(self, timeout: float = 0.0) -> FakeInfo:
         return self._info
 
     def push(self, data: list, timestamps: list) -> None:

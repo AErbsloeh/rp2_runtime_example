@@ -18,7 +18,16 @@ if __name__ == "__main__":
     SAMPLING_RATE = 1000.0
 
     generator = LslGenerator("TestStream", SAMPLING_RATE, dac_codes)
-    mcu = DeviceLoopback(DeviceAPI().process_data, "TestStream", name_out="McuEcho", label="MCU") if USE_MCU else None
+    mcu = None
+    if USE_MCU:
+        device = DeviceAPI()
+        mcu = DeviceLoopback(
+            device.process_data,
+            "TestStream",
+            name_out="McuEcho",
+            label="MCU",
+            read_results=device.read_processing_results,
+        )
     twin = DigitalTwin(
         DigitalTwinConfig(
             pipeline=[

@@ -2,6 +2,8 @@ import binascii
 from dataclasses import dataclass
 from pathlib import Path
 
+from ..definitions import DaqDataType
+
 
 def get_path_to_project(new_folder: str = "", max_levels: int = 5) -> Path:
     """Function for getting the path to find the project folder structure in application.
@@ -38,6 +40,7 @@ class DataAcquisitionConfig:
         num_bytes_total:  Integer with total number of bytes for each transmission
         bytes_sample:     Integer with number of bytes for each sample
         is_signed:        Boolean if data sample is signed or unsigned
+        data_type:        Kind of the data as DaqDataType (SAMPLE, CONT_WINDOW, EVENT_WINDOW, FEATURE, EVENT or CLASS)
     """
 
     send_batch: bool
@@ -49,6 +52,7 @@ class DataAcquisitionConfig:
     num_bytes_total: int
     bytes_sample: int
     is_signed: bool
+    data_type: DaqDataType = DaqDataType.SAMPLE
 
     @property
     def data_shape(self) -> tuple:
@@ -84,6 +88,36 @@ class DataAcquisitionConfig:
     def has_crc(self) -> bool:
         """True when packet contains a 2-byte CRC at the end."""
         return self.crc_bytes == 2
+
+
+@dataclass(frozen=True)
+class ProcessingLayout:
+    """Dataclass with the layout of the data blocks of the embedded processing (`processing_config` of the firmware)
+    Attributes:
+        in_channels:        Integer with number of channels of the input block
+        in_samples:         Integer with number of samples per channel of the input block
+        in_bytes_value:     Integer with number of bytes of one value of the input block
+        out_channels:       Integer with number of channels of the output block
+        out_samples:        Integer with number of samples per channel of the output block
+        out_bytes_value:    Integer with number of bytes of one value of the output block
+    """
+
+    in_channels: int
+    in_samples: int
+    in_bytes_value: int
+    out_channels: int
+    out_samples: int
+    out_bytes_value: int
+
+    @property
+    def in_block_bytes(self) -> int:
+        """Number of bytes of one input block"""
+        return self.in_channels * self.in_samples * self.in_bytes_value
+
+    @property
+    def out_block_bytes(self) -> int:
+        """Number of bytes of one output block"""
+        return self.out_channels * self.out_samples * self.out_bytes_value
 
 
 @dataclass(frozen=True)
