@@ -32,7 +32,7 @@ GitHub Actions check each folder separately and only run if files of this folder
 | Workflow       | Checks                                                                                    | Artifact                 |
 |----------------|-------------------------------------------------------------------------------------------|--------------------------|
 | `firmware.yml` | Build of the firmware for the Pico 2 (USB) with Pico SDK 2.1.1                            | `main.uf2`               |
-| `api.yml`      | Linting and tests of the API (without hardware tests) and build of the Python wheel       | wheel of `2_api`         |
+| `api.yml`      | Linting and tests of the API (without hardware tests) and build of wheel and sdist        | wheel and sdist of `2_api` |
 | `fpga.yml`     | Linting, cocotb simulations and build of the bitstream for the Lattice iCE40 UP5K         | `TOP_MODULE.bin`         |
 
-The artifacts are attached to the workflow run (*Actions*, section *Artifacts*). Publishing a release on GitHub starts the workflows again and attaches the firmware (`firmware-pico2-<tag>.uf2`), the bitstream (`bitstream-up5k-<tag>.bin`) and the wheel to the release. The version in `2_api/pyproject.toml` should match the tag of the release.
+The artifacts are attached to the workflow run (*Actions*, section *Artifacts*). Publishing a release on GitHub starts the workflows again and attaches the firmware (`firmware-pico2-<tag>.uf2`), the bitstream (`bitstream-up5k-<tag>.bin`), the wheel and the sdist (`.tar.gz`, including the examples) to the release. The version of the Python package is taken from the git tag.

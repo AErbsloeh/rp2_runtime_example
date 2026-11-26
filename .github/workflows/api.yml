@@ -42,12 +42,16 @@ jobs:
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run pytest -m 'not (simulation or hardware or fpga)' --reruns 3
-      - run: uv build --wheel
+      - run: uv build
       - uses: actions/upload-artifact@v4
         with:
-          name: api-wheel
-          path: 2_api/dist/*.whl
+          name: api-dist
+          path: |
+            2_api/dist/*.whl
+            2_api/dist/*.tar.gz
       - if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
-          files: 2_api/dist/*.whl
+          files: |
+            2_api/dist/*.whl
+            2_api/dist/*.tar.gz

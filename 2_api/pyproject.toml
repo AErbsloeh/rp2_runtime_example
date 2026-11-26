@@ -60,7 +60,7 @@ exclude_lines = [
 ]
 
 [tool.hatch.build.targets.sdist]
-include = ["api", "twin"]
+include = ["api", "twin", "examples"]
 exclude = ["scripts", "test_data", "data", "docs", "**/*_test.py"]
 
 [tool.hatch.build.targets.wheel]
