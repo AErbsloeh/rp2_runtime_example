@@ -13,8 +13,18 @@ class Commands(IntEnum):
     START_DAQ = 0x08
     STOP_DAQ = 0x09
     SET_PERIOD_DAQ = 0x0A
-    SET_BATCH_DAQ = 0x0B
-    PROCESS_DATA = 0x0C
+    PROCESS_DATA = 0x0B
+    APPLY_DATA = 0x0C
+    GET_CHARAC_PROCESSING = 0x0D
+
+
+class DaqDataType(IntEnum):
+    SAMPLE = 0x00
+    CONT_WINDOW = 0x01
+    EVENT_WINDOW = 0x02
+    FEATURE = 0x03
+    EVENT = 0x04
+    CLASS = 0x05
 
 
 class CommandsFPGA(IntEnum):

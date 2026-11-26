@@ -1,4 +1,5 @@
 #include "src/init_system.h"
+#include "hal/daq/processing.h"
 #include "hal/transport/transport.h"
 #include "hardware/watchdog.h"
 #include "hardware_io.h"
@@ -41,7 +42,7 @@ bool init_gpio_pico(bool block_com){
 
 
 bool init_system(void){
-    #define NUMBER_INIT_DEVICES 2
+    #define NUMBER_INIT_DEVICES 3
     uint8_t num_init_done = 0;
 	
 	// --- Internal ADC
@@ -55,6 +56,11 @@ bool init_system(void){
     }
     if(daq_init_ok)
         num_init_done++;
+
+    // --- Enabling the data processor on core 1
+    if(processing_init(&processing_config))
+        if(processing_start())
+            num_init_done++;
 
     // --- Blocking Routine if init is not completed
     sleep_ms(1);

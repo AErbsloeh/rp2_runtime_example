@@ -18,23 +18,11 @@ typedef enum {
     START_DAQ,
     STOP_DAQ,
     SET_PERIOD_DAQ,
-    SET_BATCH_DAQ,
     PROCESS_DATA,
+    APPLY_DATA,
+    GET_CHARAC_PROCESSING,
     USB_CMD_COUNT   // Just for getting the number of commands, not an actual command
 } usb_cmd_t;
-
-
-
-/*! \brief Number of data bytes of the PROCESS_DATA command (frame = 1 head byte + data bytes, MSB first) */
-#define PROCESS_DATA_NUM_BYTES  3
-
-
-/*! \brief Application-specific processing of the data from the PROCESS_DATA command (template: echo)
-* \param in         Pointer to the received data bytes (PROCESS_DATA_NUM_BYTES, MSB first), do not modify
-* \param out        Pointer to the buffer for the result bytes (PROCESS_DATA_NUM_BYTES, MSB first)
-* \return           True if the result in out is valid and shall be sent back to the host, false for no response
-*/
-bool run_sequential(const uint8_t *in, uint8_t *out);
 
 
 /*! \brief Function for processing the Remote Procedure Calls (RPC) with buffer content from an interface

@@ -663,7 +663,7 @@ class ThreadLSL:
         :return:                None
         """
         inlet = self._establish_lsl_inlet(name_in)
-        info_in = inlet.info()
+        info_in = inlet.info(timeout=10.0)
         sampling_rate = info_in.nominal_srate()
         num_channels = info_in.channel_count()
 
@@ -757,7 +757,7 @@ class ThreadLSL:
         for name in names:
             inlets.append(self._establish_lsl_inlet(name))
         # Extract meta
-        data_format = inlets[0].info().channel_format()
+        data_format = inlets[0].info(timeout=10.0).channel_format()
         time = datetime.today().strftime("%Y%m%d_%H%M%S")
 
         stream_time = list()

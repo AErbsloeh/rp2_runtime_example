@@ -1,4 +1,5 @@
 import json
+from collections.abc import Callable
 from dataclasses import replace
 from logging import Logger, getLogger
 from pathlib import Path
@@ -6,10 +7,11 @@ from time import monotonic, sleep
 
 import numpy as np
 
-from ..definitions import Commands
+from ..definitions import Commands, DaqDataType
 from ._helper import (
     DaqStreamDescription,
     DataAcquisitionConfig,
+    ProcessingLayout,
     SystemState,
     build_crc_excluding_endframe,
     convert_pin_state,
@@ -41,6 +43,7 @@ class BasicAPI:
     _last_idx: dict[int, int]
     _num_package_loss: int = 0
     _num_daq_tasks: int = 0
+    _processing_layout: ProcessingLayout | None = None
     _threads: ThreadLSL
     _plot_config: LivePlotterChannelConfig | None = None
     _pin_names: list[str] = ["LED_USER"]
@@ -93,6 +96,12 @@ class BasicAPI:
         if self.is_com_port_active:
             self._device.close()
         self._device.open()
+        self._stop_stale_daq()
+
+    def _stop_stale_daq(self) -> None:
+        """Stopping a DAQ that still runs from a previous session, otherwise its packets are read as answers of the first commands"""
+        self._write_without_feedback(Commands.STOP_DAQ)
+        self._drain_input_buffer()
 
     def extend_pins_list(self, new_pins: list[str]) -> None:
         for pin in new_pins:
@@ -252,15 +261,6 @@ class BasicAPI:
             )
         self._write_without_feedback(Commands.SET_PERIOD_DAQ, int(sampling_rate))
 
-    def _enable_batch_daq(self, process_mode: int = 0) -> None:
-        """Enabling or disabling the batch transmission mode of the DAQ
-        :param process_mode:    Integer for selecting the processing mode (0: sample, 1: batch, 2: ping-pong batch)
-        :return:                None
-        """
-        if process_mode not in range(0, 3):
-            raise ValueError("Not the right mode")
-        self._write_without_feedback(Commands.SET_BATCH_DAQ, data=process_mode)
-
     def _check_package_loss(self, head_cmd: int, new_idx: int) -> None:
         """Checking the (8-bit, wrapping) packet index of one stream for missing packets"""
         last_idx = self._last_idx.get(head_cmd)
@@ -298,6 +298,7 @@ class BasicAPI:
                 ("num_samples", "<u2"),
                 ("num_bytes", "<u2"),
                 ("bytes_sample", "u1"),
+                ("data_type", "u1"),
                 ("period", "<u8"),
             ]
         )
@@ -309,7 +310,7 @@ class BasicAPI:
         """
         if sel_daq_tasks not in range(self._num_daq_tasks):
             raise ValueError(f"Integer with selected DAQ task is out-of-range [0, {self._num_daq_tasks})")
-        ret = self._write_with_feedback(Commands.GET_CHARAC_DAQ, data=sel_daq_tasks, size=20)
+        ret = self._write_with_feedback(Commands.GET_CHARAC_DAQ, data=sel_daq_tasks, size=21)
         frame = np.frombuffer(ret, dtype=self._package_daq_config)[0]
         return DataAcquisitionConfig(
             head_cmd=int(frame["head"]),
@@ -321,22 +322,69 @@ class BasicAPI:
             bytes_sample=int(frame["bytes_sample"]),
             sampling_rate=float(1e6 / frame["period"]),
             is_signed=bool(frame["signed"]),
+            data_type=DaqDataType(int(frame["data_type"])),
         )
+
+    @property
+    def _package_processing_layout(self) -> np.dtype:
+        return np.dtype(
+            [
+                ("in_channels", "<u2"),
+                ("in_samples", "<u2"),
+                ("in_bytes_value", "u1"),
+                ("out_channels", "<u2"),
+                ("out_samples", "<u2"),
+                ("out_bytes_value", "u1"),
+            ]
+        )
+
+    def get_processing_layout(self) -> ProcessingLayout:
+        """Get the layout of the input and output block of the embedded processing (fixed by the firmware, read once)
+        :return:    Class ProcessingLayout with channels, samples and bytes per value of both blocks
+        """
+        if self._processing_layout is None:
+            ret = self._write_with_feedback(Commands.GET_CHARAC_PROCESSING, size=11)
+            frame = np.frombuffer(ret, dtype=self._package_processing_layout)[0]
+            self._processing_layout = ProcessingLayout(
+                in_channels=int(frame["in_channels"]),
+                in_samples=int(frame["in_samples"]),
+                in_bytes_value=int(frame["in_bytes_value"]),
+                out_channels=int(frame["out_channels"]),
+                out_samples=int(frame["out_samples"]),
+                out_bytes_value=int(frame["out_bytes_value"]),
+            )
+        return self._processing_layout
 
     @staticmethod
     def _build_package_dtype(config: DataAcquisitionConfig) -> np.dtype:
         """Building the numpy datatype of one DAQ packet (sample or batch mode)"""
         num_values = config.num_channels * config.num_samples
+        data_field = (
+            ("data", "u1", (num_values, 3))
+            if config.bytes_sample == 3
+            else ("data", config.dtype_sample, (num_values,))
+        )
         return np.dtype(
             [
                 ("head", "u1"),
                 ("index", "u1"),
                 ("timestamp", "<u8", (2,) if config.send_batch else (1,)),
-                ("data", config.dtype_sample, (num_values,)),
+                data_field,
                 ("crc", "<u2", (1,) if config.has_crc else (0,)),
                 ("tail", "u1"),
             ]
         )
+
+    @staticmethod
+    def _decode_data(config: DataAcquisitionConfig, raw: np.ndarray) -> np.ndarray:
+        """Decoding the data values of a DAQ packet (24 bit values are sent as three bytes, little endian)"""
+        if config.bytes_sample != 3:
+            return raw
+        bytes_value = raw.astype(np.int32)
+        values = bytes_value[..., 0] | (bytes_value[..., 1] << 8) | (bytes_value[..., 2] << 16)
+        if config.is_signed:
+            values = np.where(values & 0x800000, values - 0x1000000, values)
+        return values
 
     def _register_daq_streams(self, configs: list[DataAcquisitionConfig]) -> None:
         """Registering all DAQ streams, which can be received on the device interface (identified by head byte)"""
@@ -415,14 +463,15 @@ class BasicAPI:
             frame = np.frombuffer(packet, dtype=self._daq_dtypes[config.head_cmd])[0]
             self._check_package_loss(config.head_cmd, int(frame["index"]))
 
+            values = self._decode_data(config, frame["data"])
             if config.send_batch:
-                data = frame["data"].reshape(config.num_samples, config.num_channels).tolist()
+                data = values.reshape(config.num_samples, config.num_channels).tolist()
                 t_first, t_last = (int(val) for val in frame["timestamp"])
                 dt = (t_last - t_first) / max(config.num_samples - 1, 1)
                 timestamps = [1e-6 * (t_first + dt * idx) for idx in range(config.num_samples)]
                 return config.head_cmd, data, timestamps
             else:
-                return config.head_cmd, frame["data"].tolist(), 1e-6 * float(frame["timestamp"][0])
+                return config.head_cmd, values.tolist(), 1e-6 * float(frame["timestamp"][0])
         except Exception as e:
             self._logger.debug(f"Failed to read DAQ packet: {e}")
             return None, [], None
@@ -482,7 +531,19 @@ class BasicAPI:
             stream_names = ["data0"] + [f"data{idx}" for idx in range(1, num_daq_tasks)]
         if len(stream_names) != num_daq_tasks or len(set(stream_names)) != num_daq_tasks:
             raise ValueError(f"stream_names needs {num_daq_tasks} unique names, got {stream_names}")
-        streams = [
+        streams = self._build_streams(stream_names, daq_configs)
+        self._logger.debug(f"DAQ streams: {streams}")
+        return daq_configs, streams
+
+    def _build_streams(
+        self, stream_names: list[str], configs: list[DataAcquisitionConfig]
+    ) -> list[DaqStreamDescription]:
+        """Building the descriptions of the LSL streams, labels, units and layout of the channels defined in the plot configuration override the defaults
+        :param stream_names:    List with the LSL name of each DAQ stream
+        :param configs:         List with the configuration of each DAQ stream
+        :return:                List with the description of each stream
+        """
+        return [
             replace(
                 stream,
                 **dict(
@@ -497,10 +558,24 @@ class BasicAPI:
                     )
                 ),
             )
-            for stream in self._build_stream_descriptions(stream_names, daq_configs)
+            for stream in self._build_stream_descriptions(stream_names, configs)
         ]
-        self._logger.debug(f"DAQ streams: {streams}")
-        return daq_configs, streams
+
+    def _ensure_plot_config(self, path: Path, create_default: Callable[[], None]) -> bool:
+        """Making sure that a plot layout is defined: if none is set in code, the layout is loaded from the JSON file.
+        If the file does not exist, the default layout is defined with `create_default` and saved to it first
+        :param path:            Path to the JSON file with the plot layout (relative paths start in the project folder, the one with pyproject.toml)
+        :param create_default:  Function that defines the default layout (`setup_live_plotter`, `add_plot_channel`)
+        :return:                True if the layout was loaded from the file (and so the metadata of the streams has to be built again)
+        """
+        if self._plot_config is not None and self._plot_config.channel_configs:
+            return False
+        if not Path(get_path_to_project(), path).exists():
+            create_default()
+            self.save_plotconfigs_to_json(path)
+            self._logger.info(f"No plot layout found, created default layout: {path}")
+        self.load_plotconfigs_from_json(path)
+        return True
 
     @property
     def is_daq_running(self) -> bool:
@@ -628,6 +703,7 @@ class BasicAPI:
         :return:                Dictionary containing the saved plot configurations
         """
         path = Path(get_path_to_project(), file_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
 
         with open(path, "w", encoding="utf-8") as json_file:
             json.dump(
