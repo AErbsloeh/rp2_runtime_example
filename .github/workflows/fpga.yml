@@ -73,8 +73,14 @@ jobs:
         run: |
           echo "::error::The device ${{ steps.target.outputs.device }} of the Makefile cannot be built in the workflow yet"
           exit 1
-      - name: Copy the design of the device
-        run: uv run python -c "from elasticai.fpga_testing import copy_design; copy_design.copy_design_env6mini_files()"
+      - name: Use the own design or copy the default design of the device
+        run: |
+          if find designs -name "*.v" 2>/dev/null | grep -q .; then
+            echo "Using the own design of 1_fpga/designs"
+          else
+            echo "No design in 1_fpga/designs, copying the default design (elasticAI.env6-mini)"
+            uv run python -c "from elasticai.fpga_testing import copy_design; copy_design.copy_design_env6mini_files()"
+          fi
       - run: make bitstream
       - uses: actions/upload-artifact@v4
         with:

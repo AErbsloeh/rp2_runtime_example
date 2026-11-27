@@ -20,6 +20,11 @@ copy_design.copy_design_env5_files()      # design files for elasticAI.ENv5 (def
 ```
 Other targets are `copy_design_arty7_files` and `copy_design_env6mini_files` (the design of the GitHub workflow). The functions also copy the cocotb testbenches of the board (`cocotb_funcs.py`, `*_echo_bench.py`, `*_led_bench.py` and the runner `<board>_test.py`) into the folder `tests`. `copy_design.copy_skeleton(...)` copies skeleton modules (dnn, filter, rom, ram, math_mult, math_mac) for own designs. The frame of the SPI middleware in the design has to match `FlashFPGA._num_spi_middleware` (command, address, data = 2, 6, 16 bit).
 
+## Bitstream in the GitHub Workflow
+The workflow `fpga.yml` builds the bitstream for the `DEVICE` of the `Makefile` (the Makefile is created from the template if it is not part of the repository, default: Lattice iCE40 UP5K).
+- If the folder `designs` contains Verilog files (`*.v`), the workflow builds exactly this design. It needs the top module `TOP_MODULE` and the constraint file (`io.pcf`).
+- If the folder `designs` is empty, the workflow copies the default design of the elasticAI.env6-mini (`copy_design_env6mini_files()`) and builds it.
+
 ## Simulation with cocotb and pytest
 Verilog modules are simulated with [cocotb](https://www.cocotb.org/) and Icarus Verilog (`iverilog`, part of the devenv; otherwise install it or use the OSS CAD suite). The simulations are run by pytest through the fixture `cocotb_test_fixture` of `elasticai.creator`, which `conftest.py` enables via `pytest_plugins`.
 ```bash
