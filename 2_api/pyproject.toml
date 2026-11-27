@@ -26,9 +26,6 @@ dev = [
   "tombi>=1.1.1",
   "ty>=0.0.38",
 ]
-fpga = [
-  "elasticai-hw-measurements",
-]
 lint = [
   "ruff>=0.15.14",
   "tombi>=1.1.1",
@@ -64,7 +61,7 @@ include = ["api", "twin", "examples"]
 exclude = ["scripts", "test_data", "data", "docs", "**/*_test.py"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["api", "twin"]
+packages = ["api", "twin", "examples"]
 exclude = ["scripts", "test_data", "data", "docs", "**/*_test.py"]
 only-packages = true
 
