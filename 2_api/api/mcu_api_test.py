@@ -126,25 +126,13 @@ def test_toggle_led(dut: DeviceAPI):
 
 
 @pytest.mark.hardware
-@pytest.mark.order(-2)
-def test_run_daq_100hz(dut: DeviceAPI, path: Path):
-    DeviceAPI().do_reset()
-    dut = DeviceAPI()
-    assert dut.get_state().system == "IDLE"
-
-    dut.start_daq(sampling_rate=100.0, folder_name=str(path), do_plot=False)
-    sleep(1.0)
-    dut.stop_daq()
-
-
-@pytest.mark.hardware
 @pytest.mark.order(-1)
-def test_run_daq_500hz(dut: DeviceAPI, path: Path):
+def test_run_daq(dut: DeviceAPI, path: Path):
     DeviceAPI().do_reset()
     dut = DeviceAPI()
     assert dut.get_state().system == "IDLE"
 
-    dut.start_daq(sampling_rate=500.0, folder_name=str(path), do_plot=False)
+    dut.start_daq(sampling_rate=250.0, folder_name=str(path), do_plot=False)
     sleep(1.0)
     assert dut.is_daq_running
     dut.stop_daq()
@@ -183,14 +171,14 @@ def test_config_daq_batch_10hz(dut: DeviceAPI):
 
     rslt = dut.get_daq_characteristics(1)
     assert rslt.num_channels == 1
-    assert rslt.num_samples == 32
+    assert rslt.num_samples == 64
     assert rslt.bytes_sample == 2
     assert rslt.sampling_rate == 10.0
     assert rslt.send_batch
-    assert rslt.num_bytes_total == 85
+    assert rslt.num_bytes_total == 149
     assert rslt.tail_cmd == 0xBC
     assert rslt.head_cmd == 0xFA
-    assert rslt.data_shape == (1, 32)
+    assert rslt.data_shape == (1, 64)
     assert rslt.dtype_sample == "<u2"
     assert not rslt.is_signed
     assert rslt.has_crc

@@ -26,6 +26,48 @@ system_state_t system_state = STATE_ERROR;
     .init_done = false
 };*/
 
+// --- FPGA flash and FPGA logic on one shared SPI bus (values of the elasticAI.env5, please adapt pins to your board)
+/*spi_rp2_t spi_fpga = {
+    .pin_mosi = 3,
+    .pin_sclk = 2,
+    .pin_miso = 0,
+    .spi_mod = spi0,
+    .fspi_khz = 48000,
+    .mode = 0,
+    .msb_first = true,
+    .init_done = false
+};
+
+fpga_flash_t flash_env5 = {
+    .spi = &spi_fpga,
+    .gpio_csn = 1,
+    .gpio_progb = 12,
+    .gpio_initb = 255,
+    .use_initb = false,
+    .gpio_done = 255,
+    .use_done = false,
+    .use_32bit = false,
+    .page_size = 256,
+    .block_size = 4096 * 8
+};
+
+fpga_logic_t fpga_env5 = {
+    .spi = &spi_fpga,
+    .number_bytes = 3,
+    .gpio_csn = 5,
+    .gpio_rstn = 6,
+    .gpio_rdy = 7,
+    .init_done = false
+};
+
+fpga_spi_shared_t fpga_bus = {
+    .flash = &flash_env5,
+    .logic = &fpga_env5,
+    .fspi_khz_flash = 48000,
+    .fspi_khz_logic = 1000,
+    .attached = false
+};*/
+
 
 // =============== PICO/SYSTEM DEFINITION ==================
 // --- Internal Temp Sensor

@@ -1,0 +1,58 @@
+{
+    "plot_title": [
+        [
+            "plot1",
+            "plot2"
+        ],
+        [
+            null,
+            "plot3"
+        ]
+    ],
+    "channel_configs": [
+        {
+            "lsl_stream_name": "data0",
+            "channel_name": "CH0 Raw",
+            "channel_unit": "LSB",
+            "curve_color": "r",
+            "position": [
+                0,
+                0
+            ],
+            "stream_channel_idx": 0
+        },
+        {
+            "lsl_stream_name": "data0",
+            "channel_name": "CH0 Temp",
+            "channel_unit": "LSB",
+            "curve_color": "b",
+            "position": [
+                1,
+                1
+            ],
+            "stream_channel_idx": 1
+        },
+        {
+            "lsl_stream_name": "data1",
+            "channel_name": "CH1 Raw",
+            "channel_unit": "LSB",
+            "curve_color": "g",
+            "position": [
+                0,
+                1
+            ],
+            "stream_channel_idx": 0
+        },
+        {
+            "lsl_stream_name": "filt",
+            "channel_name": "CH0 Filtered",
+            "channel_unit": "LSB",
+            "curve_color": "g",
+            "position": [
+                0,
+                0
+            ],
+            "stream_channel_idx": 0
+        }
+    ]
+}

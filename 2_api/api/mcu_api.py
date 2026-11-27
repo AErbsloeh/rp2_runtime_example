@@ -9,7 +9,6 @@ from .src._helper import (
     get_path_to_project,
 )
 
-
 DEFAULT_PLOT_CONFIG = Path("plot_config.json")
 
 
@@ -114,7 +113,9 @@ class DeviceAPI(BasicAPI):
         stream_names = [stream.name for stream in streams]
         self.__daq_config = daq_configs[0]
         if do_plot:
-            if self._ensure_plot_config(DEFAULT_PLOT_CONFIG, lambda: self._setup_default_plot_layout(do_process)):
+            if self._ensure_plot_config(
+                DEFAULT_PLOT_CONFIG, lambda: self._setup_default_plot_layout(do_process)
+            ):
                 streams = self._build_streams(stream_names, daq_configs)
         default_filt = self._build_stream_descriptions(["filt"], daq_configs[:1])[0]
         filt_labels, filt_units, filt_layout = self._get_stream_metadata(
@@ -187,6 +188,12 @@ class DeviceAPI(BasicAPI):
 
         self._device.timeout = 2 / min(config.sampling_rate for config in daq_configs)
         self._threads.start()
+        if do_record:
+            try:
+                self._threads.wait_until_recording()
+            except Exception:
+                self._threads.stop()
+                raise
         self._write_without_feedback(Commands.START_DAQ)
 
         if do_plot:

@@ -26,12 +26,16 @@ class FakeThreads:
         self.registered = []
         self.started = False
         self.plotted = None
+        self.waited_for_recording = False
 
     def register(self, func, args, kwargs=None) -> None:
         self.registered.append((func.__name__, args, kwargs or {}))
 
     def start(self) -> None:
         self.started = True
+
+    def wait_until_recording(self) -> None:
+        self.waited_for_recording = True
 
     def lsl_stream_util(self) -> None:
         pass
@@ -152,6 +156,42 @@ def test_start_daq_can_publish_raw_lsl_without_internal_recording_or_processing(
     assert threads.registered[0][1][0] == 0
     assert [stream.name for stream in threads.registered[0][1][1]] == ["data0"]
     assert threads.registered[0][2]["require_consumers"] is False
+
+
+def test_start_daq_sends_the_start_command_after_the_recording_is_connected():
+    dut, threads, _, calls = _make_device_api()
+    order = []
+    threads.wait_until_recording = lambda: order.append("recording")
+    dut._write_without_feedback = lambda head, data=0: order.append(head)
+
+    dut.start_daq(sampling_rate=500.0, do_plot=False, do_record=True, do_process=False)
+
+    assert order == ["recording", Commands.START_DAQ]
+
+
+def test_start_daq_does_not_wait_for_the_recording_without_it():
+    dut, threads, _, _ = _make_device_api()
+
+    dut.start_daq(sampling_rate=500.0, do_plot=False, do_record=False, do_process=False)
+
+    assert threads.waited_for_recording is False
+
+
+def test_start_daq_stops_the_threads_if_the_recording_does_not_connect():
+    dut, threads, _, calls = _make_device_api()
+    stopped = []
+    threads.stop = lambda: stopped.append(True)
+
+    def fail():
+        raise TimeoutError("no recording")
+
+    threads.wait_until_recording = fail
+
+    with pytest.raises(TimeoutError):
+        dut.start_daq(sampling_rate=500.0, do_plot=False, do_record=True, do_process=False)
+
+    assert stopped == [True]
+    assert ("write", Commands.START_DAQ, 0) not in calls
 
 
 def test_start_daq_without_plot_definition_uses_default_stream_metadata():
@@ -420,7 +460,11 @@ def test_start_daq_applies_existing_plot_layout_file(tmp_path, monkeypatch):
     dut.start_daq(sampling_rate=500.0, do_plot=True, do_record=False, do_process=False)
 
     plot_config, _ = threads.plotted
-    assert [ch.channel_name for ch in plot_config.channel_configs] == ["CH0 Raw", "Temperature", "CH1 Raw"]
+    assert [ch.channel_name for ch in plot_config.channel_configs] == [
+        "CH0 Raw",
+        "Temperature",
+        "CH1 Raw",
+    ]
     assert threads.registered[0][1][1][0].channel_labels == ["CH0 Raw", "Temperature"]
 
 
