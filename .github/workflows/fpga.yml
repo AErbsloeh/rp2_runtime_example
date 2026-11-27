@@ -3,8 +3,9 @@ name: fpga
 on:
   release:
     types: [published]
+  workflow_dispatch:
   push:
-    branches: [main]
+    branches: ["**"]
     paths:
       - "1_fpga/**"
       - ".github/workflows/fpga.yml"
@@ -18,7 +19,8 @@ defaults:
     working-directory: 1_fpga
 
 jobs:
-  simulation:
+  cocotb:
+    if: github.event_name != 'release'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -31,7 +33,13 @@ jobs:
       - run: uv sync --frozen
       - run: uv run ruff check .
       - run: uv run ruff format --check .
-      - run: uv run pytest -m simulation
+      - run: uv run pytest -m "not hardware"
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cocotb-waveforms
+          path: 1_fpga/build_test
+          if-no-files-found: ignore
 
   bitstream:
     runs-on: ubuntu-latest
@@ -39,43 +47,47 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update && sudo apt-get install -y yosys nextpnr-ice40 fpga-icestorm
-        working-directory: .
       - uses: astral-sh/setup-uv@v6
         with:
           python-version: "3.13"
           enable-cache: true
           cache-dependency-glob: 1_fpga/uv.lock
       - run: uv sync --frozen
-      - name: Generate scripts and design from the template
+      - name: Generate the folder structure and the build scripts
         run: |
-          uv run python - <<'PY'
-          from pathlib import Path
-          from shutil import copyfile
-
-          import elasticai.fpga_testing as fpga_testing
-          from elasticai.fpga_testing import copy_design, init_project_folder
-
-          init_project_folder()
-          copy_design.copy_design_env6mini_files()
-          template = Path(fpga_testing.__file__).parent / "template" / "oss_cad"
-          for file in template.glob("*.mk"):
-              copyfile(file, Path("scripts") / file.name)
-          PY
-          cp ci/test_dut.v designs/test_dut.v
+          uv run python -c "from elasticai.fpga_testing import copy_oss_cad_scripts, init_project_folder; init_project_folder(); copy_oss_cad_scripts()"
+      - name: Read the target from the Makefile
+        id: target
+        run: |
+          device=$(make -s print-device)
+          echo "device=$device" >> "$GITHUB_OUTPUT"
+          echo "name=${device,,}" >> "$GITHUB_OUTPUT"
+          echo "top=$(make -s print-top)" >> "$GITHUB_OUTPUT"
+          echo "bitext=$(make -s print-bitext)" >> "$GITHUB_OUTPUT"
+      - name: Install the tools of the device
+        if: steps.target.outputs.device == 'UP5K'
+        run: sudo apt-get update && sudo apt-get install -y yosys nextpnr-ice40 fpga-icestorm
+        working-directory: .
+      - name: Check the device
+        if: steps.target.outputs.device != 'UP5K'
+        run: |
+          echo "::error::The device ${{ steps.target.outputs.device }} of the Makefile cannot be built in the workflow yet"
+          exit 1
+      - name: Copy the design of the device
+        run: uv run python -c "from elasticai.fpga_testing import copy_design; copy_design.copy_design_env6mini_files()"
       - run: make bitstream
       - uses: actions/upload-artifact@v4
         with:
-          name: bitstream-up5k
+          name: bitstream-${{ steps.target.outputs.name }}
           path: |
-            1_fpga/build/TOP_MODULE.bin
-            1_fpga/build/TOP_MODULE_util_impl.rpt
-            1_fpga/build/TOP_MODULE_timing.rpt
+            1_fpga/build/${{ steps.target.outputs.top }}.${{ steps.target.outputs.bitext }}
+            1_fpga/build/${{ steps.target.outputs.top }}_util_impl.rpt
+            1_fpga/build/${{ steps.target.outputs.top }}_timing.rpt
       - if: github.event_name == 'release'
         env:
           TAG: ${{ github.event.release.tag_name }}
-        run: cp build/TOP_MODULE.bin "build/bitstream-up5k-${TAG}.bin"
+        run: cp build/${{ steps.target.outputs.top }}.${{ steps.target.outputs.bitext }} "build/bitstream-${{ steps.target.outputs.name }}-${TAG}.${{ steps.target.outputs.bitext }}"
       - if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
-          files: 1_fpga/build/bitstream-up5k-${{ github.event.release.tag_name }}.bin
+          files: 1_fpga/build/bitstream-${{ steps.target.outputs.name }}-${{ github.event.release.tag_name }}.${{ steps.target.outputs.bitext }}

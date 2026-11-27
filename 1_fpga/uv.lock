@@ -383,8 +383,8 @@ dependencies = [
 
 [[package]]
 name = "elasticai-hw-measurements"
-version = "0.5.2.dev16+g990395d5a"
-source = { git = "https://github.com/es-ude/elastic-ai.hw-measurements.git?branch=main#990395d5a38f278a8788811a66ffa3709bbfffb6" }
+version = "0.6.1"
+source = { git = "https://github.com/es-ude/elastic-ai.hw-measurements.git?branch=main#c80130fdf2e3e0f768b03697815e76cf5b8190a0" }
 dependencies = [
     { name = "elasticai-creator" },
     { name = "h5py" },
