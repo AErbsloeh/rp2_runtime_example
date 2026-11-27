@@ -57,6 +57,9 @@ class FakeInlet:
     def info(self, timeout: float = 0.0) -> FakeInfo:
         return self._info
 
+    def open_stream(self, timeout: float = 0.0) -> None:
+        pass
+
     def push(self, data: list, timestamps: list) -> None:
         self._chunks.put((data, timestamps))
 
@@ -223,3 +226,63 @@ def test_plot_raises_if_source_stream_is_missing(tmp_path, monkeypatch):
 
     with pytest.raises(ValueError):
         twin.plot()
+
+
+def test_plot_adds_error_streams_below_the_twin(tmp_path, monkeypatch):
+    twin = _make_twin(tmp_path)
+    monkeypatch.setattr("twin.digital_twin.resolve_bypred", lambda **kwargs: [FakeInfo(1, 1000.0)])
+    plot = MagicMock()
+    monkeypatch.setattr(ThreadLSL, "lsl_plot_stream", plot)
+
+    twin.plot(extra_streams=[("McuEcho", "MCU", "LSB")], error_streams=[("McuError", "Error", "LSB")])
+
+    config = plot.call_args.kwargs["plot_config"]
+    assert [(ch.lsl_stream_name, ch.position) for ch in config.channel_configs] == [
+        ("Source", (0, 0)),
+        ("McuEcho", (1, 0)),
+        (TWIN_OUTPUT_STREAM, (2, 0)),
+        ("McuError", (3, 0)),
+    ]
+
+
+def test_process_applies_the_pipeline_offline_in_chunks(tmp_path):
+    chunk_sizes = []
+
+    def record_size(signal: np.ndarray) -> np.ndarray[np.float32]:
+        chunk_sizes.append(len(signal))
+        return (2 * signal).astype(np.float32)
+
+    twin = DigitalTwin(
+        DigitalTwinConfig(
+            pipeline=[record_size], lsl_layer_name_datasource="Source", save_h5=False, num_samples=4
+        )
+    )
+
+    result = twin.process(np.arange(10))
+
+    assert chunk_sizes == [4, 4, 2]
+    assert result.shape == (10, 1)
+    assert result.dtype == np.float32
+    assert np.array_equal(result[:, 0], 2 * np.arange(10))
+
+
+def test_process_keeps_channels_and_rejects_empty_data(tmp_path):
+    twin = _make_twin(tmp_path)
+
+    assert twin.process(np.ones((5, 2))).shape == (5, 2)
+    with pytest.raises(ValueError):
+        twin.process(np.array([]))
+
+
+def test_plot_gives_the_title_info_to_the_live_plot(tmp_path, monkeypatch):
+    twin = _make_twin(tmp_path)
+    monkeypatch.setattr("twin.digital_twin.resolve_bypred", lambda **kwargs: [FakeInfo(1, 1000.0)])
+    plot = MagicMock()
+    monkeypatch.setattr(ThreadLSL, "lsl_plot_stream", plot)
+
+    def info() -> str:
+        return "MAE: 1.00"
+
+    twin.plot(title_info=info)
+
+    assert plot.call_args.kwargs["title_info"] is info

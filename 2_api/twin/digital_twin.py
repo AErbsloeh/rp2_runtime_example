@@ -109,20 +109,49 @@ class DigitalTwin:
         """
         self._threads.wait_for_seconds(time_sec)
 
+    def process(self, data: np.ndarray) -> np.ndarray:
+        """Processing a whole array with the pipeline without LSL (offline), chunk by chunk with `num_samples` like the running twin does.
+        The functions of the pipeline keep their state (e.g. filters), so call it once per run or create a new twin
+
+        Args:
+            data (np.ndarray): Samples as [samples] (one channel) or [samples, channels]
+
+        Raises:
+            ValueError: If the array has no samples
+
+        Returns:
+            np.ndarray: Processed samples as [samples, channels] with the output data type of the pipeline
+        """
+        values = np.asarray(data)
+        if values.ndim == 1:
+            values = values.reshape(-1, 1)
+        if len(values) == 0:
+            raise ValueError("No samples to process")
+        size = self._config.num_samples
+        chunks = [
+            np.asarray(self._process_chunk(values[start : start + size].tolist()))
+            for start in range(0, len(values), size)
+        ]
+        return np.concatenate(chunks).astype(self._output_dtype)
+
     def plot(
         self,
         window_sec: float = 10.0,
         source_unit: str = "LSB",
         twin_unit: str = "LSB",
         extra_streams: list[tuple[str, str, str]] | None = None,
+        error_streams: list[tuple[str, str, str]] | None = None,
+        title_info: Callable[[], str] | None = None,
     ) -> None:
-        """Open the live plot with the source stream in the first row and the processed stream in the last row (one column per channel). This call blocks until the plot window is closed
+        """Open the live plot with the source stream in the first row and the processed stream after the extra streams and the error streams in the last rows (one column per channel). This call blocks until the plot window is closed
 
         Args:
             window_sec (float, optional): Window length in seconds. Defaults to 10.0
             source_unit (str, optional): Unit of the source data. Defaults to "LSB"
             twin_unit (str, optional): Unit of the processed data. Defaults to "LSB"
             extra_streams (list, optional): Further LSL streams with the same channels (e.g. data returned from the device) as rows between source and twin, each entry is (LSL stream name, label of the row, unit). Defaults to None
+            title_info (Callable, optional): Function with a text for the title of the window next to the runtime (e.g. the running MAE of the `ErrorMonitor`). Defaults to None
+            error_streams (list, optional): Further LSL streams with the same channels (e.g. the error between device and twin from the `ErrorMonitor`) as rows below the twin, each entry is (LSL stream name, label of the row, unit). Defaults to None
         """
         streams = resolve_bypred(predicate=f"name='{self.source_stream_name}'", minimum=1, timeout=10.0)
         if not streams:
@@ -132,10 +161,13 @@ class DigitalTwin:
                 (self.source_stream_name, "Input", source_unit),
                 *(extra_streams or []),
                 (self.output_stream_name, "Twin", twin_unit),
+                *(error_streams or []),
             ],
             num_channels=streams[0].channel_count(),
         )
-        self._threads.lsl_plot_stream(plot_config=plot_config, window_length=window_sec)
+        self._threads.lsl_plot_stream(
+            plot_config=plot_config, window_length=window_sec, title_info=title_info
+        )
 
     def stop(self) -> None:
         """Stop the digital twin by signaling the threads to terminate and waiting for them to finish"""

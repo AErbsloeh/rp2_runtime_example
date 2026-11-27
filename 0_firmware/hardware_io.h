@@ -28,6 +28,16 @@ extern system_state_t system_state;
 // ==================== SPI DEFINITION =====================
 //extern spi_rp2_t spi_mod;
 
+// --- FPGA flash and FPGA logic on one shared SPI bus
+// Needs peri_fpga_flash / peri_fpga_logic in CMakeLists.txt, the definitions are in hardware_io.c
+//#include "peri/fpga/flash.h"
+//#include "peri/fpga/logic.h"
+//#include "peri/fpga/fpga_spi_shared.h"
+//extern spi_rp2_t spi_fpga;            //!< SPI bus on the configuration pins of the FPGA (flash programming and logic access)
+//extern fpga_flash_t flash_env5;       //!< FPGA flash: programming of the bitstream (FPGA in reset)
+//extern fpga_logic_t fpga_env5;        //!< FPGA logic: SPI middleware for the data exchange (FPGA configured, flash deselected)
+//extern fpga_spi_shared_t fpga_bus;    //!< Shared bus: attaches the pins to the logic and releases them for the flash
+
 
 // ================ PICO/SYSTEM DEFINITION =================
 // --- Internal Temp Sensor

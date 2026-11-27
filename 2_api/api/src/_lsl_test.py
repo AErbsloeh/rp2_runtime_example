@@ -295,9 +295,10 @@ def test_plot_stream_keeps_plotter_alive_while_event_loop_is_running(monkeypatch
     state = {}
 
     class FakePlotter:
-        def __init__(self, config, window_width_sec):
+        def __init__(self, config, window_width_sec, title_info=None):
             state["config"] = config
             state["window"] = window_width_sec
+            state["title_info"] = title_info
 
     class FakeApp:
         def exec(self):
@@ -309,8 +310,25 @@ def test_plot_stream_keeps_plotter_alive_while_event_loop_is_running(monkeypatch
 
     dut.lsl_plot_stream("config", window_length=4.0)
 
-    assert state == {"config": "config", "window": 4.0, "alive": True}
+    assert state == {"config": "config", "window": 4.0, "title_info": None, "alive": True}
     assert dut._plotter is None
+
+
+def test_wait_until_recording_returns_when_the_recording_is_ready_and_raises_on_timeout():
+    dut = ThreadLSL()
+    with pytest.raises(TimeoutError):
+        dut.wait_until_recording(timeout=0.1)
+
+    dut._recording_ready.set()
+    dut.wait_until_recording(timeout=0.1)
+
+
+def test_wait_until_recording_raises_the_error_of_a_thread():
+    dut = ThreadLSL()
+    dut._exception.put(ValueError("stream missing"))
+
+    with pytest.raises(ValueError):
+        dut.wait_until_recording(timeout=1.0)
 
 
 @pytest.mark.parametrize(

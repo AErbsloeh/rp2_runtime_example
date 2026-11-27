@@ -200,6 +200,23 @@ def test_mouse_changes_only_the_time_axis(app, monkeypatch):
     assert dut.plots["CH0"].getViewBox().state["mouseEnabled"] == [True, False]
 
 
+def test_title_shows_runtime_and_the_info_of_the_caller(app, monkeypatch):
+    monkeypatch.setattr(LivePlotter, "_connect_lsl_streams", lambda self: [FakeInlet(samples=4)])
+    config = LivePlotterChannelConfig(
+        plot_title=[["plot1"]],
+        channel_configs=[ChannelConfig("data", "CH0", "LSB", "r", (0, 0), 0)],
+    )
+
+    dut = LivePlotter(config, window_width_sec=2.0, title_info=lambda: "MAE: 1.50")
+    dut._update_title()
+
+    assert "Runtime: 00:00:00" in dut._win.windowTitle()
+    assert "MAE: 1.50" in dut._win.windowTitle()
+    without_info = LivePlotter(config, window_width_sec=2.0)
+    without_info._update_title()
+    assert "MAE" not in without_info._win.windowTitle()
+
+
 def test_right_click_freezes_all_plots_and_second_click_continues(app, monkeypatch):
     inlet = FakeInlet(samples=10)
     monkeypatch.setattr(LivePlotter, "_connect_lsl_streams", lambda self: [inlet])

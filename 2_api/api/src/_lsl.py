@@ -1,4 +1,5 @@
 import sys
+from collections.abc import Callable
 from datetime import datetime
 from logging import Logger, getLogger
 from pathlib import Path
@@ -80,6 +81,7 @@ class RingBuffer:
 class ThreadLSL:
     _logger: Logger
     _event: Event
+    _recording_ready: Event
     _lock: Lock
     _thread: list[Thread]
     _exception: Queue
@@ -94,6 +96,7 @@ class ThreadLSL:
         """
         self._logger = getLogger(__name__)
         self._event = Event()
+        self._recording_ready = Event()
         self._lock = Lock()
         self._exception = Queue()
         self._release_threads()
@@ -158,6 +161,7 @@ class ThreadLSL:
         :return:    None
         """
         self._thread_active = list()
+        self._recording_ready.clear()
         if len(self._thread) < 2:
             raise AssertionError("No threads registered")
         else:
@@ -170,6 +174,17 @@ class ThreadLSL:
                 p.start()
             self._logger.debug("Enabling all LSL threads")
             sleep(0.2)
+
+    def wait_until_recording(self, timeout: float = 30.0) -> None:
+        """Waiting until the recording thread is connected to all its LSL streams, so the data which is sent afterwards is not lost
+        :param timeout: Floating value with maximum waiting time [s]
+        :return:        None
+        """
+        deadline = monotonic() + timeout
+        while not self._recording_ready.wait(timeout=0.05):
+            self._check_exception()
+            if monotonic() > deadline:
+                raise TimeoutError("The recording did not connect to the LSL streams")
 
     def stop(self) -> None:
         """Stopping all threads and waiting for shutdown all threads
@@ -756,6 +771,8 @@ class ThreadLSL:
         inlets: list[StreamInlet] = list()
         for name in names:
             inlets.append(self._establish_lsl_inlet(name))
+        for inlet in inlets:
+            inlet.open_stream(timeout=10.0)
         # Extract meta
         data_format = inlets[0].info(timeout=10.0).channel_format()
         time = datetime.today().strftime("%Y%m%d_%H%M%S")
@@ -793,6 +810,7 @@ class ThreadLSL:
                 stream_data[idx].attrs["channel_count"] = inlet.info().channel_count()
                 stream_data[idx].attrs["type"] = inlet.info().type()
             f.flush()
+            self._recording_ready.set()
 
             while self._event.is_set() and self._is_active:
                 try:
@@ -823,15 +841,17 @@ class ThreadLSL:
         self,
         plot_config: LivePlotterChannelConfig,
         window_length: float = 10.0,
+        title_info: Callable[[], str] | None = None,
     ) -> None:
         """Function for LSL to enable live plotting using LivePlotter (PyQtGraph)
         receiving a pre-built LivePlotterChannelConfig object.
+        :param title_info:  Optional function with a text for the title of the window next to the runtime (updated once per second)
         """
         app = QtWidgets.QApplication.instance()
         if app is None:
             app = QtWidgets.QApplication(sys.argv)
 
-        self._plotter = LivePlotter(plot_config, window_width_sec=window_length)
+        self._plotter = LivePlotter(plot_config, window_width_sec=window_length, title_info=title_info)
         try:
             app.exec()
         finally:

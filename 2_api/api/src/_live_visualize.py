@@ -1,5 +1,6 @@
 import math
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -136,8 +137,14 @@ class LivePlotter:
     LINE_WIDTH: int = 2
     X_PADDING: float = 0.04
 
-    def __init__(self, channel_config: LivePlotterChannelConfig, window_width_sec: float | int):
+    def __init__(
+        self,
+        channel_config: LivePlotterChannelConfig,
+        window_width_sec: float | int,
+        title_info: Callable[[], str] | None = None,
+    ):
         self.channel_config = channel_config
+        self._title_info = title_info
         self._window_width_sec = window_width_sec
         self.channels = channel_config.channel_configs
         self.inlets = self._connect_lsl_streams()
@@ -287,7 +294,8 @@ class LivePlotter:
 
     def _update_title(self) -> None:
         suffix = "\t FROZEN (right click: continue, double click: reset zoom)" if self._frozen else ""
-        self._win.setWindowTitle(f"LSL Live Plot\t Runtime: {self._runtime_text}{suffix}")
+        info = f"\t {self._title_info()}" if self._title_info is not None else ""
+        self._win.setWindowTitle(f"LSL Live Plot\t Runtime: {self._runtime_text}{info}{suffix}")
 
     def _init_timer(self) -> QtCore.QTimer:
         timer = QtCore.QTimer()
