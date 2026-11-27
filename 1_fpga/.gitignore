@@ -8,4 +8,5 @@ __pycache__
 .pytest_cache
 .ruff_cache
 scripts
-fpga.nix
+/fpga.nix
+/Makefile

@@ -15,10 +15,10 @@ Templates for FPGA designs (top module, SPI middleware, constraints, build scrip
 from elasticai.fpga_testing import copy_design, copy_oss_cad_scripts, init_project_folder
 
 init_project_folder()                     # once: folder structure of the FPGA workflow in your project
-copy_oss_cad_scripts()                    # build scripts for the OSS CAD suite (e.g. Lattice iCE40UP5K, CologneChip GateMate A1)
-copy_design.copy_design_env5_files()      # design files for elasticAI.env5 (default destination: folder `designs`)
+copy_oss_cad_scripts()                    # build scripts and, if missing, Makefile, fpga.nix and devenv files (existing ones are kept)
+copy_design.copy_design_env5_files()      # design files for elasticAI.ENv5 (default destination: folder `designs`)
 ```
-Other targets are `copy_design_arty7_files`, `copy_design_env6mini_files` and `copy_design_olimex_gatemate_files`. `copy_design.copy_skeleton(...)` copies skeleton modules (dnn, filter, rom, ram, math_mult, math_mac) for own designs. The frame of the SPI middleware in the design has to match `FlashFPGA._num_spi_middleware` (command, address, data = 2, 6, 16 bit).
+Other targets are `copy_design_arty7_files` and `copy_design_env6mini_files` (the design of the GitHub workflow). The functions also copy the cocotb testbenches of the board (`cocotb_funcs.py`, `*_echo_bench.py`, `*_led_bench.py` and the runner `<board>_test.py`) into the folder `tests`. `copy_design.copy_skeleton(...)` copies skeleton modules (dnn, filter, rom, ram, math_mult, math_mac) for own designs. The frame of the SPI middleware in the design has to match `FlashFPGA._num_spi_middleware` (command, address, data = 2, 6, 16 bit).
 
 ## Simulation with cocotb and pytest
 Verilog modules are simulated with [cocotb](https://www.cocotb.org/) and Icarus Verilog (`iverilog`, part of the devenv; otherwise install it or use the OSS CAD suite). The simulations are run by pytest through the fixture `cocotb_test_fixture` of `elasticai.creator`, which `conftest.py` enables via `pytest_plugins`.
