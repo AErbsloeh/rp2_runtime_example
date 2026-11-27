@@ -1,6 +1,12 @@
 from enum import IntEnum
 
 
+class BitstreamVendor(IntEnum):
+    AMD = 0x00
+    LATTICE = 0x01
+    CCGM = 0x02
+
+
 class Commands(IntEnum):
     ECHO = 0x00
     RESET = 0x01

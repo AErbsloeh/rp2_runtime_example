@@ -1,12 +1,15 @@
 from logging import Logger, getLogger
+from pathlib import Path
 from time import sleep
 
 import numpy as np
 from tqdm import tqdm
 
+from .definitions import BitstreamVendor
 from .definitions import CommandsFPGA as Commands
 from .mcu_api import DeviceAPI
 from .src._helper import FlashInfos
+from .src.bin_build import BitstreamReader
 
 
 class FlashFPGA(DeviceAPI):
@@ -14,9 +17,13 @@ class FlashFPGA(DeviceAPI):
     _num_bytes_head: int
     _num_bytes_data: int
     _num_spi_middleware: tuple[int, int, int] = (2, 6, 16)  # (CMD, ADR, DATA) in bits
+    _fpga_vendor: BitstreamVendor
 
-    def __init__(self, com_name: str = "AUTOCOM", timeout: float = 1.0) -> None:
+    def __init__(
+        self, vendor: BitstreamVendor | str, com_name: str = "AUTOCOM", timeout: float = 1.0
+    ) -> None:
         """Interface class for flashing the FPGA on a custom DAQ device
+        :param vendor:      BitstreamVendor or its name as string for reading the bitstream file: "amd", "lattice" or "ccgm"
         :param com_name:    String with the serial port name of the used device
         :param timeout:     Floating value with timeout for the communication [Default, not during DAQ]
         """
@@ -24,7 +31,12 @@ class FlashFPGA(DeviceAPI):
             raise RuntimeError(
                 "No FPGA is declared: set has_fpga = True in DeviceAPI if an FPGA is connected"
             )
+
         super().__init__(com_name, timeout)
+        if isinstance(vendor, str):
+            self._fpga_vendor = BitstreamVendor[vendor.upper()]
+        else:
+            self._fpga_vendor = vendor
         self.__logger = getLogger(__name__)
         self.extend_pins_list([])
         self.extend_states_list(["FLASHING", "ERASE_FLASH"])
@@ -194,14 +206,18 @@ class FlashFPGA(DeviceAPI):
         return pages
 
     def write_bitstream_into_flash(
-        self, bitstream: bytes, start_page: int = 0, do_check: bool = False
+        self,
+        path2bitstream: Path,
+        start_page: int = 0,
+        do_check: bool = False,
     ) -> None:
         """Writing a bitstream into the FPGA flash
-        :param bitstream:   Bytes with the bitstream to write
-        :param start_page:  Integer with the number of the first page to write
-        :param do_check:    Boolean value with the check of the data after writing
-        :return:            None
+        :param path2bitstream:  Path to the bitstream file (read by BitstreamReader)
+        :param start_page:      Integer with the number of the first page to write
+        :param do_check:        Boolean value with the check of the data after writing
+        :return:                None
         """
+        bitstream = BitstreamReader.read(vendor=self._fpga_vendor, path_to_bitstream_file=path2bitstream)
         sets = self.get_flash_infos()
         bitstream_chunks = self._split_stream_into_pages(bitstream, sets.pagesize)
         bitstream_chunks = self._add_filling_bytes_into_pages(bitstream_chunks, sets.pagesize, 4)
@@ -223,12 +239,13 @@ class FlashFPGA(DeviceAPI):
             self._write_page_into_flash(sel_page, data, sets.pagesize, do_check)
         self.fpga_set_program_state(False)
 
-    def check_bitstream_from_flash(self, bitstream: bytes, start_page: int = 0) -> bool:
+    def check_bitstream_from_flash(self, path2bitstream: Path, start_page: int = 0) -> bool:
         """Checking if bitstream is equal to the content of the FPGA flash
-        :param bitstream:   Bytes with the bitstream to check
-        :param start_page:  Integer with the number of the first page to check
-        :return:            Boolean value with the result of the check
+        :param path2bitstream:  Path to the bitstream file (read by BitstreamReader)
+        :param start_page:      Integer with the number of the first page to check
+        :return:                Boolean value with the result of the check
         """
+        bitstream = BitstreamReader.read(vendor=self._fpga_vendor, path_to_bitstream_file=path2bitstream)
         sets = self.get_flash_infos()
         data_rd = bytes()
         for page, data in enumerate(

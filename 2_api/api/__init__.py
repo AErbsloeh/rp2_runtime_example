@@ -1,5 +1,6 @@
 from .data_api import DataAPI as DataAPI
 from .data_api import StreamRecording as StreamRecording
+from .definitions import BitstreamVendor as BitstreamVendor
 from .definitions import DaqDataType as DaqDataType
 from .fpga_api import FlashFPGA as FlashFPGA
 from .mcu_api import DeviceAPI as DeviceAPI

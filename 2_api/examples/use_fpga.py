@@ -1,31 +1,29 @@
 from api import FlashFPGA, get_path_to_project
 from pathlib import Path
-from elasticai.fpga_testing.bin_build import read_bitstream_file_amd
 from time import sleep
 
 
 if __name__ == "__main__":
     do_flash = True
     do_erase = False
-    FlashFPGA().do_reset()
+    FlashFPGA(vendor="amd").do_reset()
 
-    dut = FlashFPGA()
+    dut = FlashFPGA(vendor="amd")
     if do_flash:
         path2stream = Path(get_path_to_project()).parent / "1_fpga" / "build"
         if not path2stream.exists():
             raise FileNotFoundError()
 
         file = [file for file in path2stream.glob("*.bit")][0]
-        bitstream = read_bitstream_file_amd(file)
         if do_erase:
             dut.erase_flash_all()
 
         dut.write_bitstream_into_flash(
-            bitstream=bitstream,
+            path2bitstream=file,
             start_page=0,
-            do_check=True
+            do_check=True,
         )
-        if not dut.check_bitstream_from_flash(bitstream, 0):
+        if not dut.check_bitstream_from_flash(file, 0):
             raise ValueError("Bitstream is not equal to the content of the FPGA flash!")
 
     dut.set_fpga_power_state(True)
