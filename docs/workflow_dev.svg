@@ -1,0 +1,232 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1968 890" width="1968" height="890" role="img" aria-labelledby="t d" xmlns:c2pa="http://c2pa.org/manifest">
+<title id="t">Development process: tools and commands</title>
+<desc id="d">Five steps from the start over MCU firmware, optional FPGA design, API and test to the release. Each step lists the commands, the tools with their license, what has to be adapted and the result. The loop measure, adapt, repeat leads from the test back to the firmware.</desc>
+<defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 Z" fill="#111"/></marker></defs>
+<rect width="1968" height="890" fill="#ffffff"/>
+<rect x="20" y="20" width="360" height="740" rx="24" fill="#FCEBD1"/>
+<circle cx="54" cy="56" r="16" fill="#111"/>
+<text x="54" y="63" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="19" font-weight="bold" fill="#fff" text-anchor="middle">1</text>
+<text x="80" y="64" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="24" font-weight="bold" fill="#111" text-anchor="start">Start</text>
+<text x="44" y="96" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="17" font-weight="normal" fill="#4b5563" text-anchor="start">Set up the project</text>
+<rect x="38" y="112" width="324" height="262" rx="14" fill="#0b0b0b" stroke="#111" stroke-width="2.6"/>
+<path d="M38,150 V126 Q38,112 52,112 H348 Q362,112 362,126 V150 Z" fill="#a8a8a8" stroke="#111" stroke-width="2.6"/>
+<circle cx="58" cy="131" r="7.5" fill="#ff5f57" stroke="#111" stroke-width="1"/>
+<circle cx="80" cy="131" r="7.5" fill="#febc2e" stroke="#111" stroke-width="1"/>
+<circle cx="102" cy="131" r="7.5" fill="#28c840" stroke="#111" stroke-width="1"/>
+<rect x="130" y="119" width="216" height="26" rx="10" fill="#7d7d7d" stroke="#111" stroke-width="2"/>
+<circle cx="146" cy="132" r="5.5" fill="#6b7280" stroke="#fff" stroke-width="1.4"/>
+<text x="158" y="138" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="15" font-weight="bold" fill="#fff" text-anchor="start">repository</text>
+<text x="52" y="178" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#9ca3af" text-anchor="start"># GitHub: Use this template</text>
+<text x="52" y="204" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#9ca3af" text-anchor="start"># -&gt; new repository</text>
+<text x="52" y="230" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#4ade80" text-anchor="start">$</text>
+<text x="72" y="230" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#e5e7eb" text-anchor="start">git clone &lt;your-repository&gt;</text>
+<text x="52" y="256" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#4ade80" text-anchor="start">$</text>
+<text x="72" y="256" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#e5e7eb" text-anchor="start">cd &lt;your-repository&gt;</text>
+<text x="44" y="404" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="14" font-weight="bold" fill="#6b7280" text-anchor="start">TOOLS</text>
+<rect x="38" y="414" width="324" height="32" rx="16" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1.6"/>
+<circle cx="58" cy="430" r="7" fill="#d4a017"/>
+<text x="74" y="436" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="16" font-weight="normal" fill="#111" text-anchor="start">git + GitHub (free account)</text>
+<rect x="38" y="454" width="324" height="32" rx="16" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1.6"/>
+<circle cx="58" cy="470" r="7" fill="#16a34a"/>
+<text x="74" y="476" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="16" font-weight="normal" fill="#111" text-anchor="start">uv, Python 3.13 / 3.14</text>
+<rect x="38" y="494" width="324" height="32" rx="16" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1.6"/>
+<circle cx="58" cy="510" r="7" fill="#16a34a"/>
+<text x="74" y="516" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="16" font-weight="normal" fill="#111" text-anchor="start">devenv + Nix (only for FPGA)</text>
+<text x="44" y="554" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="14" font-weight="bold" fill="#6b7280" text-anchor="start">ADAPT</text>
+<rect x="38" y="564" width="324" height="88" rx="12" fill="#fef3c7" stroke="#d4a017" stroke-width="2.2"/>
+<g transform="translate(76,586) rotate(45)"><rect x="0" y="0" width="9" height="26" fill="#d97706" stroke="#111" stroke-width="1.6"/><polygon points="0,26 9,26 4.5,36" fill="#f5d08a" stroke="#111" stroke-width="1.6"/><rect x="0" y="-6" width="9" height="6" fill="#e5e7eb" stroke="#111" stroke-width="1.6"/></g>
+<text x="100" y="590" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="15" font-weight="normal" fill="#111" text-anchor="start">Your own repository from the</text>
+<text x="100" y="612" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="15" font-weight="normal" fill="#111" text-anchor="start">template; 1_fpga only if you use</text>
+<text x="100" y="634" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="15" font-weight="normal" fill="#111" text-anchor="start">an FPGA.</text>
+<text x="44" y="674" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="14" font-weight="bold" fill="#6b7280" text-anchor="start">RESULT</text>
+<rect x="38" y="684" width="324" height="40" rx="8" fill="#fff" stroke="#111" stroke-width="2.2"/>
+<text x="200.0" y="710" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="16" font-weight="normal" fill="#111" text-anchor="middle">your repository on the computer</text>
+<line x1="382" y1="245" x2="410" y2="245" stroke="#111" stroke-width="2.2" marker-end="url(#a)"/>
+<rect x="412" y="20" width="360" height="740" rx="24" fill="#FCEBD1"/>
+<circle cx="446" cy="56" r="16" fill="#111"/>
+<text x="446" y="63" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="19" font-weight="bold" fill="#fff" text-anchor="middle">2</text>
+<text x="472" y="64" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="24" font-weight="bold" fill="#111" text-anchor="start">MCU Firmware</text>
+<text x="436" y="96" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="17" font-weight="normal" fill="#4b5563" text-anchor="start">Configure · Implement · Flash</text>
+<rect x="430" y="112" width="324" height="262" rx="14" fill="#0b0b0b" stroke="#111" stroke-width="2.6"/>
+<path d="M430,150 V126 Q430,112 444,112 H740 Q754,112 754,126 V150 Z" fill="#a8a8a8" stroke="#111" stroke-width="2.6"/>
+<circle cx="450" cy="131" r="7.5" fill="#ff5f57" stroke="#111" stroke-width="1"/>
+<circle cx="472" cy="131" r="7.5" fill="#febc2e" stroke="#111" stroke-width="1"/>
+<circle cx="494" cy="131" r="7.5" fill="#28c840" stroke="#111" stroke-width="1"/>
+<rect x="522" y="119" width="216" height="26" rx="10" fill="#7d7d7d" stroke="#111" stroke-width="2"/>
+<circle cx="538" cy="132" r="5.5" fill="#c2410c" stroke="#fff" stroke-width="1.4"/>
+<text x="550" y="138" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="15" font-weight="bold" fill="#fff" text-anchor="start">0_firmware</text>
+<text x="444" y="178" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#9ca3af" text-anchor="start"># VS Code: Pico extension</text>
+<text x="444" y="204" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#9ca3af" text-anchor="start"># -&gt; Compile (or cmake + ninja)</text>
+<text x="444" y="230" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#60a5fa" text-anchor="start">→ build/main.uf2</text>
+<text x="444" y="256" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#9ca3af" text-anchor="start"># hold BOOTSEL, plug in USB</text>
+<text x="444" y="282" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#9ca3af" text-anchor="start"># copy main.uf2 to the Pico</text>
+<text x="436" y="404" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="14" font-weight="bold" fill="#6b7280" text-anchor="start">TOOLS</text>
+<rect x="430" y="414" width="324" height="32" rx="16" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1.6"/>
+<circle cx="450" cy="430" r="7" fill="#16a34a"/>
+<text x="466" y="436" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="16" font-weight="normal" fill="#111" text-anchor="start">Pico SDK, CMake, GCC</text>
+<rect x="430" y="454" width="324" height="32" rx="16" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1.6"/>
+<circle cx="450" cy="470" r="7" fill="#16a34a"/>
+<text x="466" y="476" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="16" font-weight="normal" fill="#111" text-anchor="start">Pico extension for VS Code</text>
+<rect x="430" y="494" width="324" height="32" rx="16" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1.6"/>
+<circle cx="450" cy="510" r="7" fill="#d4a017"/>
+<text x="466" y="516" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="16" font-weight="normal" fill="#111" text-anchor="start">VS Code (Microsoft build)</text>
+<text x="436" y="554" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="14" font-weight="bold" fill="#6b7280" text-anchor="start">ADAPT</text>
+<rect x="430" y="564" width="324" height="88" rx="12" fill="#fef3c7" stroke="#d4a017" stroke-width="2.2"/>
+<g transform="translate(468,586) rotate(45)"><rect x="0" y="0" width="9" height="26" fill="#d97706" stroke="#111" stroke-width="1.6"/><polygon points="0,26 9,26 4.5,36" fill="#f5d08a" stroke="#111" stroke-width="1.6"/><rect x="0" y="-6" width="9" height="6" fill="#e5e7eb" stroke="#111" stroke-width="1.6"/></g>
+<text x="492" y="590" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="15" font-weight="normal" fill="#111" text-anchor="start">CMakeLists.txt: board, transport;</text>
+<text x="492" y="612" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="15" font-weight="normal" fill="#111" text-anchor="start">hardware_io.c, user_logic.c:</text>
+<text x="492" y="634" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="15" font-weight="normal" fill="#111" text-anchor="start">sensors and own commands.</text>
+<text x="436" y="674" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="14" font-weight="bold" fill="#6b7280" text-anchor="start">RESULT</text>
+<rect x="430" y="684" width="324" height="40" rx="8" fill="#fff" stroke="#111" stroke-width="2.2"/>
+<text x="592.0" y="710" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="16" font-weight="normal" fill="#111" text-anchor="middle">main.uf2</text>
+<line x1="774" y1="245" x2="802" y2="245" stroke="#111" stroke-width="2.2" marker-end="url(#a)"/>
+<rect x="804" y="20" width="360" height="740" rx="24" fill="#FCEBD1"/>
+<rect x="804" y="20" width="360" height="740" rx="24" fill="none" stroke="#c2410c" stroke-width="2.8" stroke-dasharray="12 8"/>
+<circle cx="838" cy="56" r="16" fill="#111"/>
+<text x="838" y="63" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="19" font-weight="bold" fill="#fff" text-anchor="middle">3</text>
+<text x="864" y="64" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="24" font-weight="bold" fill="#111" text-anchor="start">FPGA Design (optional)</text>
+<text x="828" y="96" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="17" font-weight="normal" fill="#4b5563" text-anchor="start">Configure · Implement · Check</text>
+<rect x="822" y="112" width="324" height="262" rx="14" fill="#0b0b0b" stroke="#111" stroke-width="2.6"/>
+<path d="M822,150 V126 Q822,112 836,112 H1132 Q1146,112 1146,126 V150 Z" fill="#a8a8a8" stroke="#111" stroke-width="2.6"/>
+<circle cx="842" cy="131" r="7.5" fill="#ff5f57" stroke="#111" stroke-width="1"/>
+<circle cx="864" cy="131" r="7.5" fill="#febc2e" stroke="#111" stroke-width="1"/>
+<circle cx="886" cy="131" r="7.5" fill="#28c840" stroke="#111" stroke-width="1"/>
+<rect x="914" y="119" width="216" height="26" rx="10" fill="#7d7d7d" stroke="#111" stroke-width="2"/>
+<circle cx="930" cy="132" r="5.5" fill="#15803d" stroke="#fff" stroke-width="1.4"/>
+<text x="942" y="138" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="15" font-weight="bold" fill="#fff" text-anchor="start">1_fpga</text>
+<text x="836" y="178" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#4ade80" text-anchor="start">$</text>
+<text x="856" y="178" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#e5e7eb" text-anchor="start">uv sync --group fpga</text>
+<text x="836" y="204" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#4ade80" text-anchor="start">$</text>
+<text x="856" y="204" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#e5e7eb" text-anchor="start">devenv shell</text>
+<text x="836" y="230" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#fbbf24" text-anchor="start">&gt;&gt;&gt;</text>
+<text x="876" y="230" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#e5e7eb" text-anchor="start">init_project_folder()</text>
+<text x="836" y="256" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#fbbf24" text-anchor="start">&gt;&gt;&gt;</text>
+<text x="876" y="256" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#e5e7eb" text-anchor="start">copy_oss_cad_scripts()</text>
+<text x="836" y="282" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#fbbf24" text-anchor="start">&gt;&gt;&gt;</text>
+<text x="876" y="282" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#e5e7eb" text-anchor="start">copy_design_env6mini_files()</text>
+<text x="836" y="308" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#4ade80" text-anchor="start">$</text>
+<text x="856" y="308" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#e5e7eb" text-anchor="start">pytest -m simulation</text>
+<text x="836" y="334" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#4ade80" text-anchor="start">$</text>
+<text x="856" y="334" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#e5e7eb" text-anchor="start">make bitstream</text>
+<text x="828" y="404" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="14" font-weight="bold" fill="#6b7280" text-anchor="start">TOOLS</text>
+<rect x="822" y="414" width="324" height="32" rx="16" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1.6"/>
+<circle cx="842" cy="430" r="7" fill="#16a34a"/>
+<text x="858" y="436" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="16" font-weight="normal" fill="#111" text-anchor="start">Yosys, nextpnr, openXC7 / IceStorm</text>
+<rect x="822" y="454" width="324" height="32" rx="16" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1.6"/>
+<circle cx="842" cy="470" r="7" fill="#16a34a"/>
+<text x="858" y="476" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="16" font-weight="normal" fill="#111" text-anchor="start">cocotb, Icarus Verilog</text>
+<rect x="822" y="494" width="324" height="32" rx="16" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1.6"/>
+<circle cx="842" cy="510" r="7" fill="#dc2626"/>
+<text x="858" y="516" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="16" font-weight="normal" fill="#111" text-anchor="start">Vivado (AMD): alternative</text>
+<text x="828" y="554" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="14" font-weight="bold" fill="#6b7280" text-anchor="start">ADAPT</text>
+<rect x="822" y="564" width="324" height="88" rx="12" fill="#fef3c7" stroke="#d4a017" stroke-width="2.2"/>
+<g transform="translate(860,586) rotate(45)"><rect x="0" y="0" width="9" height="26" fill="#d97706" stroke="#111" stroke-width="1.6"/><polygon points="0,26 9,26 4.5,36" fill="#f5d08a" stroke="#111" stroke-width="1.6"/><rect x="0" y="-6" width="9" height="6" fill="#e5e7eb" stroke="#111" stroke-width="1.6"/></g>
+<text x="884" y="590" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="15" font-weight="normal" fill="#111" text-anchor="start">designs/*.v: your design; io.pcf /</text>
+<text x="884" y="612" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="15" font-weight="normal" fill="#111" text-anchor="start">io.xdc: pins; Makefile: DEVICE,</text>
+<text x="884" y="634" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="15" font-weight="normal" fill="#111" text-anchor="start">PACKAGE, TOP, FREQ.</text>
+<text x="828" y="674" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="14" font-weight="bold" fill="#6b7280" text-anchor="start">RESULT</text>
+<rect x="822" y="684" width="324" height="40" rx="8" fill="#fff" stroke="#111" stroke-width="2.2"/>
+<text x="984.0" y="710" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="16" font-weight="normal" fill="#111" text-anchor="middle">TOP_MODULE.bit / .bin</text>
+<line x1="1166" y1="245" x2="1194" y2="245" stroke="#111" stroke-width="2.2" marker-end="url(#a)"/>
+<rect x="1196" y="20" width="360" height="740" rx="24" fill="#FCEBD1"/>
+<circle cx="1230" cy="56" r="16" fill="#111"/>
+<text x="1230" y="63" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="19" font-weight="bold" fill="#fff" text-anchor="middle">4</text>
+<text x="1256" y="64" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="24" font-weight="bold" fill="#111" text-anchor="start">API &amp; Test</text>
+<text x="1220" y="96" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="17" font-weight="normal" fill="#4b5563" text-anchor="start">Check · Test on the hardware</text>
+<rect x="1214" y="112" width="324" height="262" rx="14" fill="#0b0b0b" stroke="#111" stroke-width="2.6"/>
+<path d="M1214,150 V126 Q1214,112 1228,112 H1524 Q1538,112 1538,126 V150 Z" fill="#a8a8a8" stroke="#111" stroke-width="2.6"/>
+<circle cx="1234" cy="131" r="7.5" fill="#ff5f57" stroke="#111" stroke-width="1"/>
+<circle cx="1256" cy="131" r="7.5" fill="#febc2e" stroke="#111" stroke-width="1"/>
+<circle cx="1278" cy="131" r="7.5" fill="#28c840" stroke="#111" stroke-width="1"/>
+<rect x="1306" y="119" width="216" height="26" rx="10" fill="#7d7d7d" stroke="#111" stroke-width="2"/>
+<circle cx="1322" cy="132" r="5.5" fill="#1d4ed8" stroke="#fff" stroke-width="1.4"/>
+<text x="1334" y="138" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="15" font-weight="bold" fill="#fff" text-anchor="start">2_api</text>
+<text x="1228" y="178" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#4ade80" text-anchor="start">$</text>
+<text x="1248" y="178" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#e5e7eb" text-anchor="start">uv sync</text>
+<text x="1228" y="204" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#4ade80" text-anchor="start">$</text>
+<text x="1248" y="204" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#e5e7eb" text-anchor="start">ruff check</text>
+<text x="1228" y="230" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#4ade80" text-anchor="start">$</text>
+<text x="1248" y="230" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#e5e7eb" text-anchor="start">pytest -m "not hardware"</text>
+<text x="1228" y="256" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#4ade80" text-anchor="start">$</text>
+<text x="1248" y="256" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#e5e7eb" text-anchor="start">python run_twin.py</text>
+<text x="1228" y="282" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#9ca3af" text-anchor="start"># plug in the Pico (+ FPGA)</text>
+<text x="1228" y="308" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#4ade80" text-anchor="start">$</text>
+<text x="1248" y="308" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#e5e7eb" text-anchor="start">pytest -m hardware</text>
+<text x="1228" y="334" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#4ade80" text-anchor="start">$</text>
+<text x="1248" y="334" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#e5e7eb" text-anchor="start">python run_daq.py</text>
+<text x="1220" y="404" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="14" font-weight="bold" fill="#6b7280" text-anchor="start">TOOLS</text>
+<rect x="1214" y="414" width="324" height="32" rx="16" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1.6"/>
+<circle cx="1234" cy="430" r="7" fill="#16a34a"/>
+<text x="1250" y="436" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="16" font-weight="normal" fill="#111" text-anchor="start">Python, NumPy, SciPy, ruff, pytest</text>
+<rect x="1214" y="454" width="324" height="32" rx="16" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1.6"/>
+<circle cx="1234" cy="470" r="7" fill="#16a34a"/>
+<text x="1250" y="476" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="16" font-weight="normal" fill="#111" text-anchor="start">LSL, PyQtGraph, HDF5 files</text>
+<rect x="1214" y="494" width="324" height="32" rx="16" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1.6"/>
+<circle cx="1234" cy="510" r="7" fill="#dc2626"/>
+<text x="1250" y="516" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="16" font-weight="normal" fill="#111" text-anchor="start">MATLAB (optional)</text>
+<text x="1220" y="554" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="14" font-weight="bold" fill="#6b7280" text-anchor="start">ADAPT</text>
+<rect x="1214" y="564" width="324" height="88" rx="12" fill="#fef3c7" stroke="#d4a017" stroke-width="2.2"/>
+<g transform="translate(1252,586) rotate(45)"><rect x="0" y="0" width="9" height="26" fill="#d97706" stroke="#111" stroke-width="1.6"/><polygon points="0,26 9,26 4.5,36" fill="#f5d08a" stroke="#111" stroke-width="1.6"/><rect x="0" y="-6" width="9" height="6" fill="#e5e7eb" stroke="#111" stroke-width="1.6"/></g>
+<text x="1276" y="590" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="15" font-weight="normal" fill="#111" text-anchor="start">api/definitions.py: own commands;</text>
+<text x="1276" y="612" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="15" font-weight="normal" fill="#111" text-anchor="start">twin_config.py: model of the</text>
+<text x="1276" y="634" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="15" font-weight="normal" fill="#111" text-anchor="start">firmware; plot_config.json: plots.</text>
+<text x="1220" y="674" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="14" font-weight="bold" fill="#6b7280" text-anchor="start">RESULT</text>
+<rect x="1214" y="684" width="324" height="40" rx="8" fill="#fff" stroke="#111" stroke-width="2.2"/>
+<text x="1376.0" y="710" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="16" font-weight="normal" fill="#111" text-anchor="middle">live plot + *.h5 file</text>
+<line x1="1558" y1="245" x2="1586" y2="245" stroke="#111" stroke-width="2.2" marker-end="url(#a)"/>
+<rect x="1588" y="20" width="360" height="740" rx="24" fill="#FCEBD1"/>
+<circle cx="1622" cy="56" r="16" fill="#111"/>
+<text x="1622" y="63" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="19" font-weight="bold" fill="#fff" text-anchor="middle">5</text>
+<text x="1648" y="64" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="24" font-weight="bold" fill="#111" text-anchor="start">Release</text>
+<text x="1612" y="96" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="17" font-weight="normal" fill="#4b5563" text-anchor="start">CI · Tag · GitHub release</text>
+<rect x="1606" y="112" width="324" height="262" rx="14" fill="#0b0b0b" stroke="#111" stroke-width="2.6"/>
+<path d="M1606,150 V126 Q1606,112 1620,112 H1916 Q1930,112 1930,126 V150 Z" fill="#a8a8a8" stroke="#111" stroke-width="2.6"/>
+<circle cx="1626" cy="131" r="7.5" fill="#ff5f57" stroke="#111" stroke-width="1"/>
+<circle cx="1648" cy="131" r="7.5" fill="#febc2e" stroke="#111" stroke-width="1"/>
+<circle cx="1670" cy="131" r="7.5" fill="#28c840" stroke="#111" stroke-width="1"/>
+<rect x="1698" y="119" width="216" height="26" rx="10" fill="#7d7d7d" stroke="#111" stroke-width="2"/>
+<circle cx="1714" cy="132" r="5.5" fill="#111" stroke="#fff" stroke-width="1.4"/>
+<text x="1726" y="138" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="15" font-weight="bold" fill="#fff" text-anchor="start">GitHub</text>
+<text x="1620" y="178" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#4ade80" text-anchor="start">$</text>
+<text x="1640" y="178" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#e5e7eb" text-anchor="start">git push</text>
+<text x="1620" y="204" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#9ca3af" text-anchor="start"># GitHub Actions: CI checks</text>
+<text x="1620" y="230" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#4ade80" text-anchor="start">$</text>
+<text x="1640" y="230" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#e5e7eb" text-anchor="start">git tag &lt;version&gt;</text>
+<text x="1620" y="256" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#4ade80" text-anchor="start">$</text>
+<text x="1640" y="256" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#e5e7eb" text-anchor="start">git push --tags</text>
+<text x="1620" y="282" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="15" font-weight="normal" fill="#9ca3af" text-anchor="start"># GitHub: create the release</text>
+<text x="1612" y="404" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="14" font-weight="bold" fill="#6b7280" text-anchor="start">TOOLS</text>
+<rect x="1606" y="414" width="324" height="32" rx="16" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1.6"/>
+<circle cx="1626" cy="430" r="7" fill="#d4a017"/>
+<text x="1642" y="436" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="16" font-weight="normal" fill="#111" text-anchor="start">git + GitHub</text>
+<rect x="1606" y="454" width="324" height="32" rx="16" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1.6"/>
+<circle cx="1626" cy="470" r="7" fill="#d4a017"/>
+<text x="1642" y="476" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="16" font-weight="normal" fill="#111" text-anchor="start">GitHub Actions</text>
+<rect x="1606" y="494" width="324" height="32" rx="16" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1.6"/>
+<circle cx="1626" cy="510" r="7" fill="#16a34a"/>
+<text x="1642" y="516" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="16" font-weight="normal" fill="#111" text-anchor="start">OSS CAD Suite (bitstream build)</text>
+<text x="1612" y="554" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="14" font-weight="bold" fill="#6b7280" text-anchor="start">ADAPT</text>
+<rect x="1606" y="564" width="324" height="88" rx="12" fill="#fef3c7" stroke="#d4a017" stroke-width="2.2"/>
+<g transform="translate(1644,586) rotate(45)"><rect x="0" y="0" width="9" height="26" fill="#d97706" stroke="#111" stroke-width="1.6"/><polygon points="0,26 9,26 4.5,36" fill="#f5d08a" stroke="#111" stroke-width="1.6"/><rect x="0" y="-6" width="9" height="6" fill="#e5e7eb" stroke="#111" stroke-width="1.6"/></g>
+<text x="1668" y="590" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="15" font-weight="normal" fill="#111" text-anchor="start">Nothing in the template: the version</text>
+<text x="1668" y="612" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="15" font-weight="normal" fill="#111" text-anchor="start">is taken from the git tag, the assets</text>
+<text x="1668" y="634" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="15" font-weight="normal" fill="#111" text-anchor="start">are named after tag and device.</text>
+<text x="1612" y="674" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="14" font-weight="bold" fill="#6b7280" text-anchor="start">RESULT</text>
+<rect x="1606" y="684" width="324" height="40" rx="8" fill="#fff" stroke="#111" stroke-width="2.2"/>
+<text x="1768.0" y="710" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="16" font-weight="normal" fill="#111" text-anchor="middle">uf2 · bin / bit · wheel</text>
+<path d="M1376.0,762 V800 H592.0 V764" fill="none" stroke="#555" stroke-width="2.4" stroke-dasharray="9 7" marker-end="url(#a)"/>
+<rect x="834.0" y="784" width="300" height="32" rx="16" fill="#fff" stroke="#111" stroke-width="2"/>
+<text x="984.0" y="806" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="18" font-weight="bold" fill="#111" text-anchor="middle">measure → adapt → repeat</text>
+<circle cx="40" cy="852" r="7" fill="#16a34a"/>
+<text x="56" y="858" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="17" font-weight="normal" fill="#111" text-anchor="start">open source</text>
+<circle cx="200" cy="852" r="7" fill="#d4a017"/>
+<text x="216" y="858" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="17" font-weight="normal" fill="#111" text-anchor="start">free, proprietary</text>
+<circle cx="410" cy="852" r="7" fill="#dc2626"/>
+<text x="426" y="858" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="17" font-weight="normal" fill="#111" text-anchor="start">proprietary / commercial</text>
+<rect x="690" y="840" width="36" height="24" rx="6" fill="#fef3c7" stroke="#d4a017" stroke-width="2"/>
+<text x="736" y="858" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="17" font-weight="normal" fill="#111" text-anchor="start">what you adapt</text>
+<rect x="920" y="840" width="36" height="24" rx="6" fill="none" stroke="#c2410c" stroke-width="2" stroke-dasharray="6 4"/>
+<text x="966" y="858" font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif" font-size="17" font-weight="normal" fill="#111" text-anchor="start">optional (FPGA)</text>
+<text x="1160" y="858" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="17" font-weight="normal" fill="#111" text-anchor="start">$ shell command</text>
+<text x="1390" y="858" font-family="ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="17" font-weight="normal" fill="#111" text-anchor="start">&gt;&gt;&gt; Python call</text>
+<metadata><c2pa:manifest>AAAWgmp1bWIAAAAeanVtZGMycGEAEQAQgAAAqgA4m3EDYzJwYQAAABZcanVtYgAAAEdqdW1kYzJtYQARABCAAACqADibcQN1cm46YzJwYTo2OGM0YzU5NC0yMjJlLTQ2YmYtOTg4Ny0yMzM3ZTk3YWFiMmYAAAADl2p1bWIAAAApanVtZGMyYXMAEQAQgAAAqgA4m3EDYzJwYS5hc3NlcnRpb25zAAAAALxqdW1iAAAARGp1bWRjYm9yABEAEIAAAKoAOJtxE2MycGEuaW5ncmVkaWVudC52MwAAAAAYYzJzaHp+R3ABohZ07p9iDYUDD0QAAABwY2JvcqNpZGM6Zm9ybWF0bWltYWdlL3N2Zyt4bWxqaW5zdGFuY2VJRHgseG1wOmlpZDpjOTFlY2I2OS00MDQyLTRmOGYtYTkzYy1jZGNiYzJiYzI4NjJscmVsYXRpb25zaGlwaHBhcmVudE9mAAAB4mp1bWIAAABBanVtZGNib3IAEQAQgAAAqgA4m3ETYzJwYS5hY3Rpb25zLnYyAAAAABhjMnNor+kV0HDqb5WObbMrak0qJQAAAZljYm9yomdhY3Rpb25zgqJmYWN0aW9ua2MycGEub3BlbmVkanBhcmFtZXRlcnOha2luZ3JlZGllbnRzgaJjdXJseC1zZWxmI2p1bWJmPWMycGEuYXNzZXJ0aW9ucy9jMnBhLmluZ3JlZGllbnQudjNkaGFzaFggiAgJZNUCaKqiB5NhljCNpcg1KoavWKHZeowa/i5+3UikZmFjdGlvbngdY29tLmFudGhyb3BpYy5jbGF1ZGUucHJvdmlkZWRqcGFyYW1ldGVyc6F4H2NvbS5hbnRocm9waWMub3JpZ2luLWNvbmZpZGVuY2VndW5rbm93bmtkZXNjcmlwdGlvbnhmQ2xhdWRlIHByb3ZpZGVkIHRoaXMgZmlsZSBhdCB0aGUgcmVxdWVzdCBvZiBhIHVzZXIgYW5kIG1heSBoYXZlIGNyZWF0ZWQgb3IgbW9kaWZpZWQgdGhlIGZpbGUgY29udGVudHMubXNvZnR3YXJlQWdlbnShZG5hbWVmQ2xhdWRlcmFsbEFjdGlvbnNJbmNsdWRlZPUAAADIanVtYgAAAEBqdW1kY2JvcgARABCAAACqADibcRNjMnBhLmhhc2guZGF0YQAAAAAYYzJzaDNh1GKRmkaV+t1J3yvZjh8AAACAY2JvcqVjYWxnZnNoYTI1NmNwYWRMAAAAAAAAAAAAAAAAZGhhc2hYIGIvibH5lw1necue4NJYE40PzIBTOck2yXcr2x0dOAtGZG5hbWVuanVtYmYgbWFuaWZlc3RqZXhjbHVzaW9uc4GiZXN0YXJ0GYGXZmxlbmd0aBkeBAAAAj5qdW1iAAAAJ2p1bWRjMmNsABEAEIAAAKoAOJtxA2MycGEuY2xhaW0udjIAAAACD2Nib3KlY2FsZ2ZzaGEyNTZpc2lnbmF0dXJleE1zZWxmI2p1bWJmPS9jMnBhL3VybjpjMnBhOjY4YzRjNTk0LTIyMmUtNDZiZi05ODg3LTIzMzdlOTdhYWIyZi9jMnBhLnNpZ25hdHVyZWppbnN0YW5jZUlEeCx4bXA6aWlkOmY5Njk0MGQ4LTg0MTktNDczYy05YmUwLWMwNDZjMzRiOWI3MnJjcmVhdGVkX2Fzc2VydGlvbnODomN1cmx4LXNlbGYjanVtYmY9YzJwYS5hc3NlcnRpb25zL2MycGEuaW5ncmVkaWVudC52M2RoYXNoWCCICAlk1QJoqqIHk2GWMI2lyDUqhq9Yodl6jBr+Ln7dSKJjdXJseCpzZWxmI2p1bWJmPWMycGEuYXNzZXJ0aW9ucy9jMnBhLmFjdGlvbnMudjJkaGFzaFggUGzcTzAVJljuA3D2INKaCRd40mdZIZhM6v2pEcplivOiY3VybHgpc2VsZiNqdW1iZj1jMnBhLmFzc2VydGlvbnMvYzJwYS5oYXNoLmRhdGFkaGFzaFggMKzYFJyf8JJKnN3k8LtU/P8fES7HQNwbQ915aF9VlRt0Y2xhaW1fZ2VuZXJhdG9yX2luZm+jZG5hbWVvQW50aHJvcGljIEZpbGVzZ3ZlcnNpb25lMS4wLjBrc3BlY1ZlcnNpb25lMi40LjAAABA4anVtYgAAAChqdW1kYzJjcwARABCAAACqADibcQNjMnBhLnNpZ25hdHVyZQAAABAIY2JvctKEWQISogEmGCFZAgowggIGMIIBjaADAgECAhRA5aAK7sI50L64g/oGQgU9Z1UTADAKBggqhkjOPQQDAzBJMRcwFQYDVQQKEw5BbnRocm9waWMsIFBCQzEuMCwGA1UEAxMlQW50aHJvcGljIENvbnRlbnQgQ3JlZGVudGlhbHMgUm9vdCBDQTAeFw0yNjA4MDcxODQzNTZaFw0yODA4MDYxOTQzNTZaMEQxFzAVBgNVBAoTDkFudGhyb3BpYywgUEJDMSkwJwYDVQQDEyBBbnRocm9waWMgQ2xhdWRlIENvbnRlbnQgU2lnbmluZzBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABJh6CmvLUBgFFNU0vUKlOVtE6djd17L5SuwX0LemFisBM3dkd/3cyjxFA3Qo5S46fX0/ihY0VZ7mfb9KF703t5OjWDBWMA4GA1UdDwEB/wQEAwIHgDAVBgNVHSUEDjAMBgorBgEEAYPoXgIBMAwGA1UdEwEB/wQCMAAwHwYDVR0jBBgwFoAUzlHiBIFOZFsj+OPEz5o+nMHXXMIwCgYIKoZIzj0EAwMDZwAwZAIwMXMdFJ4BetLLVY7ORuE9noqbbAZOZn/aArXyTwFAZfKrPzxF2vPoJNf1+UCdg1XGAjBwX1zd9WGqYkqmL5SFqw1QySjr1zJfpJM9+1rdDwSPLMOPOjKuiXjoU/pUUeG9RwmhY3BhZFkNngAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPZYQMy1M2fLhvtvMMaPGM/AHu/7k4blOf2CakjGWlpeReIh81t3KEzicKSx+HxYLRXsWaEcXzyHUbVEV7Y+gh4ZGaE=</c2pa:manifest></metadata></svg>

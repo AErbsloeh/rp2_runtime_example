@@ -10,6 +10,16 @@ There is also a template for pushing sensor data in continuous manner from the M
 
 Enjoy. If you have questions and suggestions, please create an issue or contact the authors.
 
+## Feature Set of the Template
+The figure shows the four phases from the MCU firmware over the optional FPGA design (Verilog HDL, cocotb simulation, synthesis and implementation with OSS CAD) and the real-time application (data acquisition, digital twin, embedded AI signal processing) to the build and release with GitHub Actions. All phases interact with the sensor DAQ system.
+
+![Development flow of a sensor DAQ system](docs/workflow_feature.svg)
+
+## Using the Template for Your Application
+The figure shows for each step of the development process the commands, the tools with their license (green: open source, yellow: free but proprietary, red: proprietary), what you have to adapt for your application and the result of the step. The complete template flow, including the FPGA build, uses open-source tools; proprietary tools such as Vivado or MATLAB are optional.
+
+![Development process with commands and tools](docs/workflow_dev.svg)
+
 ## Repository Structure
 | Folder                  | Content                                                                                                                      |
 |-------------------------|------------------------------------------------------------------------------------------------------------------------------|
